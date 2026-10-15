@@ -55,7 +55,8 @@ class MainWindow(QMainWindow):
         self._thread = QThread()
         self._worker = RenderWorker()  # no parent → moveToThread is valid
         self._worker.moveToThread(self._thread)
-        self._worker.rendered.connect(self._on_rendered)
+        # No rendered.connect here: the PageView and the ThumbnailBar each
+        # subscribe to what they own and route by the key's role tag.
         # Delete the worker in its own thread once the event loop has
         # exited (QEventLoop flushes deferred deletes on exit).
         self._thread.finished.connect(self._worker.deleteLater)
@@ -289,6 +290,10 @@ class MainWindow(QMainWindow):
         # sizes come from the model too, so the render thread needs no
         # round-trip before the layout is correct.
         self._current_page_index = 0
+        # Explicit: a fresh document starts at page 1. (The model reset
+        # clears the selection, and the bar would otherwise restore the
+        # previous document's row.)
+        self._thumb_bar.set_current_row(0)
         self._status.setText(self.tr("Aperto: {0}").format(path))
 
     def _merge_file(self) -> None:
@@ -360,8 +365,15 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
+        overwritten = self._sources_overwritten_by(path)
         try:
             save_as(self._doc_model, path)
+            # save_as() replaces the file with os.replace(), which swaps the
+            # inode: the worker still holds the OLD document under that path.
+            # Without this, re-opening the file would render the pre-save
+            # content from the stale handle.
+            for source in overwritten:
+                self._worker.evict_requested.emit(source)
             self._status.setText(self.tr("Salvato: {0}").format(path))
         # Same reasoning as _open_file: a failed write (permissions, full
         # disk, malformed source) must surface as a dialog, not a traceback.
@@ -369,6 +381,23 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(
                 self, self.tr("Errore"), self.tr("Impossibile salvare:\n{0}").format(e)
             )
+
+    def _sources_overwritten_by(self, target: str) -> list[str]:
+        """Sources a save to *target* would replace (compared by inode).
+
+        Mirrors the overwrite test inside save.py, so the two can never
+        disagree about what counts as "saving over a file we are reading".
+        """
+        if not os.path.exists(target):
+            return []
+        sources = []
+        for source in self._doc_model.sources:
+            try:
+                if os.path.exists(source) and os.path.samefile(target, source):
+                    sources.append(source)
+            except OSError:
+                continue
+        return sources
 
     def _extract_pages(self) -> None:
         """Split: write a typed page selection to a separate file.
@@ -415,29 +444,6 @@ class MainWindow(QMainWindow):
             )
 
     # ------------------------------------------------------------------ #
-    #  Worker signals
-    # ------------------------------------------------------------------ #
-
-    def _on_rendered(self, key: tuple, image) -> None:
-        """Route rendered images by role tag.
-
-        PageView receives every render too, but handles only "page" keys;
-        this slot handles only "thumb" keys. Tagging beats guessing from the
-        tuple length.
-        """
-        if not key or key[0] != "thumb":
-            return
-        dpr = key[5]
-        if dpr:
-            image.setDevicePixelRatio(dpr)  # crisp on HiDPI
-        self._thumbnail_cache[key] = image
-        # Repaint just the row that just got its picture.
-        # key = ("thumb", source_id, source_index, rotation, zoom, dpr)
-        row = self._thumb_bar._model.index_for_page(key[1], key[2])
-        if row.isValid():
-            self._thumb_bar._model.dataChanged.emit(row, row, [Qt.ItemDataRole.DecorationRole])
-
-    # ------------------------------------------------------------------ #
     #  Page operations (undo commands)
     # ------------------------------------------------------------------ #
 
@@ -468,8 +474,10 @@ class MainWindow(QMainWindow):
         idx = self._thumb_bar.current_row()
         if idx < 0 or idx >= self._doc_model.page_count:
             return
+        # No manual refresh: RotatePage emits page_changed, which both the
+        # view and the thumbnail bar observe (including on undo, where a
+        # manual refresh would never be called).
         self._undo_stack.push(RotatePage(self._doc_model, idx, delta))
-        self._thumb_bar.refresh()
 
     def _delete_page(self) -> None:
         idx = self._thumb_bar.current_row()

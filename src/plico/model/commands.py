@@ -38,9 +38,11 @@ class DeletePage(QUndoCommand):
         if self._item is None:
             self._item = self._model.pages.pop(self._index)
         else:
-            # macro redo: restore to original slot then pop again
-            self._model.pages.insert(self._index, self._item)
-            self._item = self._model.pages.pop(self._index)
+            # Redo after an undo: undo() put the item back at _index, so
+            # deleting it again is just another pop. (The previous version
+            # inserted and popped at the same index, which is a no-op: redo
+            # after undo silently did nothing.)
+            self._model.pages.pop(self._index)
         self._model.changed.emit()
 
     def undo(self) -> None:

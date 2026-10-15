@@ -54,10 +54,10 @@ plico/
 └── tests/
     ├── test_model.py         # modello, comandi, salvataggio, parse_page_ranges
     ├── test_worker.py        # il worker di rendering in isolamento
-    └── test_integration.py   # MainWindow vera, offscreen: ~30 test end-to-end
+    └── test_integration.py   # MainWindow vera, offscreen: ~40 test end-to-end
 ```
 
-Gate di qualità attuale: **57 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **72 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
 (12 file sorgente).
 
 ---
@@ -205,8 +205,16 @@ class RenderRequest:
     rotation: int        # solo offset utente
 ```
 
-`RenderWorker` ha `render_requested = Signal(object)` e
-`rendered = Signal(object, QImage)` e:
+`RenderWorker` ha quattro signal:
+
+```python
+render_requested = Signal(object)        # in
+rendered         = Signal(object, QImage)  # out
+render_failed    = Signal(object)        # out: key di una richiesta fallita
+evict_requested  = Signal(str)           # in: dimentica l'handle di un path
+```
+
+e:
 
 - apre i sorgenti **pigramente**, al primo render richiesto, tenendo una LRU di
   al massimo `MAX_OPEN_DOCUMENTS = 16` handle (unire molti PDF non deve
@@ -214,6 +222,17 @@ class RenderRequest:
 - riceve il **percorso** nel `RenderRequest` invece di dipendere da un
   messaggio "apri" precedente: non c'è alcun ordinamento fra thread da
   sbagliare, e una pagina non viene mai resa dal documento sbagliato.
+
+Chi chiede un render segna la `key` come "in volo". Se il worker non riesce a
+produrre l'immagine — sorgente sparita, pagina fuori intervallo, documento
+chiuso — emette `render_failed` con quella key: il ricevente **deve** azzerare
+il segno, altrimenti la pagina aspetta per sempre un render che non arriverà
+mai e non viene più ritentata.
+
+`evict_requested` esiste per un caso preciso: dopo un salvataggio che
+sovrascrive una sorgente, `save_as()` ha fatto `os.replace()` e l'inode è
+cambiato, ma il worker terrebbe aperto il documento **vecchio**. Senza
+l'evict, riaprire lo stesso file renderebbe il contenuto di prima del salvataggio.
 
 Punti che sembrano dettagli e non lo sono:
 
@@ -278,16 +297,51 @@ Gli slot che contano: `set_zoom`, `set_zoom_fit_width`, `zoom_in`/`zoom_out`,
 
 `QListView` + `QAbstractListModel` che avvolge `DocumentModel.pages`.
 `THUMB_ZOOM = 0.2`, key `thumb_key(...)`, cache `ThumbnailCache` (LRU,
-`maxsize=60`), condivisa con `MainWindow` tramite i signal del worker.
+`maxsize=60`) creata da `MainWindow` e passata al costruttore. **È la barra
+l'unica a leggerla e a riempirla**: `MainWindow` non instrada più i render.
+
+La barra è anche il **router** delle miniature: tiene in `_pending` le key che
+ha chiesto (key → riga di destinazione) e usa quella mappa per due cose:
+
+- **niente richieste duplicate**: `_request_row` esce se la key è già in cache
+  o già in volo. Senza il controllo, ogni tick di scroll riemetteva le
+  richieste di tutto il visibile, riempiendo la coda del worker di duplicati e
+  ritardando la pagina che l'utente aspetta;
+- **scarto degli obsoleti**: `_on_rendered` fa `_pending.pop(key)`. Se la key
+  non c'è, il risultato non è suo — è un render di pagina (li gestisce la
+  `PageView`) o un render di un documento che non mostriamo più. Le chiavi
+  ripartono da `source_id 0` a ogni apertura, quindi senza questo filtro la
+  miniatura del file precedente finirebbe sulla riga del nuovo.
+
+Per lo stesso motivo `MainWindow` **non** instrada più le miniature: ognuno
+riceve tutti i `rendered` e scarta quelli che non sono suoi, in base al tag in
+`key[0]` (`"page"` / `"thumb"`).
 
 - **Caricamento lazy**: `_visible_rows()` chiede solo le miniature in vista
   (più ±2 celle), con fallback al primo schermo pieno finché il layout non è
-  avvenuto. La barra si aggiorna anche su `verticalScrollBar().valueChanged`.
-- **Il drag & drop è tradotto in un comando**: `dropEvent` calcola
-  `from_row`/`to_row`, chiama `event.ignore()` perché il riordino interno
-  predefinito non avvenga **mai**, ed emette `move_requested(from, to)`.
-  Lasciare che la vista si riordini da sola disallineerebbe vista e modello.
+  avvenuto. La scansione parte dalla riga sotto la cima del viewport e si
+  ferma appena esce dalla fascia visibile: è O(visibili), non O(pagine) a ogni
+  tick di scroll. La barra si aggiorna anche su
+  `verticalScrollBar().valueChanged`.
+- **La selezione sopravvive a un reset**: `beginResetModel/endResetModel`
+  azzera `currentIndex`, quindi dopo ogni delete/riordino la selezione moriva e
+  `Ctrl+R` non faceva più nulla finché non si ricliccava. `_on_doc_changed`
+  ripristina `_last_row` (clampato al nuovo conteggio) con `_restoring = True`,
+  così la selezione torna **senza** trascinare la vista principale sulla riga.
+- **Un in-place edit scarta la miniatura stantia**: la key embedde la
+  rotazione utente, quindi la voce resa prima della rotazione è irraggiungibile
+  da `data()`. `_on_page_changed` la elimina (e dimentica l'eventuale render in
+  volo della rotazione annullata), altrimenti ogni rotazione lasciava
+  un'immagine orfana nella cache.
+- **Il drag & drop è tradotto in un comando**: `dropEvent` chiama
+  `event.ignore()` perché il riordino interno predefinito non avvenga **mai**,
+  ed emette `move_requested(from, to)`. Lasciare che la vista si riordini da
+  sola disallineerebbe vista e modello. La destinazione passa da
+  `drop_target_row()`, che **conta lo scostamento del pop** (vedi §10).
 - Segnali: `move_requested(int, int)`, `page_selected(int)`.
+- `ThumbnailCache` è una LRU vera: `get()` e `[]` spostano la voce in testa,
+  perché le righe intorno al viewport sono rilette a ogni repaint e sono
+  esattamente quelle che vale la pena tenere.
 
 ---
 
@@ -376,6 +430,14 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
   il tasto non fa niente. Usare `"Del"`. C'è un test che verifica che ogni
   azione abbia una scorciatoia non vuota: è la regressione per questa classe
   di bug.
+- `beginResetModel()` / `endResetModel()` **azzerano `currentIndex`**: dopo
+  ogni delete o riordino la selezione della barra moriva, e `Ctrl+R` non faceva
+  più niente finché non si ricliccava. Se il modello si resetta, la vista deve
+  ripristinare la selezione da sé (`ThumbnailBar._on_doc_changed`).
+- Una `OrderedDict` usata come LRU non è una LRU finché **anche `get()`** non
+  sposta la voce in testa: le righe intorno al viewport sono rilette a ogni
+  repaint, quindi con il solo `__getitem__` venivano sfrattate proprio le voci
+  più usate. `ThumbnailCache` sposta la voce in testa in lettura e in scrittura.
 
 ### Thread e distruzione degli oggetti
 
@@ -390,6 +452,13 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
   sperare.
 - Non usare `pkill -f "pytest"` per sbloccare un test appeso: il pattern
   corrisponde alla command line della shell che lo esegue e la uccide.
+- Un **callable Python** (`lambda`, `list.append`) connesso a un segnale di un
+  `QObject` che vive in un **altro thread** viene consegnato *accodato*, non
+  diretto: uno spy messo nel test sul thread GUI non viene chiamato in modo
+  sincrono e sembra che il segnale non sia mai stato emesso. È esattamente ciò
+  che è successo spiando `worker.render_requested` mentre `_pending` cresceva
+  correttamente. In quel caso asserire sullo **stato** (`_pending`), non sul
+  segnale.
 
 ### Geometria e visibilità
 
@@ -400,6 +469,33 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
   `height_px` in `_relayout()` e calcola la visibilità in modo deterministico.
   (Con una finestra *mostrata* il codice vecchio funzionava: è il motivo per
   cui il bug è rimasto nascosto.)
+
+### Drag & drop
+
+- La posizione dell'indicatore va letta da
+  `event.dropIndicatorPosition()` (`QtWidgets.QAbstractItemView.DropIndicatorPosition`,
+  `AboveItem = 1`, `BelowItem = 2`): `indexAt(center)` da solo non dice se il
+  rilascio è sopra o sotto l'elemento.
+- L'indice di destinazione è nella lista **già accorciata**: `MovePage` fa
+  `pop(from)` e poi `insert(to)`, quindi per un elemento raccolto sopra e
+  rilasciato sotto la riga *k* la destinazione è `k - 1`, non `k`. La logica
+  sta in `ThumbnailBar.drop_target_row(from_row, target_row, below)` ed è
+  testata in entrambe le direzioni contro `MovePage` stesso.
+
+### Modello
+
+- **Niente liste parallele a `pages`.** `page_sizes` era una seconda lista che
+  `DeletePage`/`MovePage` non aggiornavano: dopo un delete restava a 3 mentre
+  `pages` era a 2. La correzione non è stata «ricordarsi di aggiornare anche
+  l'altra lista», ma togliere la seconda lista: la dimensione orientata vive
+  su `PageItem` (`width_pt`/`height_pt`) e `DocumentModel.page_sizes` è una
+  **property derivata**. Così l'allineamento è una proprietà della struttura
+  invece che una disciplina da mantenere. Vale per qualsiasi dato per-pagina
+  che si voglia aggiungere in futuro.
+- Un `QUndoCommand` che al `redo` non ricalcola lo stato è un comando rotto:
+  `DeletePage.redo` faceva `insert` + `pop` sullo stesso indice (un no-op), per
+  cui *redo dopo undo non cancellava nulla*. Il `redo` deve funzionare anche
+  quando l'oggetto è già stato costruito e annullato una volta.
 
 ### PyMuPDF
 

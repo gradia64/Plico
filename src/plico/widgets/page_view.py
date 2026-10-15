@@ -76,6 +76,10 @@ class PageView(QScrollArea):
 
         # --- signals ---
         self.worker.rendered.connect(self._on_rendered)
+        # A request that produced nothing must clear its pending key, or the
+        # page would wait for a render that will never arrive and never be
+        # retried (a missing source, or a page index out of range).
+        self.worker.render_failed.connect(self._on_render_failed)
         # Load further pages as the user scrolls through the document.
         self.verticalScrollBar().valueChanged.connect(lambda _v: self._request_visible())
         # The view observes the model instead of being poked by the window:
@@ -339,7 +343,8 @@ class PageView(QScrollArea):
         """Slot for RenderWorker.rendered signal (GUI thread).
 
         Only handles page renders (keys tagged "page"); thumbnail renders
-        are tagged "thumb" and handled by MainWindow.
+        are tagged "thumb" and handled by the ThumbnailBar, which is also
+        the router that knows which of them it asked for.
         """
         if not key or key[0] != "page":
             return  # not a page render
@@ -355,6 +360,18 @@ class PageView(QScrollArea):
         c.pending_key = None
         c.label.setPixmap(pix)
         c.label.setText("")
+
+    def _on_render_failed(self, key) -> None:
+        """Slot for RenderWorker.render_failed (GUI thread).
+
+        Clear the pending marker so the page is retried the next time it is
+        scrolled into view, instead of waiting forever on a dead request.
+        """
+        if not key or key[0] != "page":
+            return  # not a page render
+        c = self._by_page.get((key[1], key[2]))
+        if c is not None and c.pending_key == key:
+            c.pending_key = None
 
     def _cache_put(self, key, pix, img) -> None:
         self._cache[key] = pix

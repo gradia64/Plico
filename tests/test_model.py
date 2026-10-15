@@ -62,6 +62,34 @@ def test_parse_ranges_out_of_bounds_raises():
         parse_page_ranges("1-5000000", 3)
 
 
+@pytest.mark.parametrize("spec", ["", "   ", "1-", "-3", "1-a", "a", "1;2"])
+def test_parse_ranges_rejects_malformed(spec):
+    """Uno split malformato deve essere rifiutato, non interpretato a metà."""
+    with pytest.raises(ValueError):
+        parse_page_ranges(spec, 10)
+
+
+def test_parse_ranges_tolerates_a_stray_separator():
+    """Un separatore in più non è un errore: '1,,2' significa '1,2'.
+
+    Scelta deliberata: solo una selezione VUOTA è un errore (nessuna pagina
+    da estrarre), un token vuoto non perde nulla.
+    """
+    assert parse_page_ranges("1,,2", 5) == [0, 1]
+
+
+@pytest.mark.parametrize("spec", ["0", "11", "1-11", "8-12"])
+def test_parse_ranges_rejects_out_of_bounds(spec):
+    """Meglio un errore che un'estrazione che perde pagine in silenzio."""
+    with pytest.raises(ValueError):
+        parse_page_ranges(spec, 10)
+
+
+def test_parse_ranges_whitespace_ok_and_bounds_inclusive():
+    assert parse_page_ranges(" 1 , 3-4 ", 4) == [0, 2, 3]
+    assert parse_page_ranges("1-1", 1) == [0]
+
+
 # --- _contiguous_runs -------------------------------------------------------
 
 def test_contiguous_runs_break_on_source_and_gap():
@@ -123,6 +151,40 @@ def test_rotate_undo_emits_page_changed(mixed_model):
     cmd.redo()
     cmd.undo()
     assert rows == [0, 0]
+
+
+def test_delete_redo_after_undo_really_deletes(mixed_model):
+    """Redo dopo undo deve cancellare davvero.
+
+    Regressione: il ramo ``else`` di DeletePage.redo faceva insert+pop sullo
+    stesso indice, cioè un no-op -- dopo undo+redo la pagina restava nella
+    lista, quindi ri-fare una cancellazione annullata non cancellava nulla.
+    """
+    stack = QUndoStack()
+    stack.push(DeletePage(mixed_model, 0))
+    assert mixed_model.page_count == 2
+    stack.undo()
+    assert mixed_model.page_count == 3
+    stack.redo()
+    assert mixed_model.page_count == 2
+    assert [p.source_index for p in mixed_model.pages] == [1, 2]
+
+
+def test_sizes_follow_the_pages_through_move_and_delete(mixed_model):
+    """La dimensione vive sull'item, quindi segue la pagina (BUG 1).
+
+    Con la vecchia lista parallela, dopo il delete la posizione 0 leggeva la
+    dimensione della pagina originariamente in posizione 1: su un misto di
+    ritratto/paesaggio il layout veniva misurato con la pagina sbagliata.
+    """
+    def sizes(model):
+        return [(round(p.width_pt), round(p.height_pt)) for p in model.pages]
+
+    assert sizes(mixed_model) == [(595, 842), (842, 595), (420, 595)]
+    DeletePage(mixed_model, 0).redo()
+    assert sizes(mixed_model) == [(842, 595), (420, 595)]
+    MovePage(mixed_model, 0, 1).redo()
+    assert sizes(mixed_model) == [(420, 595), (842, 595)]
 
 
 # --- salvataggio ------------------------------------------------------------

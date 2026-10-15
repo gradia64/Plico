@@ -58,6 +58,15 @@ class RenderWorker(QObject):
 
     render_requested = Signal(object)
     rendered = Signal(object, QImage)   # emit QImage, NOT QPixmap
+    # The key of a request that produced no image (missing source, page out
+    # of range, document closed). Without it a requester that marks a key as
+    # "in flight" would wait for it forever and never retry that page.
+    render_failed = Signal(object)
+    # Ask the worker to drop its cached handle for a source path. Needed
+    # after saving over a file that is currently open: os.replace() swaps the
+    # inode, and the handle we hold would keep reading the OLD document even
+    # if the same path is re-opened.
+    evict_requested = Signal(str)
 
     def __init__(self) -> None:
         super().__init__()
@@ -65,6 +74,7 @@ class RenderWorker(QObject):
         # reused source_id can never be confused with a different document.
         self._docs: OrderedDict[str, fitz.Document] = OrderedDict()
         self.render_requested.connect(self._render)
+        self.evict_requested.connect(self._evict)
 
     def _doc_for(self, path: str) -> fitz.Document | None:
         """Return the open handle for *path*, opening it on first use."""
@@ -87,6 +97,7 @@ class RenderWorker(QObject):
     def _render(self, req: RenderRequest) -> None:
         doc = self._doc_for(req.source_path)
         if doc is None:
+            self.render_failed.emit(req.key)
             return
         try:
             page = doc[req.source_index]
@@ -103,7 +114,14 @@ class RenderWorker(QObject):
             self.rendered.emit(req.key, img)
         except (IndexError, RuntimeError, ValueError):
             # Page index out of range or document already closed
-            return
+            self.render_failed.emit(req.key)
+
+    @Slot(str)
+    def _evict(self, path: str) -> None:
+        """Drop and close the cached handle for *path*."""
+        doc = self._docs.pop(path, None)
+        if doc is not None:
+            doc.close()
 
     @Slot()
     def shutdown(self) -> None:

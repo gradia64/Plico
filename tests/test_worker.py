@@ -55,16 +55,62 @@ def test_worker_reuses_one_handle_per_source(tmp_path):
     assert len(seen) == 3
 
 
-def test_worker_survives_a_missing_source(tmp_path):
-    """A sourced document that vanished must not raise inside the thread."""
+def test_worker_reports_a_missing_source(tmp_path):
+    """A vanished source must not raise, and must not leave the asker hanging.
+
+    The requester marks a key as "in flight"; it clears that marker on
+    render_failed. Without the signal the page would wait forever for a
+    render that can never arrive and would never be retried.
+    """
     worker = RenderWorker()
     seen = []
+    failed = []
     worker.rendered.connect(lambda key, img: seen.append(key))
+    worker.render_failed.connect(failed.append)
 
     key = ("page", 0, 0, 0, 1.0, 1.0)
     worker._render(RenderRequest(key, str(tmp_path / "nope.pdf"), 0, 1.0, 0))
 
     assert seen == []
+    assert failed == [key]
+
+
+def test_worker_reports_a_page_out_of_range(tmp_path):
+    """A bad page index is a per-request failure, not a thread-killer."""
+    pdf_path = tmp_path / "one.pdf"
+    _make_pdf(pdf_path)
+
+    worker = RenderWorker()
+    failed = []
+    worker.render_failed.connect(failed.append)
+
+    key = ("page", 0, 99, 0, 1.0, 1.0)
+    worker._render(RenderRequest(key, str(pdf_path), 99, 1.0, 0))
+
+    assert failed == [key]
+
+
+def test_evict_forgets_and_closes_a_handle(tmp_path):
+    """After saving over a file, the worker must not keep reading the old inode."""
+    pdf_path = tmp_path / "doc.pdf"
+    _make_pdf(pdf_path)
+
+    worker = RenderWorker()
+    key = ("page", 0, 0, 0, 1.0, 1.0)
+    worker._render(RenderRequest(key, str(pdf_path), 0, 1.0, 0))
+    assert str(pdf_path) in worker._docs
+
+    worker._evict(str(pdf_path))
+
+    assert str(pdf_path) not in worker._docs
+    assert worker._docs == {}
+
+
+def test_evict_ignores_an_unknown_path(tmp_path):
+    """Evicting a path we never opened is a no-op, not an error."""
+    worker = RenderWorker()
+    worker._evict(str(tmp_path / "never-opened.pdf"))
+    assert worker._docs == {}
 
 
 def test_worker_rotation():

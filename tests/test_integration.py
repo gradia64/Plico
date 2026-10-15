@@ -8,11 +8,12 @@ so a failing assertion can never leave a QThread running.
 import os
 import pathlib
 import time
+from unittest import mock
 
 import fitz
 import pytest
 from PySide6.QtCore import QSettings
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtGui import QAction, QIcon, QImage
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -24,6 +25,12 @@ import plico.main_window
 from plico.main_window import MainWindow
 from plico.model.commands import DeletePage, RotatePage
 from plico.model.save import save_as
+from plico.widgets.thumbnail_bar import (
+    THUMB_ZOOM,
+    ThumbnailBar,
+    ThumbnailCache,
+    thumb_key,
+)
 
 pytestmark = pytest.mark.usefixtures("qapp")
 
@@ -838,3 +845,189 @@ def test_open_path_and_merge_path_drive_the_command_line(tmp_path, windows):
     assert mw._doc_model.page_count == 5
     assert len(mw._doc_model.sources) == 2
     assert mw._doc_model.pages[2].source_id != mw._doc_model.pages[0].source_id
+
+
+# --------------------------------------------------------------------------- #
+#  Regressioni del secondo giro di review
+# --------------------------------------------------------------------------- #
+
+def test_drop_target_row_maps_both_directions():
+    """La destinazione del drop è un indice nella lista SENZA la riga trascinata.
+
+    MovePage fa pop e poi insert, quindi quando il bersaglio sta dopo la riga
+    trascinata la sua posizione scala di uno. Senza la correzione, trascinare
+    una pagina verso il basso sulla metà ALTA di X la lasciava comunque dopo X.
+    """
+    # Su [A B C D], trascino A (riga 0) su C (riga 2):
+    assert ThumbnailBar.drop_target_row(0, 2, below=False) == 1  # sopra C → [B A C D]
+    assert ThumbnailBar.drop_target_row(0, 2, below=True) == 2   # sotto C → [B C A D]
+    # Trascino D (riga 3) verso l'alto, su B (riga 1):
+    assert ThumbnailBar.drop_target_row(3, 1, below=False) == 1  # sopra B → [A D B C]
+    assert ThumbnailBar.drop_target_row(3, 1, below=True) == 2   # sotto B → [A B D C]
+
+
+def test_drop_target_row_agrees_with_the_move_command(windows, tmp_path):
+    """La mappatura è corretta solo se MovePage produce davvero quell'ordine."""
+    pdf = str(tmp_path / "four.pdf")
+    _make_pdf(pdf, pages=4, text="P")
+
+    mw = windows()
+    _open(mw, pdf)
+
+    to_row = ThumbnailBar.drop_target_row(0, 2, below=False)
+    mw._move_page(0, to_row)
+
+    assert [p.source_index for p in mw._doc_model.pages] == [1, 0, 2, 3]
+
+
+def test_selection_survives_a_delete(windows, tmp_path):
+    """Dopo un delete la selezione non deve morire.
+
+    beginResetModel/endResetModel azzera currentIndex: senza il ripristino
+    Ctrl+R leggeva -1 e non faceva nulla finché l'utente non ricliccava.
+    """
+    pdf = str(tmp_path / "in.pdf")
+    _make_pdf(pdf, pages=5)
+
+    mw = windows()
+    _open(mw, pdf)
+    mw._thumb_bar.set_current_row(3)
+    assert mw._thumb_bar.current_row() == 3
+
+    mw._delete_page()  # cancella la riga 3
+
+    row = mw._thumb_bar.current_row()
+    assert row >= 0, "la selezione è andata persa dopo il delete"
+
+    # ...e ora il comando agisce davvero su quella riga.
+    mw._rotate_selected(90)
+    assert mw._doc_model.pages[row].rotation == 90
+
+
+def test_rotation_drops_the_stale_thumbnail_of_that_page(windows, tmp_path):
+    """La chiave embedde la rotazione: la voce precedente è irraggiungibile.
+
+    Senza lo scarto, ogni rotazione lasciava un'immagine orfana nell'LRU.
+    """
+    pdf = str(tmp_path / "in.pdf")
+    _make_pdf(pdf, pages=3)
+
+    mw = windows()
+    _open(mw, pdf)
+
+    old_key = thumb_key(mw._doc_model.pages[0], THUMB_ZOOM, 1.0)
+    other_key = thumb_key(mw._doc_model.pages[1], THUMB_ZOOM, 1.0)
+    blank = QImage(4, 4, QImage.Format.Format_RGB888)
+    mw._thumbnail_cache[old_key] = blank
+    mw._thumbnail_cache[other_key] = blank
+
+    mw._thumb_bar.set_current_row(0)
+    mw._rotate_selected(90)
+
+    assert old_key not in mw._thumbnail_cache, "miniatura stantia non scartata"
+    assert other_key in mw._thumbnail_cache, "scartata la miniatura di un'altra pagina"
+
+
+def test_thumbnail_requests_are_not_duplicated(windows, tmp_path):
+    """Lo scroll non deve riempire la coda del worker di richieste duplicate.
+
+    Osservato su `_pending` invece che sul segnale: un callable Python
+    connesso a un segnale di un QObject che vive in un altro thread viene
+    consegnato ACCODATO, quindi uno spy nel thread GUI non lo vedrebbe.
+    """
+    pdf = str(tmp_path / "in.pdf")
+    _make_pdf(pdf, pages=30)
+
+    mw = windows()
+    _open(mw, pdf)
+
+    # Rimetti la barra nello stato "niente in cache, niente in volo".
+    mw._thumbnail_cache.clear()
+    mw._thumb_bar._pending.clear()
+
+    mw._thumb_bar.refresh()
+    in_flight = dict(mw._thumb_bar._pending)
+    assert in_flight, "la barra non ha chiesto nessuna miniatura"
+
+    mw._thumb_bar.refresh()
+    mw._thumb_bar.refresh()
+
+    assert mw._thumb_bar._pending == in_flight, "richieste duplicate in volo"
+
+
+def test_late_render_for_a_key_nobody_asked_is_dropped(windows, tmp_path):
+    """Il risultato di un documento che non mostriamo più non va in cache.
+
+    Le chiavi ripartono da source_id 0 a ogni apertura: senza il filtro
+    `_pending` la miniatura del vecchio file finirebbe sulla riga del nuovo.
+    """
+    pdf = str(tmp_path / "in.pdf")
+    _make_pdf(pdf, pages=3)
+
+    mw = windows()
+    _open(mw, pdf)
+
+    mw._thumbnail_cache.clear()
+    mw._thumb_bar._pending.clear()
+    orphan = ("thumb", 0, 0, 0, THUMB_ZOOM, 1.0)
+    mw._thumb_bar._on_rendered(orphan, QImage(4, 4, QImage.Format.Format_RGB888))
+
+    assert orphan not in mw._thumbnail_cache
+
+
+def test_failed_thumbnail_render_clears_pending(windows, tmp_path):
+    """Una richiesta fallita deve poter essere ritentata, non restare appesa."""
+    pdf = str(tmp_path / "in.pdf")
+    _make_pdf(pdf, pages=3)
+
+    mw = windows()
+    _open(mw, pdf)
+
+    mw._thumbnail_cache.clear()
+    mw._thumb_bar._pending.clear()
+    mw._thumb_bar.refresh()
+    assert mw._thumb_bar._pending, "niente in volo: il test non prova nulla"
+
+    for key in list(mw._thumb_bar._pending):
+        mw._thumb_bar._on_render_failed(key)
+
+    assert mw._thumb_bar._pending == {}
+
+
+def test_thumbnail_cache_is_lru_not_fifo():
+    """`get` deve rinfrescare la recency, o la cache è FIFO travestita."""
+    cache = ThumbnailCache(maxsize=2)
+    cache["a"] = 1
+    cache["b"] = 2
+
+    assert cache.get("a") == 1  # "a" torna in testa
+    cache["c"] = 3              # deve sfrattare "b", non "a"
+
+    assert "a" in cache
+    assert "b" not in cache
+
+
+def test_saving_over_the_open_file_makes_the_worker_forget_it(windows, tmp_path):
+    """Dopo un salvataggio che sovrascrive la sorgente l'handle è vecchio.
+
+    save_as() usa os.replace(): l'inode cambia, ma il worker terrebbe aperto
+    il documento vecchio, quindi riaprire lo stesso file renderebbe il
+    contenuto di prima.
+    """
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=4, text="Prima")
+
+    mw = windows()
+    _open(mw, pdf)
+    assert pdf in mw._worker._docs, "il worker non ha aperto la sorgente"
+
+    mw._delete_page()
+    with mock.patch.object(
+        QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (pdf, ""))
+    ):
+        mw._save_file()
+    _pump()
+
+    assert mw._worker._docs == {}, "il worker tiene ancora il documento sovrascritto"
+    with fitz.open(pdf) as doc:
+        assert doc.page_count == 4 - 1
