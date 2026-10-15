@@ -16,3 +16,9 @@ venv/
 
 # Local PDFs used for manual testing
 *.pdf
+
+# Flatpak
+.flatpak-builder/
+build-dir/
+repo/
+*.flatpak

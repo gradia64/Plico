@@ -1,0 +1,50 @@
+{
+  "app-id": "io.github.gradia.Plico",
+  "runtime": "org.kde.Platform",
+  "runtime-version": "6.11",
+  "sdk": "org.kde.Sdk",
+  "base": "io.qt.PySide.BaseApp",
+  "base-version": "6.11",
+  "command": "plico",
+  "finish-args": [
+    "--share=ipc",
+    "--socket=wayland",
+    "--socket=fallback-x11",
+    "--device=dri",
+    "--filesystem=home"
+  ],
+  "build-options": {
+    "env": {
+      "BASEAPP_REMOVE_WEBENGINE": "1",
+      "BASEAPP_DISABLE_NUMPY": "1"
+    }
+  },
+  "cleanup-commands": [
+    "/app/cleanup-BaseApp.sh"
+  ],
+  "modules": [
+    "python3-pymupdf.json",
+    {
+      "name": "plico",
+      "buildsystem": "simple",
+      "build-commands": [
+        "pip3 install --no-build-isolation --no-deps --prefix=/app ."
+      ],
+      "sources": [
+        {
+          "type": "dir",
+          "path": "..",
+          "skip": [
+            ".git",
+            ".venv",
+            ".mypy_cache",
+            ".pytest_cache",
+            ".ruff_cache",
+            "build",
+            "dist"
+          ]
+        }
+      ]
+    }
+  ]
+}

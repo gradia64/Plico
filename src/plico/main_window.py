@@ -252,6 +252,15 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
+        self.open_path(path)
+
+    def open_path(self, path: str) -> bool:
+        """Open *path*, reporting any failure instead of propagating it.
+
+        Shared by the "Apri" action and by the command line, so a document
+        handed over by the desktop entry fails exactly like one chosen from
+        the dialog. Returns whether the document is now open.
+        """
         try:
             self.open_document(path)
         # A damaged/encrypted/unsupported PDF can raise a wide range of
@@ -261,6 +270,8 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(
                 self, self.tr("Errore"), self.tr("Impossibile aprire:\n{0}").format(e)
             )
+            return False
+        return True
 
     def open_document(self, path: str) -> None:
         """Open *path*, resetting every view and cache first.
@@ -302,9 +313,17 @@ class MainWindow(QMainWindow):
         if not path:
             return
 
+        self.merge_path(path)
+
+    def merge_path(self, path: str) -> None:
+        """Append every page of *path*, reporting failures instead of raising.
+
+        Also reachable from the command line, where several arguments mean
+        "open the first and append the rest".
+        """
         try:
             added = self._doc_model.append_document(path)
-        # Same reasoning as _open_file: a damaged PDF is reported, never fatal.
+        # Same reasoning as open_path: a damaged PDF is reported, never fatal.
         except Exception as e:  # noqa: BLE001
             QMessageBox.critical(
                 self,

@@ -1,0 +1,14 @@
+{
+  "name": "python3-pymupdf",
+  "buildsystem": "simple",
+  "build-commands": [
+    "pip3 install --no-index --prefix=/app pymupdf-1.28.2-cp310-abi3-manylinux_2_28_x86_64.whl"
+  ],
+  "sources": [
+    {
+      "type": "file",
+      "url": "https://files.pythonhosted.org/packages/c7/06/dace3e27af26690cb20bead80dbac42941b0841eb689b8aabbd67dde16f0/pymupdf-1.28.2-cp310-abi3-manylinux_2_28_x86_64.whl",
+      "sha256": "397d6715c1f0df7548a92d0afd8ce370fc48fa47aeefac16be2bc04a16a8227f"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Plico
+GenericName=Editor PDF
+GenericName[en]=PDF editor
+Comment=Un vero editor PDF nativo per Linux
+Comment[en]=A true native PDF editor for Linux
+Exec=plico %U
+Icon=io.github.gradia.Plico
+Terminal=false
+Categories=Office;Viewer;Qt;KDE;
+MimeType=application/pdf;
+Keywords=PDF;editor;pagina;pagine;ruota;unisci;estrai;redazione;
+Keywords[en]=PDF;editor;page;rotate;merge;extract;redaction;
+StartupNotify=true

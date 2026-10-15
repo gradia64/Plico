@@ -751,3 +751,46 @@ def test_merge_reveals_the_appended_pages_in_a_real_window(windows, tmp_path):
     assert not merged.label.pixmap().isNull(), "the merged page must be rendered"
     # Landscape source appended to a portrait one: the box must be landscape.
     assert merged.width_pt > merged.height_pt
+
+
+def test_open_path_reports_a_broken_file_instead_of_raising(
+    qapp, tmp_path, monkeypatch, windows
+):
+    """The command line must fail like the dialog does, never crash on startup.
+
+    The .desktop file hands the document over as an argument, so a corrupted
+    file is now reachable before the window is even up: the failure has to be
+    a message box, not a traceback out of main().
+    """
+    broken = tmp_path / "broken.pdf"
+    broken.write_bytes(b"this is not a PDF at all\n")
+    errors = []
+    monkeypatch.setattr(
+        QMessageBox, "critical", staticmethod(lambda *a, **k: errors.append(a[2]))
+    )
+
+    mw = windows()
+
+    assert mw.open_path(str(broken)) is False
+    assert errors, "a damaged PDF must be reported to the user"
+    assert mw._doc_model.page_count == 0
+
+
+def test_open_path_and_merge_path_drive_the_command_line(tmp_path, windows):
+    """`plico a.pdf b.pdf` opens the first document and appends the rest."""
+    pdf_a = str(tmp_path / "a.pdf")
+    pdf_b = str(tmp_path / "b.pdf")
+    _make_pdf(pdf_a, pages=2, text="A")
+    _make_pdf(pdf_b, pages=3, text="B")
+
+    mw = windows()
+
+    assert mw.open_path(pdf_a) is True
+    assert mw._doc_model.page_count == 2
+
+    # No dialog is involved on this path.
+    mw.merge_path(pdf_b)
+
+    assert mw._doc_model.page_count == 5
+    assert len(mw._doc_model.sources) == 2
+    assert mw._doc_model.pages[2].source_id != mw._doc_model.pages[0].source_id

@@ -112,6 +112,58 @@ temporaneo, perché PyMuPDF non può scrivere in un documento che sta leggendo.
 pip install -e ".[dev]"
 ```
 
+L'entry point accetta i file da aprire, come si aspetta un'app desktop:
+
+```bash
+plico relazione.pdf              # apre
+plico a.pdf b.pdf                # apre a.pdf e vi unisce b.pdf
+```
+
+## Flatpak
+
+Il packaging è in `flatpak/` ed è pensato per essere pubblicabile su Flathub.
+
+| File | Ruolo |
+| --- | --- |
+| `io.github.gradia.Plico.json` | manifest dell'applicazione |
+| `python3-pymupdf.json` | modulo per PyMuPDF, con wheel e `sha256` fissati |
+| `io.github.gradia.Plico.desktop` | launcher (registra `application/pdf`) |
+| `io.github.gradia.Plico.metainfo.xml` | metadati AppStream |
+| `io.github.gradia.Plico.svg` | icona |
+
+Tre scelte non ovvie:
+
+- **`base: io.qt.PySide.BaseApp`** invece di installare PySide6 con pip. La
+  BaseApp di Flathub contiene già PySide6 compilato e allineato al Qt di
+  `org.kde.Platform`, quindi il bundle non duplica Qt né rischia di
+  sovrascrivere la versione del runtime. Per questo l'installazione
+  dell'applicazione usa `--no-deps`: PySide6 arriva dal runtime, PyMuPDF dal
+  suo modulo, e pip non deve nemmeno provare a scaricare PySide6 da PyPI.
+- **PyMuPDF da wheel `manylinux`** (`cp310-abi3`, valida per ogni Python ≥ 3.10,
+  quindi anche per il 3.13 del runtime) e non da sorgente: compilare MuPDF
+  dentro il manifest vorrebbe dire `swig` e parecchi minuti di build.
+- **`cleanup-commands: /app/cleanup-BaseApp.sh`**, richiesto dalla BaseApp.
+
+Costruire e installare nella propria utenza:
+
+```bash
+# una volta sola: builder, SDK e BaseApp
+flatpak remote-add --user --if-not-exists flathub \
+    https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpak install --user -y flathub org.flatpak.Builder//stable \
+    org.kde.Sdk//6.11 io.qt.PySide.BaseApp//6.11
+
+# build + install
+flatpak run org.flatpak.Builder --force-clean --user --install \
+    --install-deps-from=flathub \
+    build-dir flatpak/io.github.gradia.Plico.json
+
+flatpak run io.github.gradia.Plico
+```
+
+Per pubblicare su Flathub la sorgente `type: dir` del modulo `plico` va
+sostituita con la sorgente `git` del tag di rilascio.
+
 ## Sviluppo
 
 ```bash

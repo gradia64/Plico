@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>Plico</title>
+
+  <!-- Pagina con l'angolo piegato: nessun testo, leggibile anche a 16 px -->
+  <path
+    d="M124 64 H316 L388 136 V448 H124 Z"
+    fill="#ffffff"
+    stroke="#17365f"
+    stroke-width="22"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M316 64 H388 V136 Z"
+    fill="#7aa9e0"
+    stroke="#17365f"
+    stroke-width="22"
+    stroke-linejoin="round"
+  />
+
+  <!-- Righe di testo -->
+  <g stroke="#6f8bab" stroke-width="20" stroke-linecap="round">
+    <path d="M172 214 H340" />
+    <path d="M172 270 H340" />
+    <path d="M172 326 H340" />
+    <path d="M172 382 H286" />
+  </g>
+</svg>

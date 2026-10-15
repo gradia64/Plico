@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.gradia.Plico</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <name>Plico</name>
+  <summary>Un vero editor PDF nativo per Linux</summary>
+  <summary xml:lang="en">A true native PDF editor for Linux</summary>
+
+  <description>
+    <p>
+      Plico è un editor PDF nativo per Linux: riunisce in un'unica applicazione
+      quello che oggi richiede PDF Arranger, Xournal++ e i comandi da terminale
+      come qpdf.
+    </p>
+    <p>Funzioni disponibili in questa versione:</p>
+    <ul>
+      <li>Ruotare, eliminare e riordinare le pagine, anche con drag &amp; drop</li>
+      <li>Unire più PDF: le pagine vengono accodate senza copiarle</li>
+      <li>Estrarre un sottoinsieme di pagine in un nuovo file</li>
+      <li>Annullare e ripristinare ogni operazione</li>
+      <li>Rendering asincrono e pigro: l'interfaccia non si blocca mai</li>
+    </ul>
+    <p>
+      Il file non viene mai modificato finché non si salva: il documento aperto
+      è una lista di pagine virtuali che puntano ai PDF originali, letti in sola
+      lettura. Questo rende l'annullamento immediato e il salvataggio sicuro.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">io.github.gradia.Plico.desktop</launchable>
+
+  <provides>
+    <binary>plico</binary>
+    <mediatype>application/pdf</mediatype>
+  </provides>
+
+  <categories>
+    <category>Office</category>
+    <category>Viewer</category>
+  </categories>
+
+  <keywords>
+    <keyword>PDF</keyword>
+    <keyword>pagine</keyword>
+    <keyword>ruota</keyword>
+    <keyword>unisci</keyword>
+    <keyword>estrai</keyword>
+  </keywords>
+
+  <developer id="io.github.gradia">
+    <name>gradia</name>
+  </developer>
+
+  <url type="homepage">https://github.com/gradia/plico</url>
+  <url type="bugtracker">https://github.com/gradia/plico/issues</url>
+  <url type="vcs-browser">https://github.com/gradia/plico</url>
+
+  <content_rating type="oars-1.1"/>
+
+  <releases>
+    <release version="0.1.0" date="2026-10-15"/>
+  </releases>
+</component>
