@@ -7,6 +7,8 @@ Un vero editor PDF nativo per Linux, costruito con **Qt6** e **PySide6** + **PyM
 ## Caratteristiche MVP
 
 - **Ruotare, eliminare, riordinare** pagine (drag & drop nella barra miniature)
+- **Estrarre pagine** (dividere) in un nuovo file con una selezione tipo
+  `1-3,5,8` — l'ordine digitato è conservato, quindi vale anche come riordino
 - **Undo/Redo** completo grazie a `QUndoStack`
 - **Rendering asincrono** in un thread separato — l'UI non si blocca mai
 - **Rendering lazy**: si renderizzano solo le pagine visibili, non l'intero
@@ -33,7 +35,7 @@ plico/
     ├── model/
     │   ├── document.py        # DocumentModel, PageItem
     │   ├── commands.py        # QUndoCommand: RotatePage, DeletePage, MovePage
-    │   └── save.py            # save_as()
+    │   └── save.py            # save_as(), extract_pages(), parse_page_ranges()
     ├── rendering/
     │   └── worker.py          # RenderWorker in QThread
     └── widgets/

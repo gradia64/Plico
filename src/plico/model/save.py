@@ -28,11 +28,18 @@ def _contiguous_runs(items: list[PageItem]) -> Iterator[list[PageItem]]:
         yield run
 
 
-def _write_pdf(model: DocumentModel, out_path: str) -> None:
-    """Build the output PDF at *out_path* from the virtual page list."""
+def _write_pdf(
+    model: DocumentModel, out_path: str, pages: list[int] | None = None
+) -> None:
+    """Build the output PDF at *out_path* from the virtual page list.
+
+    *pages* selects a subset by 0-based index, preserving the given order;
+    ``None`` means "every page, in model order".
+    """
     assert model.path is not None, "No document open"
+    items = model.pages if pages is None else [model.pages[i] for i in pages]
     with fitz.open(model.path) as src, fitz.open() as out:
-        for run in _contiguous_runs(model.pages):
+        for run in _contiguous_runs(items):
             first = run[0].source_index
             last = run[-1].source_index
             out.insert_pdf(src, from_page=first, to_page=last)
@@ -47,33 +54,27 @@ def _write_pdf(model: DocumentModel, out_path: str) -> None:
         out.save(out_path, garbage=4, deflate=True)
 
 
-def save_as(model: DocumentModel, out_path: str) -> None:
-    """Render the virtual page list to *out_path*.
+def _write_atomically(
+    model: DocumentModel, target: str, pages: list[int] | None
+) -> None:
+    """Write *target*, never destroying the file currently being read.
 
-    The source PDF is opened read-only; pages are copied by ``source_index``
-    and their rotation is set to ``base_rotation + rotation``.
-
-    Saving onto the file that is currently open is allowed: PyMuPDF cannot
-    write to a file it is reading, so the new document goes to a temporary
-    file in the same directory and only replaces the original once it has
-    been written successfully. A failure therefore never destroys the
-    user's original.
+    PyMuPDF cannot write to a document it is reading, so when the target is
+    the open source the output goes to a temporary file in the same
+    directory and replaces the original only once written successfully.
     """
-    assert model.path is not None, "No document open"
-
-    target = os.path.abspath(out_path)
-    source = os.path.abspath(model.path)
+    source = os.path.abspath(model.path or "")
     overwriting = os.path.exists(target) and os.path.samefile(target, source)
 
     if not overwriting:
-        _write_pdf(model, target)
+        _write_pdf(model, target, pages)
         return
 
     directory = os.path.dirname(target)
     fd, tmp_path = tempfile.mkstemp(dir=directory, suffix=".pdf.tmp")
     os.close(fd)
     try:
-        _write_pdf(model, tmp_path)
+        _write_pdf(model, tmp_path, pages)
         # Keep the original file's permissions across the swap.
         os.chmod(tmp_path, os.stat(source).st_mode & 0o7777)
         os.replace(tmp_path, target)
@@ -82,3 +83,66 @@ def save_as(model: DocumentModel, out_path: str) -> None:
         with contextlib.suppress(OSError):
             os.unlink(tmp_path)
         raise
+
+
+def save_as(model: DocumentModel, out_path: str) -> None:
+    """Render the virtual page list to *out_path*.
+
+    The source PDF is opened read-only; pages are copied by ``source_index``
+    and their rotation is set to ``base_rotation + rotation``.
+
+    Saving onto the file that is currently open is allowed; see
+    :func:`_write_atomically`.
+    """
+    assert model.path is not None, "No document open"
+    _write_atomically(model, os.path.abspath(out_path), None)
+
+
+def extract_pages(model: DocumentModel, out_path: str, indices: list[int]) -> None:
+    """Split: write only *indices* (0-based, in the order given).
+
+    This never mutates the open document -- the selection is materialised
+    into a separate file, exactly like :func:`save_as`.
+    """
+    assert model.path is not None, "No document open"
+    if not indices:
+        raise ValueError("Nessuna pagina da estrarre.")
+    _write_atomically(model, os.path.abspath(out_path), indices)
+
+
+def parse_page_ranges(spec: str, page_count: int) -> list[int]:
+    """Parse a 1-based page spec such as ``"1-3,5,8"`` into 0-based indices.
+
+    The order the user typed is preserved, so ``"5,1-3"`` reorders as well
+    as extracts. Range bounds are inclusive. Anything malformed, out of
+    range, or empty raises :class:`ValueError` with a message meant to be
+    shown to the user: silently dropping pages from a split would be worse
+    than refusing to run it.
+    """
+    indices: list[int] = []
+
+    for token in spec.replace(" ", "").split(","):
+        if not token:
+            continue
+        if "-" in token:
+            low, _, high = token.partition("-")
+            if not (low.isdigit() and high.isdigit()):
+                raise ValueError(f"Intervallo non valido: «{token}»")
+            if int(low) > int(high):
+                raise ValueError(f"Intervallo al contrario: «{token}»")
+            indices.extend(range(int(low), int(high) + 1))
+        elif token.isdigit():
+            indices.append(int(token))
+        else:
+            raise ValueError(f"Indicazione di pagina non valida: «{token}»")
+
+    if not indices:
+        raise ValueError("Nessuna pagina indicata.")
+
+    for number in indices:
+        if not 1 <= number <= page_count:
+            raise ValueError(
+                f"La pagina {number} non esiste: il documento ne ha {page_count}."
+            )
+
+    return [number - 1 for number in indices]

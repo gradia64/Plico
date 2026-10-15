@@ -13,7 +13,12 @@ import fitz
 import pytest
 from PySide6.QtCore import QSettings
 from PySide6.QtGui import QAction, QIcon
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import (
+    QApplication,
+    QFileDialog,
+    QInputDialog,
+    QMessageBox,
+)
 
 import plico.main_window
 from plico.main_window import MainWindow
@@ -113,7 +118,7 @@ def test_rotate_changes_geometry_and_saved_rotation(windows, tmp_path):
 
     first = mw._page_view._canvases[0]
     w_before, h_before = first.width_pt, first.height_pt
-    assert (w_before, h_before) == (595.0, 842.0)   # A4 portrait
+    assert (w_before, h_before) == (595.0, 842.0)  # A4 portrait
 
     mw._thumb_bar.set_current_row(0)
     mw._rotate_cw_clicked()
@@ -132,8 +137,8 @@ def test_rotate_changes_geometry_and_saved_rotation(windows, tmp_path):
     save_as(mw._doc_model, out)
     with fitz.open(out) as d:
         assert d.page_count == 3
-        assert d[0].rotation == 90      # rotated page
-        assert d[1].rotation == 0       # untouched page
+        assert d[0].rotation == 90  # rotated page
+        assert d[1].rotation == 0  # untouched page
 
 
 def test_rotate_is_undoable(windows, tmp_path):
@@ -233,7 +238,7 @@ def test_save_preserves_base_rotation(windows, tmp_path):
     item = mw._doc_model.pages[0]
     assert item.base_rotation == 90
     assert item.total_rotation == 90
-    assert item.rotation == 0        # user offset untouched
+    assert item.rotation == 0  # user offset untouched
 
     from plico.model import save_as
 
@@ -255,7 +260,7 @@ def test_save_over_the_original_file(windows, tmp_path):
 
     from plico.model import save_as
 
-    save_as(mw._doc_model, pdf)         # same path as the source
+    save_as(mw._doc_model, pdf)  # same path as the source
 
     with fitz.open(pdf) as d:
         assert d.page_count == 1
@@ -282,6 +287,7 @@ def test_compression_flags_reduce_size(tmp_path):
     with fitz.open(out) as d:
         assert d.page_count == 3
         assert d[0].get_text().strip() == "Pagina 1"
+
 
 def test_large_document_stays_responsive(windows, tmp_path):
     """Acceptance criterion: a 300-page PDF must open without blocking.
@@ -442,3 +448,92 @@ def test_zoom_and_geometry_round_trip_through_settings(qapp, tmp_path, monkeypat
     finally:
         second.shutdown_worker()
         second.deleteLater()
+
+
+def test_file_menu_exposes_every_expected_action(windows):
+    """Guards the menu against an action being dropped by a careless edit."""
+    mw = windows()
+    texts = {a.text() for a in mw.findChildren(QAction)}
+
+    expected = {
+        "A&pri…",
+        "&Salva con nome…",
+        "&Estrai pagine…",
+        "&Esci",
+        "Annulla",
+        "Ripeti",
+        "Elimina pagina",
+        "Adatta alla &larghezza",
+        "Zoom a&vanti",
+        "Zoom &indietro",
+    }
+    assert expected <= texts, f"missing menu actions: {expected - texts}"
+
+
+def test_no_two_actions_share_a_shortcut(windows):
+    mw = windows()
+    seen: dict[str, str] = {}
+    for action in mw.findChildren(QAction):
+        if action.shortcut().isEmpty():
+            continue
+        key = action.shortcut().toString()
+        # Undo/redo live on the QUndoStack, so ignore obviously distinct
+        # duplicates only if they are the same action text.
+        if key in seen and seen[key] != action.text():
+            raise AssertionError(f"shortcut {key} used by both {seen[key]!r} and {action.text()!r}")
+        seen[key] = action.text()
+
+
+def test_extract_action_writes_a_subset_without_touching_the_source(
+    qapp, tmp_path, monkeypatch, windows
+):
+    """Drives the real menu handler with the dialogs stubbed out."""
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=5)
+    out = str(tmp_path / "out.pdf")
+
+    mw = windows()
+    _open(mw, pdf)
+    mw._doc_model.pages[1].rotation = 90
+
+    monkeypatch.setattr(QInputDialog, "getText", staticmethod(lambda *a, **k: ("2-3", True)))
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
+
+    mw._extract_pages()
+
+    with fitz.open(out) as doc:
+        assert doc.page_count == 2
+        assert doc[0].rotation == 90  # page 2 of the source
+    with fitz.open(pdf) as doc:
+        assert doc.page_count == 5, "extracting must not modify the source"
+
+
+def test_extract_rejects_a_bad_page_spec_without_writing(qapp, tmp_path, monkeypatch, windows):
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=5)
+    out = str(tmp_path / "out.pdf")
+
+    mw = windows()
+    _open(mw, pdf)
+
+    # A modal QMessageBox would block forever offscreen, so capture it.
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        staticmethod(lambda _parent, _title, text, *a, **k: warnings.append(text)),
+    )
+
+    calls: list[str] = []
+    monkeypatch.setattr(QInputDialog, "getText", staticmethod(lambda *a, **k: ("99", True)))
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (calls.append("asked"), (out, ""))[1]),
+    )
+
+    mw._extract_pages()
+
+    assert calls == [], "a file dialog must not open for an invalid range"
+    assert not os.path.exists(out)
+    assert warnings and "99" in warnings[0], f"the user must be told why: {warnings}"

@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QDockWidget,
     QFileDialog,
+    QInputDialog,
     QLabel,
     QMainWindow,
     QMessageBox,
@@ -18,7 +19,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .model import DeletePage, DocumentModel, MovePage, RotatePage, save_as
+from .model import (
+    DeletePage,
+    DocumentModel,
+    MovePage,
+    RotatePage,
+    extract_pages,
+    parse_page_ranges,
+    save_as,
+)
 from .rendering import RenderWorker
 from .widgets.page_view import PageView
 from .widgets.thumbnail_bar import ThumbnailBar, ThumbnailCache
@@ -110,7 +119,9 @@ class MainWindow(QMainWindow):
     #  Menus & Toolbar
     # ------------------------------------------------------------------ #
 
-    def _act(self, text: str, icon_name: str, shortcut: str, slot: Callable[..., object]) -> QAction:
+    def _act(
+        self, text: str, icon_name: str, shortcut: str, slot: Callable[..., object]
+    ) -> QAction:
         """Build an action carrying a Breeze theme icon.
 
         No icon assets are bundled: KDE ships the theme, and on a desktop
@@ -140,6 +151,14 @@ class MainWindow(QMainWindow):
                 "document-save-as",
                 "Ctrl+Shift+S",
                 self._save_file,
+            )
+        )
+        file_menu.addAction(
+            self._act(
+                self.tr("&Estrai pagine…"),
+                "document-export",
+                "Ctrl+E",
+                self._extract_pages,
             )
         )
         file_menu.addSeparator()
@@ -274,6 +293,50 @@ class MainWindow(QMainWindow):
         except Exception as e:  # noqa: BLE001
             QMessageBox.critical(
                 self, self.tr("Errore"), self.tr("Impossibile salvare:\n{0}").format(e)
+            )
+
+    def _extract_pages(self) -> None:
+        """Split: write a typed page selection to a separate file.
+
+        The open document is never modified -- this only materialises a
+        subset, so it needs no undo entry.
+        """
+        if self._doc_model.path is None:
+            QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
+            return
+
+        spec, accepted = QInputDialog.getText(
+            self,
+            self.tr("Estrai pagine"),
+            self.tr("Pagine da estrarre (es. 1-3,5,8):"),
+        )
+        if not accepted or not spec.strip():
+            return
+
+        try:
+            indices = parse_page_ranges(spec, self._doc_model.page_count)
+        except ValueError as e:
+            # The message is written for the user, so show it verbatim.
+            QMessageBox.warning(self, self.tr("Attenzione"), str(e))
+            return
+
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            self.tr("Estrai pagine"),
+            str(os.path.expanduser("~")),
+            self.tr("File PDF (*.pdf)"),
+        )
+        if not path:
+            return
+
+        try:
+            extract_pages(self._doc_model, path, indices)
+            self._status.setText(self.tr("Estratte {0} pagine in: {1}").format(len(indices), path))
+        except Exception as e:  # noqa: BLE001
+            QMessageBox.critical(
+                self,
+                self.tr("Errore"),
+                self.tr("Impossibile estrarre:\n{0}").format(e),
             )
 
     # ------------------------------------------------------------------ #
