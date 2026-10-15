@@ -138,17 +138,23 @@ class PageView(QScrollArea):
         self._request_visible()
 
     def _oriented_size(self, position: int, item: PageItem) -> tuple[float, float]:
-        """Page size in points as displayed, i.e. with its total rotation.
+        """Page size in points as displayed, user rotation included.
 
         ``position`` is the index in the virtual page list, NOT in the
         source document: sizes are stored per virtual page because that is
         what the layout walks. Falls back to A4 when sizes are not known
         yet, so the placeholder still has a sane box.
+
+        The swap is driven by the USER offset only. ``_sizes_pt`` comes from
+        ``page.rect``, which MuPDF has already rotated by the page's own
+        /Rotate, so the base rotation is baked into those numbers already;
+        swapping on ``total_rotation`` would apply it a second time and every
+        scan would be laid out the wrong way round.
         """
         if position >= len(self._sizes_pt):
             return 595.0, 842.0
         w_pt, h_pt = self._sizes_pt[position]
-        if item.total_rotation % 180 == 0:
+        if item.rotation % 180 == 0:
             return w_pt, h_pt
         return h_pt, w_pt
 
@@ -321,7 +327,7 @@ class PageView(QScrollArea):
                 "page",
                 c.item.source_id,
                 c.item.source_index,
-                c.item.total_rotation,
+                c.item.rotation,
                 self._zoom,
                 dpr,
             )
@@ -341,9 +347,9 @@ class PageView(QScrollArea):
                     key,
                     self._model.source_for(c.item),
                     c.item.source_index,
-                    self._zoom * dpr,       # zoom in real pixels
-                    c.item.total_rotation,  # composite rotation for rendering
-                )
+                    self._zoom * dpr,   # zoom in real pixels
+                    c.item.rotation,    # user offset only: MuPDF has already
+                )                       # applied the page's own /Rotate
             )
 
     def _on_rendered(self, key, img) -> None:

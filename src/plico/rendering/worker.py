@@ -11,9 +11,11 @@ Key design decisions:
   - The request carries the source *path* rather than relying on an earlier
     "open" message: there is no cross-thread ordering to get wrong, and the
     same page is never rendered from a stale document.
-  - Rendering uses the composite rotation (item.total_rotation) so that
-    page.rect (which already includes base rotation) and our user rotation
-    offset are combined correctly.
+  - Rendering applies ONLY the user's rotation offset. MuPDF already applies
+    the page's own /Rotate, both when rendering and when reporting
+    ``page.rect``, so adding ``base_rotation`` here would rotate a
+    base-rotated page twice -- and base-rotated pages are everywhere (scans,
+    phone exports, anything a viewer has "fixed" by writing /Rotate).
 """
 
 from collections import OrderedDict
@@ -48,7 +50,7 @@ class RenderRequest:
         self.source_path = source_path      # which PDF to render from
         self.source_index = source_index    # page position in that PDF
         self.zoom = zoom                    # zoom in real pixels (zoom × dpr)
-        self.rotation = rotation            # composite rotation for rendering
+        self.rotation = rotation            # user offset on top of /Rotate
 
 
 class RenderWorker(QObject):

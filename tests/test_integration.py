@@ -150,6 +150,50 @@ def test_rotate_changes_geometry_and_saved_rotation(windows, tmp_path):
         assert d[1].rotation == 0  # untouched page
 
 
+def test_page_with_base_rotation_is_not_rotated_twice(windows, tmp_path):
+    """A page carrying its own /Rotate must be shown as it really is.
+
+    MuPDF applies the page's /Rotate both when rendering and when reporting
+    ``page.rect``, so the renderer may only add the USER's offset. Passing the
+    composite rotation rotates such a page a second time: it comes out
+    portrait and upside down. Base-rotated pages are common (scans, phone
+    exports, anything a viewer has "fixed" by writing /Rotate), which is why
+    this needs a regression test of its own.
+    """
+    pdf = str(tmp_path / "base90.pdf")
+    out = str(tmp_path / "base90-out.pdf")
+    doc = fitz.open()
+    page = doc.new_page(width=595, height=842)  # stored portrait...
+    page.insert_text((72, 72), "BASE90", fontsize=24)
+    page.set_rotation(90)  # ...but flagged as rotated 90
+    doc.save(pdf)
+    doc.close()
+
+    mw = windows()
+    _open(mw, pdf)
+
+    assert mw._doc_model.pages[0].base_rotation == 90
+    assert mw._doc_model.pages[0].rotation == 0  # the user rotated nothing
+
+    first = mw._page_view._canvases[0]
+    # Landscape, the way every other PDF viewer shows it.
+    assert (first.width_pt, first.height_pt) == (842.0, 595.0)
+    pix = first.label.pixmap()
+    assert not pix.isNull()
+    assert pix.width() > pix.height()  # NOT portrait: no double rotation
+
+    # The user's own 90° must compose with the base one, not replace it.
+    mw._thumb_bar.set_current_row(0)
+    mw._rotate_cw_clicked()
+    _pump()
+    first = mw._page_view._canvases[0]
+    assert (first.width_pt, first.height_pt) == (595.0, 842.0)
+
+    save_as(mw._doc_model, out)
+    with fitz.open(out) as d:
+        assert d[0].rotation == 180  # 90 base + 90 user
+
+
 def test_rotate_is_undoable(windows, tmp_path):
     pdf = str(tmp_path / "in.pdf")
     _make_pdf(pdf, pages=2)

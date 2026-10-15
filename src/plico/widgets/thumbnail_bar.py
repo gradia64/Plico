@@ -41,16 +41,16 @@ def thumb_key(item: PageItem, zoom: float = THUMB_ZOOM, dpr: float = 1.0) -> tup
 
     ("thumb", source_id, source_index, rotation, zoom, dpr) -- source_id is
     included so a merged document cannot reuse another source's pixmap.
-    
 
-    Rotation is part of the key: a rotated page must re-render rather than
-    reuse the stale thumbnail. source_index alone would collide.
+    The rotation in the key is the USER offset, which is what the renderer
+    applies on top of the page's own /Rotate. It is part of the key so a
+    rotated page re-renders instead of reusing a stale thumbnail.
     """
     return (
         "thumb",
         item.source_id,
         item.source_index,
-        item.total_rotation,
+        item.rotation,
         zoom,
         dpr,
     )
@@ -212,7 +212,7 @@ class ThumbnailBar(QListView):
                         self._doc_model.source_for(item),
                         item.source_index,
                         THUMB_ZOOM * dpr,
-                        item.total_rotation,
+                        item.rotation,
                     )
                 )
 
