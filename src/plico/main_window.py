@@ -1,9 +1,10 @@
 """MainWindow — orchestrates model, worker, commands, and views."""
 
 import os
+from collections.abc import Callable
 
-from PySide6.QtCore import QMetaObject, Qt, QThread
-from PySide6.QtGui import QAction, QUndoStack
+from PySide6.QtCore import QMetaObject, QSettings, Qt, QThread
+from PySide6.QtGui import QAction, QIcon, QUndoStack
 from PySide6.QtWidgets import (
     QApplication,
     QDockWidget,
@@ -65,7 +66,7 @@ class MainWindow(QMainWindow):
 
         # --- central widget (PageView handles its own rendering) ---
         self._page_view = PageView(self._worker, self._doc_model)
-        self._status = QLabel("Pronto")
+        self._status = QLabel(self.tr("Pronto"))
 
         # Layout: page view in a container with status bar
         central = QWidget()
@@ -77,19 +78,19 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
         # --- thumbnail bar ---
-        self._thumb_bar = ThumbnailBar(
-            self._doc_model, self._worker, self._thumbnail_cache
-        )
+        self._thumb_bar = ThumbnailBar(self._doc_model, self._worker, self._thumbnail_cache)
         # The bar never reorders itself: it reports the intent and we push
         # an undoable command.
         self._thumb_bar.move_requested.connect(self._move_page)
         self._thumb_bar.page_selected.connect(self._on_page_selected)
-        dock = QDockWidget("Miniature", self)
+        dock = QDockWidget(self.tr("Miniature"), self)
+        dock.setObjectName("thumbnail_dock")
         dock.setWidget(self._thumb_bar)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock)
 
         # --- undo dock (dev tool) ---
-        undo_dock = QDockWidget("Storico azioni", self)
+        undo_dock = QDockWidget(self.tr("Storico azioni"), self)
+        undo_dock.setObjectName("undo_dock")
         self._undo_view = QUndoView(self._undo_stack)
         undo_dock.setWidget(self._undo_view)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, undo_dock)
@@ -102,82 +103,116 @@ class MainWindow(QMainWindow):
         self._sizes_pt: list[tuple[float, float]] = []
         self._current_page_index = 0
 
+        # --- restore the previous session's UI state ---
+        self._restore_settings()
+
     # ------------------------------------------------------------------ #
     #  Menus & Toolbar
     # ------------------------------------------------------------------ #
 
+    def _act(self, text: str, icon_name: str, shortcut: str, slot: Callable[..., object]) -> QAction:
+        """Build an action carrying a Breeze theme icon.
+
+        No icon assets are bundled: KDE ships the theme, and on a desktop
+        without it ``fromTheme`` returns a null icon which we simply skip
+        rather than showing an empty square.
+        """
+        action = QAction(text, self)
+        if shortcut:
+            action.setShortcut(shortcut)
+        icon = QIcon.fromTheme(icon_name)
+        if not icon.isNull():
+            action.setIcon(icon)
+        action.triggered.connect(slot)
+        return action
+
     def _setup_menus(self) -> None:
         menubar = self.menuBar()
 
-        file_menu = menubar.addMenu("&File")
+        file_menu = menubar.addMenu(self.tr("&File"))
 
-        open_act = QAction("A&pri…", self)
-        open_act.setShortcut("Ctrl+O")
-        open_act.triggered.connect(self._open_file)
-        file_menu.addAction(open_act)
-
-        save_act = QAction("&Salva con nome…", self)
-        save_act.setShortcut("Ctrl+Shift+S")
-        save_act.triggered.connect(self._save_file)
-        file_menu.addAction(save_act)
-
+        file_menu.addAction(
+            self._act(self.tr("A&pri…"), "document-open", "Ctrl+O", self._open_file)
+        )
+        file_menu.addAction(
+            self._act(
+                self.tr("&Salva con nome…"),
+                "document-save-as",
+                "Ctrl+Shift+S",
+                self._save_file,
+            )
+        )
         file_menu.addSeparator()
+        file_menu.addAction(self._act(self.tr("&Esci"), "application-exit", "Ctrl+Q", self.close))
 
-        quit_act = QAction("&Esci", self)
-        quit_act.setShortcut("Ctrl+Q")
-        quit_act.triggered.connect(self.close)
-        file_menu.addAction(quit_act)
+        edit_menu = menubar.addMenu(self.tr("&Modifica"))
 
-        edit_menu = menubar.addMenu("&Modifica")
-
-        undo_act = self._undo_stack.createUndoAction(self, "Annulla")
+        undo_act = self._undo_stack.createUndoAction(self, self.tr("Annulla"))
         undo_act.setShortcut("Ctrl+Z")
+        undo_act.setIcon(QIcon.fromTheme("edit-undo"))
         edit_menu.addAction(undo_act)
 
-        redo_act = self._undo_stack.createRedoAction(self, "Ripeti")
+        redo_act = self._undo_stack.createRedoAction(self, self.tr("Ripeti"))
         redo_act.setShortcut("Ctrl+Y")
+        redo_act.setIcon(QIcon.fromTheme("edit-redo"))
         edit_menu.addAction(redo_act)
 
         edit_menu.addSeparator()
 
-        self._delete_act = QAction("Elimina pagina", self)
-        self._delete_act.setShortcut("Canc")
-        self._delete_act.triggered.connect(self._delete_page)
+        self._delete_act = self._act(
+            self.tr("Elimina pagina"), "edit-delete", "Del", self._delete_page
+        )
         edit_menu.addAction(self._delete_act)
 
-        view_menu = menubar.addMenu("&Visualizza")
+        view_menu = menubar.addMenu(self.tr("&Visualizza"))
 
-        fit_act = QAction("Adatta alla &larghezza", self)
-        fit_act.setShortcut("Ctrl+0")
-        fit_act.triggered.connect(self._page_view.set_zoom_fit_width)
-        view_menu.addAction(fit_act)
+        self._fit_act = self._act(
+            self.tr("Adatta alla &larghezza"),
+            "zoom-fit-best",
+            "Ctrl+0",
+            self._page_view.set_zoom_fit_width,
+        )
+        view_menu.addAction(self._fit_act)
 
-        zoom_in_act = QAction("Zoom &avanti", self)
-        zoom_in_act.setShortcut("Ctrl++")
-        zoom_in_act.triggered.connect(self._page_view.zoom_in)
-        view_menu.addAction(zoom_in_act)
+        self._zoom_in_act = self._act(
+            self.tr("Zoom a&vanti"), "zoom-in", "Ctrl++", self._page_view.zoom_in
+        )
+        view_menu.addAction(self._zoom_in_act)
 
-        zoom_out_act = QAction("Zoom &indietro", self)
-        zoom_out_act.setShortcut("Ctrl+-")
-        zoom_out_act.triggered.connect(self._page_view.zoom_out)
-        view_menu.addAction(zoom_out_act)
+        self._zoom_out_act = self._act(
+            self.tr("Zoom &indietro"), "zoom-out", "Ctrl+-", self._page_view.zoom_out
+        )
+        view_menu.addAction(self._zoom_out_act)
 
     def _setup_toolbar(self) -> None:
-        toolbar = QToolBar("Strumenti")
+        toolbar = QToolBar(self.tr("Strumenti"))
+        # saveState()/restoreState() identify docks and toolbars by
+        # objectName, and warn without one.
+        toolbar.setObjectName("main_toolbar")
         self.addToolBar(toolbar)
 
-        # Rotation buttons
-        self._rotate_cw = QAction("↻", self)
-        self._rotate_cw.setToolTip("Ruota a destra 90°")
-        self._rotate_cw.setShortcut("Ctrl+R")
-        self._rotate_cw.triggered.connect(self._rotate_cw_clicked)
+        self._rotate_cw = self._act(
+            self.tr("Ruota a destra"),
+            "object-rotate-right",
+            "Ctrl+R",
+            self._rotate_cw_clicked,
+        )
+        self._rotate_cw.setToolTip(self.tr("Ruota a destra 90°"))
         toolbar.addAction(self._rotate_cw)
 
-        self._rotate_ccw = QAction("↺", self)
-        self._rotate_ccw.setToolTip("Ruota a sinistra 90°")
-        self._rotate_ccw.setShortcut("Ctrl+Shift+R")
-        self._rotate_ccw.triggered.connect(self._rotate_ccw_clicked)
+        self._rotate_ccw = self._act(
+            self.tr("Ruota a sinistra"),
+            "object-rotate-left",
+            "Ctrl+Shift+R",
+            self._rotate_ccw_clicked,
+        )
+        self._rotate_ccw.setToolTip(self.tr("Ruota a sinistra 90°"))
         toolbar.addAction(self._rotate_ccw)
+
+        toolbar.addSeparator()
+        toolbar.addAction(self._zoom_out_act)
+        toolbar.addAction(self._zoom_in_act)
+        toolbar.addAction(self._fit_act)
 
     # ------------------------------------------------------------------ #
     #  File operations
@@ -185,7 +220,10 @@ class MainWindow(QMainWindow):
 
     def _open_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
-            self, "Apri PDF", str(os.path.expanduser("~")), "PDF files (*.pdf)"
+            self,
+            self.tr("Apri PDF"),
+            str(os.path.expanduser("~")),
+            self.tr("File PDF (*.pdf)"),
         )
         if not path:
             return
@@ -195,7 +233,9 @@ class MainWindow(QMainWindow):
         # exceptions from PyMuPDF; at this GUI boundary the correct
         # behaviour is to report it, never to crash the editor.
         except Exception as e:  # noqa: BLE001
-            QMessageBox.critical(self, "Errore", f"Impossibile aprire:\n{e}")
+            QMessageBox.critical(
+                self, self.tr("Errore"), self.tr("Impossibile aprire:\n{0}").format(e)
+            )
 
     def open_document(self, path: str) -> None:
         """Open *path*, resetting every view and cache first.
@@ -212,24 +252,29 @@ class MainWindow(QMainWindow):
         self._doc_model.open(path)
         self._worker.open_requested.emit(path)
         self._current_page_index = 0
-        self._status.setText(f"Aperto: {path}")
+        self._status.setText(self.tr("Aperto: {0}").format(path))
 
     def _save_file(self) -> None:
         if self._doc_model.path is None:
-            QMessageBox.warning(self, "Attenzione", "Nessun documento aperto.")
+            QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
             return
         path, _ = QFileDialog.getSaveFileName(
-            self, "Salva con nome", str(self._doc_model.path), "PDF files (*.pdf)"
+            self,
+            self.tr("Salva con nome"),
+            str(self._doc_model.path),
+            self.tr("File PDF (*.pdf)"),
         )
         if not path:
             return
         try:
             save_as(self._doc_model, path)
-            self._status.setText(f"Salvato: {path}")
+            self._status.setText(self.tr("Salvato: {0}").format(path))
         # Same reasoning as _open_file: a failed write (permissions, full
         # disk, malformed source) must surface as a dialog, not a traceback.
         except Exception as e:  # noqa: BLE001
-            QMessageBox.critical(self, "Errore", f"Impossibile salvare:\n{e}")
+            QMessageBox.critical(
+                self, self.tr("Errore"), self.tr("Impossibile salvare:\n{0}").format(e)
+            )
 
     # ------------------------------------------------------------------ #
     #  Worker signals
@@ -256,14 +301,12 @@ class MainWindow(QMainWindow):
             return
         dpr = key[4]
         if dpr:
-            image.setDevicePixelRatio(dpr)   # crisp on HiDPI
+            image.setDevicePixelRatio(dpr)  # crisp on HiDPI
         self._thumbnail_cache[key] = image
         # Repaint just the row that just got its picture.
         row = self._thumb_bar._model.index_for_source(key[1])
         if row.isValid():
-            self._thumb_bar._model.dataChanged.emit(
-                row, row, [Qt.ItemDataRole.DecorationRole]
-            )
+            self._thumb_bar._model.dataChanged.emit(row, row, [Qt.ItemDataRole.DecorationRole])
 
     # ------------------------------------------------------------------ #
     #  Page operations (undo commands)
@@ -324,9 +367,40 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
 
     def closeEvent(self, event) -> None:
-        """Clean shutdown of the worker thread."""
+        """Persist the UI state and shut the worker thread down cleanly."""
+        self._save_settings()
         self.shutdown_worker()
         event.accept()
+
+    # ------------------------------------------------------------------ #
+    #  Settings (QSettings: window geometry, dock/toolbar layout, zoom)
+    # ------------------------------------------------------------------ #
+
+    def _settings(self) -> QSettings:
+        """Explicit org/app: no reliance on global QApplication state."""
+        return QSettings("Plico", "plico")
+
+    def _restore_settings(self) -> None:
+        s = self._settings()
+        geometry = s.value("window/geometry")
+        if geometry is not None:
+            self.restoreGeometry(geometry)
+        state = s.value("window/state")
+        if state is not None:
+            self.restoreState(state)
+        raw = s.value("view/zoom", 0.0)
+        try:
+            zoom = float(raw) if isinstance(raw, (int, float, str)) else 0.0
+        except (TypeError, ValueError):
+            zoom = 0.0
+        if zoom > 0:
+            self._page_view.set_zoom(zoom)
+
+    def _save_settings(self) -> None:
+        s = self._settings()
+        s.setValue("window/geometry", self.saveGeometry())
+        s.setValue("window/state", self.saveState())
+        s.setValue("view/zoom", self._page_view.zoom())
 
     def shutdown_worker(self) -> None:
         """Stop the render thread deterministically.

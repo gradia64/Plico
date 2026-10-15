@@ -69,6 +69,19 @@ viene scritto in un file temporaneo nella stessa directory e sostituisce
 l'originale solo al termine. Un errore di scrittura non distrugge quindi il
 file dell'utente.
 
+### Integrazione desktop (KDE)
+
+- **Icone dal tema** (`QIcon.fromTheme`: `document-open`, `document-save-as`,
+  `edit-undo`, `object-rotate-right`, `zoom-in`, …): nessun asset grafico nel
+  pacchetto. Se il tema non fornisce l'icona, l'azione resta senza icona invece
+  di mostrare un quadrato vuoto.
+- **Stringhe traducibili da subito** (`self.tr()` su tutto il testo
+  visibile): pronte per Qt Linguist (`lupdate` / `lrelease`) senza doverle
+  rintracciare a posteriori.
+- **Stato della sessione in `QSettings`** (`~/.config/Plico/plico.conf`):
+  geometria della finestra, layout di dock e barra strumenti, e fattore di
+  zoom.
+
 ## Requisiti
 
 - Python ≥ 3.11

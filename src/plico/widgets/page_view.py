@@ -194,6 +194,10 @@ class PageView(QScrollArea):
     #  Zoom controls
     # ------------------------------------------------------------------ #
 
+    def zoom(self) -> float:
+        """Current zoom factor (1.0 = 100%)."""
+        return self._zoom
+
     def set_zoom_fit_width(self) -> None:
         self._fit_mode = True
         self._relayout()

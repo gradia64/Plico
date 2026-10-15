@@ -6,12 +6,16 @@ so a failing assertion can never leave a QThread running.
 """
 
 import os
+import pathlib
 import time
 
 import fitz
 import pytest
+from PySide6.QtCore import QSettings
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication
 
+import plico.main_window
 from plico.main_window import MainWindow
 
 pytestmark = pytest.mark.usefixtures("qapp")
@@ -354,3 +358,87 @@ def test_application_quit_stops_the_worker_thread(windows, tmp_path):
     QApplication.instance().aboutToQuit.emit()
 
     assert not mw._thread.isRunning(), "the render thread survived app quit"
+
+
+def test_all_window_shortcuts_are_valid(windows):
+    """A mistyped key name parses to an EMPTY sequence and silently
+    disables the shortcut.  'Canc' (Italian for Del) did exactly that:
+    QKeySequence('Canc').toString() == '' while non-empty checks pass.
+    """
+    mw = windows()
+    actions = [a for a in mw.findChildren(QAction) if not a.shortcut().isEmpty()]
+
+    assert actions, "no window action exposes a shortcut at all"
+    broken = [a.text() for a in actions if not a.shortcut().toString()]
+    assert not broken, f"shortcuts that do not round-trip: {broken}"
+
+
+def test_actions_carry_theme_icons_no_bundled_assets(windows):
+    """KDE touches: icons come from the Breeze theme, never from the app.
+
+    On a headless container no icon theme is installed, so fromTheme()
+    legitimately returns a null icon and _act() skips it rather than
+    painting an empty square; in that case there is nothing to assert.
+    """
+    wanted = ("object-rotate-right", "object-rotate-left")
+    if not any(QIcon.hasThemeIcon(name) for name in wanted):
+        pytest.skip(f"no icon theme provides {wanted} here (Qt theme: {QIcon.themeName()!r})")
+
+    mw = windows()
+    for action in mw.findChildren(QAction):
+        if action.text() in ("Ruota a destra", "Ruota a sinistra"):
+            assert not action.icon().isNull(), f"{action.text()} has no theme icon"
+
+
+def test_package_ships_no_icon_assets():
+    """The 'zero asset da impacchettare' requirement, verified on disk."""
+    pkg = pathlib.Path(plico.main_window.__file__).parent
+    icons = [
+        f
+        for f in pkg.rglob("*")
+        if f.suffix.lower() in (".png", ".svg", ".ico", ".xpm") and f.is_file()
+    ]
+    assert not icons, f"bundled icon assets defeat the theme-icon approach: {icons}"
+
+
+def test_zoom_and_geometry_round_trip_through_settings(qapp, tmp_path, monkeypatch):
+    """QSettings must survive a restart: close the window, reopen, same zoom.
+
+    _settings is redirected to a throwaway INI so the test never touches the
+    developer's real configuration.
+    """
+    ini = str(tmp_path / "plico.ini")
+    monkeypatch.setattr(
+        MainWindow,
+        "_settings",
+        lambda self: QSettings(ini, QSettings.Format.IniFormat),
+    )
+
+    first = MainWindow()
+    first._page_view.set_zoom(1.5)
+    first.resize(1000, 700)
+    first.close()  # closeEvent -> _save_settings
+    first.deleteLater()
+
+    stored = QSettings(ini, QSettings.Format.IniFormat)
+    assert float(stored.value("view/zoom")) == pytest.approx(1.5)
+    blob = stored.value("window/geometry")
+    assert blob is not None and not blob.isEmpty(), "geometry was never written"
+
+    # restoreGeometry() clamps to the available screen (the offscreen
+    # platform is 800px wide), so assert on round-trip *stability* rather
+    # than on the raw pixel size.
+    second = MainWindow()
+    try:
+        assert second._page_view.zoom() == pytest.approx(1.5)
+        restored = second.saveGeometry()
+        assert not restored.isEmpty()
+        third = MainWindow()
+        try:
+            assert third.saveGeometry() == restored
+        finally:
+            third.shutdown_worker()
+            third.deleteLater()
+    finally:
+        second.shutdown_worker()
+        second.deleteLater()
