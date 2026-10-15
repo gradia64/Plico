@@ -119,8 +119,8 @@ Tre conseguenze, tutte non negoziabili:
 **Questo bug è realmente accaduto** (è stato trovato e corretto durante la
 stesura di questo documento). Un refactor aveva portato il codice a passare
 `total_rotation` al worker *e* a far decidere lo scambio largo/alto della
-pagina a `total_rotation` in `PageView._oriented_size`, mentre `page_sizes`
-(che viene da `page.rect`) la rotazione base ce l'ha già dentro. Effetto: le
+pagina a `total_rotation` in `PageView._oriented_size`, mentre `width_pt`/
+`height_pt` (che vengono da `page.rect`) la rotazione base ce l'hanno già dentro. Effetto: le
 pagine con `/Rotate` diverso da zero — scansioni, PDF esportati da telefono,
 qualsiasi cosa un visualizzatore abbia "raddrizzato" scrivendo `/Rotate` —
 venivano mostrate **verticali e capovolte**. Il test di regressione è
@@ -145,6 +145,8 @@ class PageItem:
     base_rotation: int    # /Rotate originale (0/90/180/270)
     rotation: int = 0     # offset scelto dall'utente
     source_id: int = 0    # indice in DocumentModel.sources
+    width_pt: float = 0.0    # dimensione orientata, /Rotate già applicata
+    height_pt: float = 0.0
 
     @property
     def total_rotation(self) -> int: ...
@@ -153,11 +155,17 @@ class PageItem:
 `DocumentModel(QObject)` espone:
 
 - `pages: list[PageItem]` — le pagine virtuali, nell'ordine mostrato;
-- `page_sizes: list[tuple[float, float]]` — dimensioni **orientate**,
-  parallele a `pages`. Vengono da `page.rect`, quindi includono la `/Rotate`
-  base. Sono lette al momento dell'apertura perché la vista possa impaginare
-  *prima* che il thread di rendering abbia prodotto un pixel: costa una
-  passata di metadati, non un render;
+- `page_sizes` (property, **derivata**) — le dimensioni **orientate**, lette
+  da `item.width_pt`/`item.height_pt` e quindi sempre allineate a `pages`.
+  Tenerle in una lista parallela è la cosa che viene naturale, ed è quello che
+  c'era: ma `DeletePage` e `MovePage` mutano `pages` da soli, e bastava il
+  comando che dimenticava di aggiornare la seconda lista perché impaginazione e
+  documento divergessero. Derivandola, l'allineamento diventa una proprietà
+  della struttura invece che una disciplina da ricordare a ogni comando nuovo.
+  I valori vengono da `page.rect`, quindi includono la `/Rotate` base, e sono
+  letti all'apertura perché la vista possa impaginare *prima* che il thread di
+  rendering abbia prodotto un pixel: costa una passata di metadati, non un
+  render;
 - `sources: list[str]` — i percorsi dei PDF aperti;
 - `page_count` (property);
 - `open(path)` — sostituisce tutto, aprendo in sola lettura;
@@ -171,7 +179,12 @@ class PageItem:
 scelta deliberata: aggiornare le viste a mano dopo ogni comando significa
 dimenticarsene su undo/redo, che è esattamente il bug che era stato
 introdotto e poi corretto. `PageView` e `ThumbnailBar` si connettono a
-`model.changed` / `model.page_changed` da soli.
+`model.changed` / `model.page_changed` da soli. `ThumbnailBar`, in
+particolare, tratta `page_changed` **senza** resettare il modello — la riga
+resta e va solo ridipinta — e ne scarta la miniatura vecchia: la chiave di
+render contiene la rotazione utente, quindi l'immagine resa prima della
+rotazione non sarebbe più raggiungibile da `data()` e resterebbe nella LRU a
+occupare spazio, una per ogni rotazione (avanti e indietro).
 
 ---
 

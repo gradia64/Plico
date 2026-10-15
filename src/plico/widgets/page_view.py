@@ -54,7 +54,6 @@ class PageView(QScrollArea):
 
         # --- state ---
         self._items: list[PageItem] = []
-        self._sizes_pt: list[tuple[float, float]] = []   # per page, parallel to pages
         self._canvases: list[_Canvas] = []
         # Identity is (source_id, source_index), never source_index alone:
         # once a second PDF is merged, two pages can share a source_index.
@@ -96,7 +95,7 @@ class PageView(QScrollArea):
             return
         first_page = self._first_visible_page()
         self._items = list(self._model.pages)
-        self._sizes_pt = list(self._model.page_sizes)
+        # No size list to copy: each item carries its own oriented size.
         self._rebuild_canvases()
         self._relayout()
         self._anchor_on(first_page)
@@ -122,38 +121,22 @@ class PageView(QScrollArea):
     #  Document lifecycle
     # ------------------------------------------------------------------ #
 
-    def set_pages(
-        self,
-        items: list[PageItem],
-        sizes_pt: list[tuple[float, float]]
-    ) -> None:
-        """Receive the virtual page list + native page sizes from the model."""
-        # Preserve first visible page for scroll anchoring
-        first_page = self._first_visible_page()
-        self._items = list(items)
-        self._sizes_pt = sizes_pt
-        self._rebuild_canvases()
-        self._relayout()
-        self._anchor_on(first_page)
-        self._request_visible()
-
-    def _oriented_size(self, position: int, item: PageItem) -> tuple[float, float]:
+    def _oriented_size(self, item: PageItem) -> tuple[float, float]:
         """Page size in points as displayed, user rotation included.
 
-        ``position`` is the index in the virtual page list, NOT in the
-        source document: sizes are stored per virtual page because that is
-        what the layout walks. Falls back to A4 when sizes are not known
-        yet, so the placeholder still has a sane box.
+        Falls back to A4 when the item has no size (a hand-built PageItem, or
+        a source that reported nothing) so the placeholder still has a sane
+        box.
 
-        The swap is driven by the USER offset only. ``_sizes_pt`` comes from
-        ``page.rect``, which MuPDF has already rotated by the page's own
-        /Rotate, so the base rotation is baked into those numbers already;
-        swapping on ``total_rotation`` would apply it a second time and every
-        scan would be laid out the wrong way round.
+        The swap is driven by the USER offset only. ``item.width_pt`` /
+        ``item.height_pt`` come from ``page.rect``, which MuPDF has already
+        rotated by the page's own /Rotate, so the base rotation is baked into
+        those numbers already; swapping on ``total_rotation`` would apply it a
+        second time and every scan would be laid out the wrong way round.
         """
-        if position >= len(self._sizes_pt):
+        w_pt, h_pt = item.width_pt, item.height_pt
+        if w_pt <= 0.0 or h_pt <= 0.0:
             return 595.0, 842.0
-        w_pt, h_pt = self._sizes_pt[position]
         if item.rotation % 180 == 0:
             return w_pt, h_pt
         return h_pt, w_pt
@@ -184,14 +167,14 @@ class PageView(QScrollArea):
 
         self._canvases = []
         self._by_page = {}
-        for position, item in enumerate(self._items):
+        for item in self._items:
             page_id = self._identity(item)
             canvas = existing.pop(page_id) if page_id in existing else None
             if canvas is None:
                 canvas = _Canvas(item=item, label=self._make_label())
             else:
                 canvas.item = item
-            canvas.width_pt, canvas.height_pt = self._oriented_size(position, item)
+            canvas.width_pt, canvas.height_pt = self._oriented_size(item)
             self._layout.addWidget(canvas.label)
             self._canvases.append(canvas)
             self._by_page[page_id] = canvas
@@ -206,8 +189,8 @@ class PageView(QScrollArea):
         Rotation changes an existing page rather than restructuring the
         list, so the canvases must be re-measured before the relayout.
         """
-        for position, c in enumerate(self._canvases):
-            c.width_pt, c.height_pt = self._oriented_size(position, c.item)
+        for c in self._canvases:
+            c.width_pt, c.height_pt = self._oriented_size(c.item)
         self._relayout()
 
     # ------------------------------------------------------------------ #
@@ -318,7 +301,7 @@ class PageView(QScrollArea):
         return first, last
 
     def _request_visible(self) -> None:
-        if not self._sizes_pt or not self._canvases:
+        if not self._canvases:
             return
         first, last = self._visible_range()
         dpr = self.devicePixelRatioF() or 1.0
@@ -436,7 +419,6 @@ class PageView(QScrollArea):
             self._layout.removeWidget(c.label)
             c.label.deleteLater()
         self._items.clear()
-        self._sizes_pt.clear()
         self._canvases.clear()
         self._by_page.clear()
         self._cache.clear()
@@ -449,7 +431,6 @@ class PageView(QScrollArea):
         Wipes the render cache too: keys are built from source identity, so
         a re-opened document would otherwise hit the old document's pixmaps.
         """
-        self._sizes_pt = []
         self.clear()
         if self._model is not None:
             self._items = list(self._model.pages)

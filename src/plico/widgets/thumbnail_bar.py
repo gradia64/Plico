@@ -73,6 +73,11 @@ class ThumbnailModel(QAbstractListModel):
         self._cache = cache  # shared LRU: render key → QImage
         self._dpr = 1.0
         self._doc_model.changed.connect(self._on_doc_changed)
+        # An in-place edit (rotation, or the undo of one) keeps the row
+        # count, so the whole model must NOT be reset -- but the row must be
+        # repainted, because its decoration is keyed on the rotation and the
+        # view would otherwise keep showing the old orientation.
+        self._doc_model.page_changed.connect(self._on_page_changed)
 
     def set_device_pixel_ratio(self, dpr: float) -> None:
         """Keep thumbnail keys consistent with the device we render for."""
@@ -81,6 +86,12 @@ class ThumbnailModel(QAbstractListModel):
     def _on_doc_changed(self) -> None:
         self.beginResetModel()
         self.endResetModel()
+
+    def _on_page_changed(self, row: int) -> None:
+        """Repaint one row after an in-place edit (rotation, or its undo)."""
+        if 0 <= row < self.rowCount():
+            index = self.createIndex(row, 0)
+            self.dataChanged.emit(index, index, [Qt.ItemDataRole.DecorationRole])
 
     def rowCount(self, parent=_INVALID) -> int:
         return self._doc_model.page_count
@@ -157,6 +168,10 @@ class ThumbnailBar(QListView):
         # Structural changes (delete/reorder) refresh the list and request
         # whatever thumbnails are still missing.
         self._doc_model.changed.connect(self.refresh)
+        # In-place changes (rotation, including its undo) keep the row but
+        # invalidate its thumbnail: the render key embeds the rotation, so
+        # the image rendered before the rotation can never be reused.
+        self._doc_model.page_changed.connect(self._on_page_changed)
         # Thumbnails are loaded lazily as the user scrolls.
         self.verticalScrollBar().valueChanged.connect(lambda _v: self.refresh())
 
@@ -172,6 +187,32 @@ class ThumbnailBar(QListView):
         user is actually looking at. Rows are requested as they scroll into
         view instead.
         """
+        self._request_visible_thumbnails()
+
+    def _on_page_changed(self, row: int) -> None:
+        """Drop a page's stale thumbnail after an in-place edit.
+
+        The render key embeds the user rotation, so the entry produced before
+        the rotation is unreachable by ``data()`` — it would just sit in the
+        LRU until it aged out, once per rotation. Dropping it is what keeps
+        rotating a page back and forth from leaking an image each time.
+        """
+        pages = self._doc_model.pages
+        if not 0 <= row < len(pages):
+            return
+        item = pages[row]
+        stale = [
+            key
+            for key in self._cache
+            if key[0] == "thumb"
+            and key[1] == item.source_id
+            and key[2] == item.source_index
+            and key[3] != item.rotation
+        ]
+        for key in stale:
+            del self._cache[key]
+        # Ask for the new one only if it is on screen; otherwise the next
+        # refresh() (on scroll) will pick it up.
         self._request_visible_thumbnails()
 
     def _visible_rows(self) -> list[int]:

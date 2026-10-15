@@ -142,6 +142,14 @@ def parse_page_ranges(spec: str, page_count: int) -> list[int]:
     shown to the user: silently dropping pages from a split would be worse
     than refusing to run it.
     """
+
+    def checked(number: int) -> int:
+        if not 1 <= number <= page_count:
+            raise ValueError(
+                f"La pagina {number} non esiste: il documento ne ha {page_count}."
+            )
+        return number
+
     indices: list[int] = []
 
     for token in spec.replace(" ", "").split(","):
@@ -151,21 +159,23 @@ def parse_page_ranges(spec: str, page_count: int) -> list[int]:
             low, _, high = token.partition("-")
             if not (low.isdigit() and high.isdigit()):
                 raise ValueError(f"Intervallo non valido: «{token}»")
-            if int(low) > int(high):
+            start, end = int(low), int(high)
+            if start > end:
                 raise ValueError(f"Intervallo al contrario: «{token}»")
-            indices.extend(range(int(low), int(high) + 1))
+            # Check the bounds BEFORE building the range. A spec such as
+            # "1-5000000" used to materialise five million integers and only
+            # then discover that the document has three pages -- an
+            # out-of-memory waiting to happen on a typo. The range is
+            # contiguous and ascending, so checking its ends is enough.
+            checked(start)
+            checked(end)
+            indices.extend(range(start, end + 1))
         elif token.isdigit():
-            indices.append(int(token))
+            indices.append(checked(int(token)))
         else:
             raise ValueError(f"Indicazione di pagina non valida: «{token}»")
 
     if not indices:
         raise ValueError("Nessuna pagina indicata.")
-
-    for number in indices:
-        if not 1 <= number <= page_count:
-            raise ValueError(
-                f"La pagina {number} non esiste: il documento ne ha {page_count}."
-            )
 
     return [number - 1 for number in indices]

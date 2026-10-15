@@ -19,12 +19,22 @@ class PageItem:
     ``source_id`` indexes :attr:`DocumentModel.sources`, which makes merging
     a second PDF just a matter of appending pages that point somewhere else:
     no page is ever copied, rewritten or materialised.
+
+    The oriented size lives here, on the item, and not in a list parallel to
+    :attr:`DocumentModel.pages`: a parallel list has to be kept in sync by
+    every structural command, and the one that forgets desynchronises the
+    layout from the document. A page that carries its own size cannot drift.
     """
 
     source_index: int     # position in its own source document
     base_rotation: int    # /Rotate as stored in the original (0/90/180/270)
     rotation: int = 0     # user-supplied rotation offset
     source_id: int = 0    # index into DocumentModel.sources
+    # Oriented size in points, with the base /Rotate ALREADY applied: it comes
+    # from ``page.rect``, which MuPDF has rotated for us. Only the user offset
+    # still has to be composed on top of these numbers.
+    width_pt: float = 0.0
+    height_pt: float = 0.0
 
     @property
     def total_rotation(self) -> int:
@@ -41,32 +51,41 @@ class DocumentModel(QObject):
     def __init__(self) -> None:
         super().__init__()
         self.pages: list[PageItem] = []
-        # Oriented page sizes, parallel to ``pages``. Cached at open time so
-        # the views can lay out before the render thread has produced a single
-        # pixel; reading them costs one metadata pass, not a render.
-        self.page_sizes: list[tuple[float, float]] = []
         self.sources: list[str] = []
         self.path: str | None = None
 
-    def _items_for(self, source_id: int, path: str) -> tuple[
-        list[PageItem], list[tuple[float, float]]
-    ]:
+    @property
+    def page_sizes(self) -> list[tuple[float, float]]:
+        """Oriented page sizes, derived from :attr:`pages`.
+
+        Read-only on purpose. This used to be a list filled alongside
+        ``pages``, and every command that mutated one without the other
+        (``DeletePage``, ``MovePage``) silently desynchronised the layout:
+        pages moved, sizes stayed. Deriving it makes the alignment an
+        invariant of the data structure instead of a discipline every future
+        command has to remember.
+        """
+        return [(item.width_pt, item.height_pt) for item in self.pages]
+
+    def _items_for(self, source_id: int, path: str) -> list[PageItem]:
         """Read *path* read-only and describe it as virtual pages."""
         with fitz.open(path) as doc:
-            items = [
-                PageItem(source_index=i, base_rotation=p.rotation, source_id=source_id)
+            return [
+                PageItem(
+                    source_index=i,
+                    base_rotation=p.rotation,
+                    source_id=source_id,
+                    # page.rect already includes the base /Rotate, so these
+                    # are the oriented dimensions the view must lay out with.
+                    width_pt=p.rect.width,
+                    height_pt=p.rect.height,
+                )
                 for i, p in enumerate(doc)
             ]
-            # page.rect already includes the base /Rotate, so these are the
-            # oriented dimensions the view must lay out with.
-            sizes = [(p.rect.width, p.rect.height) for p in doc]
-        return items, sizes
 
     def open(self, path: str) -> None:
         """Open *path* read-only, replacing the virtual page list entirely."""
-        items, sizes = self._items_for(0, path)
-        self.pages = items
-        self.page_sizes = sizes
+        self.pages = self._items_for(0, path)
         self.sources = [path]
         self.path = path
         self.changed.emit()
@@ -78,12 +97,11 @@ class DocumentModel(QObject):
         after it has been read successfully, so a corrupt file leaves the
         model exactly as it was.
         """
-        items, sizes = self._items_for(len(self.sources), path)
+        items = self._items_for(len(self.sources), path)
         if not items:
             return 0
         self.sources.append(path)
         self.pages.extend(items)
-        self.page_sizes.extend(sizes)
         self.changed.emit()
         return len(items)
 
@@ -97,7 +115,6 @@ class DocumentModel(QObject):
 
     def close(self) -> None:
         self.pages.clear()
-        self.page_sizes.clear()
         self.sources.clear()
         self.path = None
         self.changed.emit()
