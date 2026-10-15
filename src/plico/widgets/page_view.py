@@ -11,7 +11,7 @@ Key design:
 from collections import OrderedDict
 from dataclasses import dataclass
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtGui import QPalette as QPaletteColor
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QLabel, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
@@ -60,6 +60,9 @@ class PageView(QScrollArea):
         # once a second PDF is merged, two pages can share a source_index.
         self._by_page: dict[tuple[int, int], _Canvas] = {}
         self._zoom = 1.0
+        # Scroll offset we are still trying to reach, if the scrollbar range
+        # was too small when it was asked for.
+        self._pending_scroll: int | None = None
         self._fit_mode = False
         self._cache: OrderedDict[tuple, QPixmap] = OrderedDict()
         self._cache_bytes = 0
@@ -270,6 +273,7 @@ class PageView(QScrollArea):
             y_px += h_px + spacing
 
         # Request visible renders
+        self._apply_pending_scroll()
         self._request_visible()
 
     def resizeEvent(self, event) -> None:
@@ -391,8 +395,30 @@ class PageView(QScrollArea):
         true right after a rebuild, and it silently does nothing in a
         window that is not on screen yet.
         """
+        self._pending_scroll = canvas.y_px
+        self._apply_pending_scroll()
+        if self._pending_scroll is not None:
+            # Qt widens the scrollbar range in its own layout pass, which
+            # has not run yet: one deferred retry lands on the real target.
+            QTimer.singleShot(0, self._finish_pending_scroll)
+
+    def _apply_pending_scroll(self) -> None:
+        """Scroll as far towards the requested offset as the range allows."""
+        if self._pending_scroll is None:
+            return
         sb = self.verticalScrollBar()
-        sb.setValue(max(0, min(canvas.y_px, sb.maximum())))
+        sb.setValue(max(0, min(self._pending_scroll, sb.maximum())))
+        if self._pending_scroll <= sb.maximum():
+            self._pending_scroll = None
+
+    def _finish_pending_scroll(self) -> None:
+        """Last chance to reach the target, then forget it.
+
+        Dropping the request matters: a stale offset re-applied on a later
+        resize would yank the view back to where the user no longer is.
+        """
+        self._apply_pending_scroll()
+        self._pending_scroll = None
 
     def ensure_page_visible(self, index: int) -> None:
         """Scroll the view so the page at *index* is on screen."""

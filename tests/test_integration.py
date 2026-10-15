@@ -50,10 +50,17 @@ def windows(qapp):
     qapp.processEvents()
 
 
-def _make_pdf(path: str, pages: int = 5, text: str = "Pagina") -> None:
+def _make_pdf(
+    path: str,
+    pages: int = 5,
+    text: str = "Pagina",
+    size: tuple[float, float] | None = None,
+) -> None:
+    """Write a small PDF; *size* allows a mixed-orientation document."""
     doc = fitz.open()
+    width, height = size if size else (595.0, 842.0)
     for i in range(pages):
-        page = doc.new_page()
+        page = doc.new_page(width=width, height=height)
         page.insert_text((72, 72), f"{text} {i + 1}", fontsize=24)
     doc.save(path)
     doc.close()
@@ -709,3 +716,38 @@ def test_merge_without_a_document_warns_instead_of_crashing(
 
     assert warnings, "the user must be told there is nothing to merge into"
     assert opened == [], "no file dialog without an open document"
+
+
+def test_merge_reveals_the_appended_pages_in_a_real_window(windows, tmp_path):
+    """The merged pages must actually reach the viewport, not just the model.
+
+    Regression guard: the scroll target is computed from our own layout, and
+    the scrollbar range is only final after Qt's own layout pass. Clamping to
+    a not-yet-grown range used to stop the view short of the merged pages.
+    """
+    pdf_a = str(tmp_path / "a.pdf")
+    pdf_b = str(tmp_path / "b.pdf")
+    _make_pdf(pdf_a, pages=3, text="A")                      # portrait
+    _make_pdf(pdf_b, pages=2, text="B", size=(842.0, 595.0))  # landscape
+
+    mw = windows()
+    mw.resize(1000, 700)
+    mw.show()
+    _open(mw, pdf_a)
+    mw._doc_model.append_document(pdf_b)
+    _pump(0.5)
+
+    view = mw._page_view
+    assert view.verticalScrollBar().maximum() > 0, "the window must be scrollable"
+    view.ensure_page_visible(3)   # first merged page
+    _pump(1.5)
+
+    first, last = view._visible_range()
+    assert first <= 3 < last, (
+        f"merged page 3 is not in view: range is ({first}, {last}), "
+        f"scroll is {view.verticalScrollBar().value()}"
+    )
+    merged = view._by_page[(1, 0)]
+    assert not merged.label.pixmap().isNull(), "the merged page must be rendered"
+    # Landscape source appended to a portrait one: the box must be landscape.
+    assert merged.width_pt > merged.height_pt
