@@ -22,6 +22,8 @@ from PySide6.QtWidgets import (
 
 import plico.main_window
 from plico.main_window import MainWindow
+from plico.model.commands import DeletePage, RotatePage
+from plico.model.save import save_as
 
 pytestmark = pytest.mark.usefixtures("qapp")
 
@@ -82,8 +84,8 @@ def test_open_renders_pages(windows, tmp_path):
     # Model and view agree
     assert mw._doc_model.page_count == 5
     assert len(mw._page_view._canvases) == 5
-    # Native page geometry arrived from the worker
-    assert mw._sizes_pt and mw._sizes_pt[0][0] > 0
+    # Native page geometry was read from the model
+    assert mw._doc_model.page_sizes and mw._doc_model.page_sizes[0][0] > 0
 
     # The first page got a real pixmap, not the grey placeholder
     first = mw._page_view._canvases[0]
@@ -320,7 +322,11 @@ def test_large_document_stays_responsive(windows, tmp_path):
 
 
 def test_second_document_does_not_reuse_first_render(windows, tmp_path):
-    """Caches are keyed by source_index, so they MUST be flushed per document."""
+    """Render keys embed the source identity, so caches MUST still be flushed.
+
+    Two different files both have a page 0; without the flush the second
+    document would be served the first document's pixmap from cache.
+    """
     first_pdf = str(tmp_path / "first.pdf")
     second_pdf = str(tmp_path / "second.pdf")
     _make_pdf(first_pdf, pages=1, text="AAAA")
@@ -458,6 +464,7 @@ def test_file_menu_exposes_every_expected_action(windows):
     expected = {
         "A&pri…",
         "&Salva con nome…",
+        "&Unisci PDF…",
         "&Estrai pagine…",
         "&Esci",
         "Annulla",
@@ -537,3 +544,168 @@ def test_extract_rejects_a_bad_page_spec_without_writing(qapp, tmp_path, monkeyp
     assert calls == [], "a file dialog must not open for an invalid range"
     assert not os.path.exists(out)
     assert warnings and "99" in warnings[0], f"the user must be told why: {warnings}"
+
+
+# --------------------------------------------------------------------- #
+#  Unire (merge): a second source document, never a second copy
+# --------------------------------------------------------------------- #
+
+def test_merge_appends_a_second_source(windows, tmp_path):
+    """Unire must grow the page list without copying anything anywhere."""
+    pdf_a = str(tmp_path / "a.pdf")
+    pdf_b = str(tmp_path / "b.pdf")
+    _make_pdf(pdf_a, pages=5, text="A")
+    _make_pdf(pdf_b, pages=3, text="B")
+
+    mw = windows()
+    _open(mw, pdf_a)
+    mw._doc_model.append_document(pdf_b)
+
+    assert mw._doc_model.page_count == 8
+    assert len(mw._doc_model.sources) == 2
+    # Page sizes are stored per virtual page, so the appended ones are aligned
+    assert len(mw._doc_model.page_sizes) == 8
+    # The appended pages know which document they belong to
+    assert [p.source_id for p in mw._doc_model.pages] == [0] * 5 + [1] * 3
+    # ...and both sources still resolve to their own path
+    assert mw._doc_model.source_for(mw._doc_model.pages[0]) == pdf_a
+    assert mw._doc_model.source_for(mw._doc_model.pages[7]) == pdf_b
+
+    # The view rebuilt itself from the model, with no manual refresh
+    assert len(mw._page_view._canvases) == 8
+    assert mw._thumb_bar._model.rowCount() == 8
+
+
+def test_merged_page_identity_does_not_collide(windows, tmp_path):
+    """Both sources contain a page 0; they must remain distinct pages."""
+    pdf_a = str(tmp_path / "a.pdf")
+    pdf_b = str(tmp_path / "b.pdf")
+    _make_pdf(pdf_a, pages=2, text="A")
+    _make_pdf(pdf_b, pages=2, text="B")
+
+    mw = windows()
+    _open(mw, pdf_a)
+    mw._doc_model.append_document(pdf_b)
+
+    # Row 0 and row 2 both have source_index 0 but different source_id
+    first, third = mw._doc_model.pages[0], mw._doc_model.pages[2]
+    assert first.source_index == third.source_index == 0
+    assert first.source_id != third.source_id
+
+    view = mw._page_view
+    assert len(view._by_page) == 4, "colliding source_index would collapse two pages"
+    assert view._identity(first) != view._identity(third)
+
+
+def test_merged_document_renders_and_saves_every_source(windows, tmp_path):
+    """Both the render thread and the writer must reach the second PDF."""
+    pdf_a = str(tmp_path / "a.pdf")
+    pdf_b = str(tmp_path / "b.pdf")
+    _make_pdf(pdf_a, pages=5, text="A")
+    _make_pdf(pdf_b, pages=3, text="B")
+
+    mw = windows()
+    # A real window: the scrollbar only has a range once the scroll area has
+    # been laid out, so an unshown window cannot scroll to a page.
+    mw.resize(1024, 768)
+    mw.show()
+    _open(mw, pdf_a)
+    mw._doc_model.append_document(pdf_b)
+    _pump(0.3)
+
+    # Pages render lazily, so the merged page only appears once it is on
+    # screen: scroll to it exactly as the user would.
+    view = mw._page_view
+    assert view.verticalScrollBar().maximum() > 0, "the window must be scrollable"
+    view.ensure_page_visible(5)
+    _pump(1.5)
+
+    appended = view._by_page[(1, 0)]
+    assert appended.label.pixmap().width() > 0, "a merged page must render"
+
+    out = str(tmp_path / "merged.pdf")
+    save_as(mw._doc_model, out)
+    with fitz.open(out) as doc:
+        assert doc.page_count == 8
+        # Page 5 is the first page of the second document
+        assert "B" in doc[5].get_text()
+        assert "A" in doc[0].get_text()
+
+
+def test_merge_respects_rotation_of_both_sources(windows, tmp_path):
+    """A rotation applied to a merged page must survive the save."""
+    pdf_a = str(tmp_path / "a.pdf")
+    pdf_b = str(tmp_path / "b.pdf")
+    _make_pdf(pdf_a, pages=2, text="A")
+    _make_pdf(pdf_b, pages=2, text="B")
+
+    mw = windows()
+    _open(mw, pdf_a)
+    mw._doc_model.append_document(pdf_b)
+
+    row = 2  # first page of the second source
+    mw._undo_stack.push(RotatePage(mw._doc_model, row, 90))
+    mw._undo_stack.push(DeletePage(mw._doc_model, 0))  # drop a page from source A
+
+    out = str(tmp_path / "rotated.pdf")
+    save_as(mw._doc_model, out)
+    with fitz.open(out) as doc:
+        assert doc.page_count == 3
+        # Deleting row 0 leaves A2 first, then the two pages of B
+        assert "A 2" in doc[0].get_text()
+        assert "B" in doc[1].get_text()
+        assert doc[1].rotation == 90, "rotation of a merged page must be written"
+        assert doc[0].rotation == 0
+
+
+def test_merge_action_reads_a_second_file_and_saves_both(
+    qapp, tmp_path, monkeypatch, windows
+):
+    """Drives the real menu handler with the file dialog stubbed out."""
+    pdf_a = str(tmp_path / "a.pdf")
+    pdf_b = str(tmp_path / "b.pdf")
+    _make_pdf(pdf_a, pages=2, text="A")
+    _make_pdf(pdf_b, pages=2, text="B")
+    out = str(tmp_path / "merged.pdf")
+
+    mw = windows()
+    _open(mw, pdf_a)
+
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (pdf_b, "")))
+    mw._merge_file()
+
+    assert mw._doc_model.page_count == 4
+    assert len(mw._doc_model.sources) == 2
+    assert "Unite 2" in mw._status.text()
+
+    save_as(mw._doc_model, out)
+    with fitz.open(out) as doc:
+        assert doc.page_count == 4
+        assert "A 1" in doc[0].get_text()
+        assert "B 1" in doc[2].get_text()
+        assert "B 2" in doc[3].get_text()
+    # Merging is additive and never rewrites the documents being read
+    with fitz.open(pdf_a) as doc:
+        assert doc.page_count == 2
+    with fitz.open(pdf_b) as doc:
+        assert doc.page_count == 2
+
+
+def test_merge_without_a_document_warns_instead_of_crashing(
+    qapp, tmp_path, monkeypatch, windows
+):
+    """No document open: the action must refuse, not raise."""
+    mw = windows()
+    warnings = []
+    monkeypatch.setattr(
+        QMessageBox, "warning", staticmethod(lambda *a, **k: warnings.append(a[2]))
+    )
+    opened = []
+    monkeypatch.setattr(
+        QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: opened.append(a) or ("", ""))
+    )
+
+    mw._merge_file()
+
+    assert warnings, "the user must be told there is nothing to merge into"
+    assert opened == [], "no file dialog without an open document"

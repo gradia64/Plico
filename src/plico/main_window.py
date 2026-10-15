@@ -55,7 +55,6 @@ class MainWindow(QMainWindow):
         self._thread = QThread()
         self._worker = RenderWorker()  # no parent → moveToThread is valid
         self._worker.moveToThread(self._thread)
-        self._worker.opened.connect(self._on_worker_opened)
         self._worker.rendered.connect(self._on_rendered)
         # Delete the worker in its own thread once the event loop has
         # exited (QEventLoop flushes deferred deletes on exit).
@@ -109,7 +108,6 @@ class MainWindow(QMainWindow):
         self._setup_toolbar()
 
         # --- state ---
-        self._sizes_pt: list[tuple[float, float]] = []
         self._current_page_index = 0
 
         # --- restore the previous session's UI state ---
@@ -151,6 +149,14 @@ class MainWindow(QMainWindow):
                 "document-save-as",
                 "Ctrl+Shift+S",
                 self._save_file,
+            )
+        )
+        file_menu.addAction(
+            self._act(
+                self.tr("&Unisci PDF…"),
+                "document-open-recent",
+                "Ctrl+Shift+M",
+                self._merge_file,
             )
         )
         file_menu.addAction(
@@ -266,21 +272,71 @@ class MainWindow(QMainWindow):
         self._undo_stack.clear()
         self._page_view.reset()
         self._thumbnail_cache.clear()
-        self._sizes_pt = []
 
         self._doc_model.open(path)
-        self._worker.open_requested.emit(path)
+        # The model emits ``changed`` and the views rebuild from it. Page
+        # sizes come from the model too, so the render thread needs no
+        # round-trip before the layout is correct.
         self._current_page_index = 0
         self._status.setText(self.tr("Aperto: {0}").format(path))
 
+    def _merge_file(self) -> None:
+        """Unire: append every page of another PDF to the document.
+
+        Nothing is copied or rewritten -- the model just grows a second
+        source and the new pages point into it, exactly like the original
+        ones. Undo is not involved: this is an additive file operation.
+        """
+        if not self._doc_model.sources:
+            QMessageBox.warning(
+                self, self.tr("Attenzione"), self.tr("Nessun documento aperto.")
+            )
+            return
+
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            self.tr("Unisci PDF"),
+            str(os.path.expanduser("~")),
+            self.tr("File PDF (*.pdf)"),
+        )
+        if not path:
+            return
+
+        try:
+            added = self._doc_model.append_document(path)
+        # Same reasoning as _open_file: a damaged PDF is reported, never fatal.
+        except Exception as e:  # noqa: BLE001
+            QMessageBox.critical(
+                self,
+                self.tr("Errore"),
+                self.tr("Impossibile unire:\n{0}").format(e),
+            )
+            return
+
+        if added == 0:
+            QMessageBox.warning(
+                self,
+                self.tr("Attenzione"),
+                self.tr("Il documento scelto non contiene pagine."),
+            )
+            return
+
+        # Jump to the first merged page: the whole point of the gesture is to
+        # check what was just appended, and lazily-rendered pages only appear
+        # once they are on screen.
+        first_new = self._doc_model.page_count - added
+        self._page_view.ensure_page_visible(first_new)
+        self._thumb_bar.set_current_row(first_new)
+        self._status.setText(self.tr("Unite {0} pagine da: {1}").format(added, path))
+
     def _save_file(self) -> None:
-        if self._doc_model.path is None:
+        if not self._doc_model.sources:
             QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
             return
         path, _ = QFileDialog.getSaveFileName(
             self,
             self.tr("Salva con nome"),
-            str(self._doc_model.path),
+            self._doc_model.path or "",
             self.tr("File PDF (*.pdf)"),
         )
         if not path:
@@ -301,7 +357,7 @@ class MainWindow(QMainWindow):
         The open document is never modified -- this only materialises a
         subset, so it needs no undo entry.
         """
-        if self._doc_model.path is None:
+        if not self._doc_model.sources:
             QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
             return
 
@@ -343,16 +399,6 @@ class MainWindow(QMainWindow):
     #  Worker signals
     # ------------------------------------------------------------------ #
 
-    def _on_worker_opened(self, path: str, sizes_pt: list) -> None:
-        """Worker has opened the PDF and reports page sizes in points.
-
-        Any render requested before this point was dropped by the worker
-        (it had no document yet), so this is where thumbnails are asked for.
-        """
-        self._sizes_pt = sizes_pt
-        self._page_view.set_pages(self._doc_model.pages, sizes_pt)
-        self._thumb_bar.refresh()
-
     def _on_rendered(self, key: tuple, image) -> None:
         """Route rendered images by role tag.
 
@@ -362,12 +408,13 @@ class MainWindow(QMainWindow):
         """
         if not key or key[0] != "thumb":
             return
-        dpr = key[4]
+        dpr = key[5]
         if dpr:
             image.setDevicePixelRatio(dpr)  # crisp on HiDPI
         self._thumbnail_cache[key] = image
         # Repaint just the row that just got its picture.
-        row = self._thumb_bar._model.index_for_source(key[1])
+        # key = ("thumb", source_id, source_index, rotation, zoom, dpr)
+        row = self._thumb_bar._model.index_for_page(key[1], key[2])
         if row.isValid():
             self._thumb_bar._model.dataChanged.emit(row, row, [Qt.ItemDataRole.DecorationRole])
 

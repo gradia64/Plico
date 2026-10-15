@@ -54,9 +54,11 @@ class PageView(QScrollArea):
 
         # --- state ---
         self._items: list[PageItem] = []
-        self._sizes_pt: list[tuple[float, float]] = []   # (w_pt, h_pt) per source
+        self._sizes_pt: list[tuple[float, float]] = []   # per page, parallel to pages
         self._canvases: list[_Canvas] = []
-        self._by_source: dict[int, _Canvas] = {}          # source_index → canvas
+        # Identity is (source_id, source_index), never source_index alone:
+        # once a second PDF is merged, two pages can share a source_index.
+        self._by_page: dict[tuple[int, int], _Canvas] = {}
         self._zoom = 1.0
         self._fit_mode = False
         self._cache: OrderedDict[tuple, QPixmap] = OrderedDict()
@@ -89,23 +91,29 @@ class PageView(QScrollArea):
         """The page list changed shape (open/delete/reorder): rebuild."""
         if self._model is None:
             return
-        first_src = self._first_visible_source()
+        first_page = self._first_visible_page()
         self._items = list(self._model.pages)
+        self._sizes_pt = list(self._model.page_sizes)
         self._rebuild_canvases()
         self._relayout()
-        self._anchor_on(first_src)
+        self._anchor_on(first_page)
 
     def _on_page_changed(self, _row: int) -> None:
         """A page changed in place (rotation): re-measure and re-render."""
         self.refresh_geometry()
 
-    def _anchor_on(self, source_index: int | None) -> None:
+    @staticmethod
+    def _identity(item: PageItem) -> tuple[int, int]:
+        """Page identity: (source_id, source_index) — stable across edits."""
+        return (item.source_id, item.source_index)
+
+    def _anchor_on(self, page_id: tuple[int, int] | None) -> None:
         """Scroll back to the page the user was looking at, if still present."""
-        if source_index is None:
+        if page_id is None:
             return
-        c = self._by_source.get(source_index)
+        c = self._by_page.get(page_id)
         if c is not None:
-            self.ensureWidgetVisible(c.label)
+            self._scroll_to(c)
 
     # ------------------------------------------------------------------ #
     #  Document lifecycle
@@ -117,24 +125,26 @@ class PageView(QScrollArea):
         sizes_pt: list[tuple[float, float]]
     ) -> None:
         """Receive the virtual page list + native page sizes from the model."""
-        # Preserve first visible source for scroll anchoring
-        first_src = self._first_visible_source()
+        # Preserve first visible page for scroll anchoring
+        first_page = self._first_visible_page()
         self._items = list(items)
         self._sizes_pt = sizes_pt
         self._rebuild_canvases()
         self._relayout()
-        self._anchor_on(first_src)
+        self._anchor_on(first_page)
         self._request_visible()
 
-    def _oriented_size(self, item: PageItem) -> tuple[float, float]:
+    def _oriented_size(self, position: int, item: PageItem) -> tuple[float, float]:
         """Page size in points as displayed, i.e. with its total rotation.
 
-        Before the worker reports sizes (the model can open first) we fall
-        back to A4 so the placeholder has a sane box.
+        ``position`` is the index in the virtual page list, NOT in the
+        source document: sizes are stored per virtual page because that is
+        what the layout walks. Falls back to A4 when sizes are not known
+        yet, so the placeholder still has a sane box.
         """
-        if item.source_index >= len(self._sizes_pt):
+        if position >= len(self._sizes_pt):
             return 595.0, 842.0
-        w_pt, h_pt = self._sizes_pt[item.source_index]
+        w_pt, h_pt = self._sizes_pt[position]
         if item.total_rotation % 180 == 0:
             return w_pt, h_pt
         return h_pt, w_pt
@@ -156,7 +166,7 @@ class PageView(QScrollArea):
         label keeps its rendered pixmap: reordering or deleting a page
         never forces a re-render, and never flashes grey.
         """
-        existing = {c.item.source_index: c for c in self._canvases}
+        existing = {self._identity(c.item): c for c in self._canvases}
 
         # Detach every label so they can be re-added in the new order.
         for c in self._canvases:
@@ -164,17 +174,18 @@ class PageView(QScrollArea):
             c.label.setParent(None)
 
         self._canvases = []
-        self._by_source = {}
-        for item in self._items:
-            canvas = existing.pop(item.source_index) if item.source_index in existing else None
+        self._by_page = {}
+        for position, item in enumerate(self._items):
+            page_id = self._identity(item)
+            canvas = existing.pop(page_id) if page_id in existing else None
             if canvas is None:
                 canvas = _Canvas(item=item, label=self._make_label())
             else:
                 canvas.item = item
-            canvas.width_pt, canvas.height_pt = self._oriented_size(item)
+            canvas.width_pt, canvas.height_pt = self._oriented_size(position, item)
             self._layout.addWidget(canvas.label)
             self._canvases.append(canvas)
-            self._by_source[item.source_index] = canvas
+            self._by_page[page_id] = canvas
 
         # Pages that no longer exist in the document.
         for stale in existing.values():
@@ -186,8 +197,8 @@ class PageView(QScrollArea):
         Rotation changes an existing page rather than restructuring the
         list, so the canvases must be re-measured before the relayout.
         """
-        for c in self._canvases:
-            c.width_pt, c.height_pt = self._oriented_size(c.item)
+        for position, c in enumerate(self._canvases):
+            c.width_pt, c.height_pt = self._oriented_size(position, c.item)
         self._relayout()
 
     # ------------------------------------------------------------------ #
@@ -302,7 +313,14 @@ class PageView(QScrollArea):
         first, last = self._visible_range()
         dpr = self.devicePixelRatioF() or 1.0
         for c in self._canvases[first:last]:
-            key = ("page", c.item.source_index, c.item.total_rotation, self._zoom, dpr)
+            key = (
+                "page",
+                c.item.source_id,
+                c.item.source_index,
+                c.item.total_rotation,
+                self._zoom,
+                dpr,
+            )
             if c.current_key == key or c.pending_key == key:
                 continue
             pix = self._cache.get(key)
@@ -317,6 +335,7 @@ class PageView(QScrollArea):
             self.worker.render_requested.emit(
                 RenderRequest(
                     key,
+                    self._model.source_for(c.item),
                     c.item.source_index,
                     self._zoom * dpr,       # zoom in real pixels
                     c.item.total_rotation,  # composite rotation for rendering
@@ -331,9 +350,9 @@ class PageView(QScrollArea):
         """
         if not key or key[0] != "page":
             return  # not a page render
-        src = key[1]
-        dpr = key[4]
-        c = self._by_source.get(src)
+        page_id = (key[1], key[2])
+        dpr = key[5]
+        c = self._by_page.get(page_id)
         if c is None or c.pending_key != key:
             return  # stale result
         img.setDevicePixelRatio(dpr)  # crisp HiDPI
@@ -356,18 +375,29 @@ class PageView(QScrollArea):
     #  Selection / navigation helpers
     # ------------------------------------------------------------------ #
 
-    def _first_visible_source(self) -> int | None:
-        """source_index of the topmost page near the viewport, for anchoring."""
+    def _first_visible_page(self) -> tuple[int, int] | None:
+        """Identity of the topmost page near the viewport, for anchoring."""
         first, _last = self._visible_range()
         if 0 <= first < len(self._canvases):
-            return self._canvases[first].item.source_index
+            return self._identity(self._canvases[first].item)
         return None
+
+    def _scroll_to(self, canvas: "_Canvas") -> None:
+        """Put the top of *canvas* at the top of the viewport.
+
+        The offset is computed from the layout we recorded ourselves
+        (``y_px``) rather than delegated to ``ensureWidgetVisible``: that
+        call depends on Qt having already run a layout pass, which is not
+        true right after a rebuild, and it silently does nothing in a
+        window that is not on screen yet.
+        """
+        sb = self.verticalScrollBar()
+        sb.setValue(max(0, min(canvas.y_px, sb.maximum())))
 
     def ensure_page_visible(self, index: int) -> None:
         """Scroll the view so the page at *index* is on screen."""
         if 0 <= index < len(self._canvases):
-            # ensureWidgetVisible belongs to QScrollArea, not to the label.
-            self.ensureWidgetVisible(self._canvases[index].label)
+            self._scroll_to(self._canvases[index])
 
     def clear(self) -> None:
         for c in self._canvases:
@@ -376,7 +406,7 @@ class PageView(QScrollArea):
         self._items.clear()
         self._sizes_pt.clear()
         self._canvases.clear()
-        self._by_source.clear()
+        self._by_page.clear()
         self._cache.clear()
         self._cache_bytes = 0
         self.update()
@@ -384,8 +414,8 @@ class PageView(QScrollArea):
     def reset(self) -> None:
         """Drop the current document entirely (before opening another).
 
-        Wipes the render cache too: keys are built from ``source_index``,
-        so a new document would otherwise hit the old document's pixmaps.
+        Wipes the render cache too: keys are built from source identity, so
+        a re-opened document would otherwise hit the old document's pixmaps.
         """
         self._sizes_pt = []
         self.clear()

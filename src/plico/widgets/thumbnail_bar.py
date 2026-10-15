@@ -37,18 +37,30 @@ _INVALID = QModelIndex()
 
 
 def thumb_key(item: PageItem, zoom: float = THUMB_ZOOM, dpr: float = 1.0) -> tuple:
-    """Cache/render key for a thumbnail: ("thumb", src, rotation, zoom, dpr).
+    """Cache/render key for a thumbnail.
+
+    ("thumb", source_id, source_index, rotation, zoom, dpr) -- source_id is
+    included so a merged document cannot reuse another source's pixmap.
+    
 
     Rotation is part of the key: a rotated page must re-render rather than
     reuse the stale thumbnail. source_index alone would collide.
     """
-    return ("thumb", item.source_index, item.total_rotation, zoom, dpr)
+    return (
+        "thumb",
+        item.source_id,
+        item.source_index,
+        item.total_rotation,
+        zoom,
+        dpr,
+    )
 
 
 class ThumbnailModel(QAbstractListModel):
     """Thin model wrapping the DocumentModel's page list."""
 
     SourceIndexRole = Qt.ItemDataRole.UserRole + 1
+    SourceIdRole = Qt.ItemDataRole.UserRole + 2
 
     def __init__(
         self,
@@ -81,6 +93,8 @@ class ThumbnailModel(QAbstractListModel):
             return f"Pagina {index.row() + 1}"
         if role == self.SourceIndexRole:
             return item.source_index
+        if role == self.SourceIdRole:
+            return item.source_id
         if role == Qt.ItemDataRole.DecorationRole:
             key = thumb_key(item, THUMB_ZOOM, self._dpr)
             img = self._cache.get(key)
@@ -95,10 +109,14 @@ class ThumbnailModel(QAbstractListModel):
             return _INVALID
         return self.createIndex(row, column)
 
-    def index_for_source(self, source_index: int) -> QModelIndex:
-        """Find the model index for a given source_index (may differ from row)."""
+    def index_for_page(self, source_id: int, source_index: int) -> QModelIndex:
+        """Find the model index for a page identity (may differ from row).
+
+        Both parts are needed: after a merge, two pages routinely share a
+        source_index and only (source_id, source_index) identifies one.
+        """
         for row, item in enumerate(self._doc_model.pages):
-            if item.source_index == source_index:
+            if item.source_id == source_id and item.source_index == source_index:
                 return self.createIndex(row, 0)
         return _INVALID
 
@@ -191,6 +209,7 @@ class ThumbnailBar(QListView):
                 self._worker.render_requested.emit(
                     RenderRequest(
                         key,
+                        self._doc_model.source_for(item),
                         item.source_index,
                         THUMB_ZOOM * dpr,
                         item.total_rotation,
