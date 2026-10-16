@@ -112,8 +112,12 @@ class RenderWorker(QObject):
                 QImage.Format.Format_RGB888,
             ).copy()
             self.rendered.emit(req.key, img)
-        except (IndexError, RuntimeError, ValueError):
-            # Page index out of range or document already closed
+        # Not just IndexError/RuntimeError/ValueError: MuPDF's own errors
+        # (FzErrorLimit, FzErrorFormat, ...) derive straight from Exception.
+        # A large-format page at high zoom raises FzErrorLimit ("Overly large
+        # image"), and an exception escaping this slot would skip
+        # render_failed, leaving the page "in flight" forever.
+        except Exception:  # noqa: BLE001
             self.render_failed.emit(req.key)
 
     @Slot(str)

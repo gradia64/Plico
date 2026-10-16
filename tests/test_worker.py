@@ -119,3 +119,30 @@ def test_worker_rotation():
     mat_rotated = fitz.Matrix(1.0, 1.0).prerotate(90)
     # A 90° rotation matrix should differ from the identity
     assert mat_rotated != mat_normal
+
+
+def test_worker_reports_a_mupdf_error_as_a_failure(tmp_path):
+    """MuPDF's own exceptions are not RuntimeError: they must still fail cleanly.
+
+    A large-format page (14400 pt, the PDF maximum) at the view's highest
+    zoom on a HiDPI screen (8 × 2) asks MuPDF for an image it refuses to
+    build, with ``FzErrorLimit``, which derives straight from ``Exception``.
+    MuPDF checks the size before allocating, so this costs no memory.
+    """
+    pdf_path = tmp_path / "poster.pdf"
+    doc = fitz.open()
+    doc.new_page(width=14400, height=14400)
+    doc.save(str(pdf_path))
+    doc.close()
+
+    worker = RenderWorker()
+    seen = []
+    failed = []
+    worker.rendered.connect(lambda key, img: seen.append(key))
+    worker.render_failed.connect(failed.append)
+
+    key = ("page", 0, 0, 0, 8.0, 2.0)
+    worker._render(RenderRequest(key, str(pdf_path), 0, 16.0, 0))
+
+    assert seen == []
+    assert failed == [key]

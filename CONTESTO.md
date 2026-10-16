@@ -65,7 +65,7 @@ plico/
     └── test_integration.py   # MainWindow vera, offscreen: ~67 test end-to-end
 ```
 
-Gate di qualità attuale: **197 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **198 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
 (17 file sorgente).
 
 ---
@@ -248,6 +248,14 @@ produrre l'immagine — sorgente sparita, pagina fuori intervallo, documento
 chiuso — emette `render_failed` con quella key: il ricevente **deve** azzerare
 il segno, altrimenti la pagina aspetta per sempre un render che non arriverà
 mai e non viene più ritentata.
+
+Per lo stesso motivo `_render` intercetta **`Exception`**, non un elenco di
+tipi: le eccezioni di MuPDF (`FzErrorLimit`, `FzErrorFormat`, …) derivano
+direttamente da `Exception`, non da `RuntimeError`. Il caso concreto: una
+pagina di grande formato (14400 pt) allo zoom massimo su HiDPI (8 × 2) dà
+`FzErrorLimit: Overly large image`. Con l'elenco ristretto l'eccezione
+usciva dallo slot, `render_failed` non partiva e la pagina restava «in volo»
+per sempre. Test: `test_worker_reports_a_mupdf_error_as_a_failure`.
 
 `evict_requested` esiste per un caso preciso: dopo un salvataggio che
 sovrascrive una sorgente, `save_as()` ha fatto `os.replace()` e l'inode è
