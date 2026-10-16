@@ -19,7 +19,10 @@ comprimerli.
 - **Rendering lazy**: si renderizzano solo le pagine visibili, non l'intero
   documento
 - **Cache** a budget di byte per le pagine, LRU per le miniature
-- **Salvataggio** su file temporaneo: il PDF di partenza non si tocca
+- **Salvataggio** su file temporaneo: il PDF di partenza non si tocca.
+  `Ctrl+S` salva sul file aperto (o sull'ultimo «Salva con nome»),
+  `Ctrl+Shift+S` chiede dove; il titolo segna con `*` le modifiche non
+  salvate, e chiudere o aprire un altro file chiede prima di perderle
 - **Salva compresso** a tre livelli, con il guadagno mostrato a fine lavoro —
   e il livello "leggera" è senza perdita
 - **Redazione vera**: si trascina un rettangolo sui dati da eliminare e al
@@ -101,6 +104,11 @@ file dell'utente.
 Dopo un'unione le sorgenti sono più d'una, quindi il controllo copre **tutte**
 le sorgenti: salvare sopra uno qualsiasi dei PDF aperti passa per il file
 temporaneo, perché PyMuPDF non può scrivere in un documento che sta leggendo.
+
+Dopo un salvataggio sopra il file aperto, Plico **riapre** il file salvato:
+è quello il documento, adesso, con eliminazioni, rotazioni e redazioni già
+dentro. Per questo le modifiche fatte fino a lì non si possono più annullare.
+Estrarre pagine sopra un file aperto, invece, non è permesso.
 
 ### Compressione: dove si guadagna davvero
 

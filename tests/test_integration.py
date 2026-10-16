@@ -13,7 +13,7 @@ from unittest import mock
 import fitz
 import pytest
 from PySide6.QtCore import QEvent, QPointF, QSettings, Qt, QThreadPool
-from PySide6.QtGui import QAction, QIcon, QImage, QMouseEvent
+from PySide6.QtGui import QAction, QCloseEvent, QIcon, QImage, QMouseEvent
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -527,7 +527,8 @@ def test_file_menu_exposes_every_expected_action(windows):
 
     expected = {
         "A&pri…",
-        "&Salva con nome…",
+        "&Salva",
+        "Salva con &nome…",
         "&Unisci PDF…",
         "&Estrai pagine…",
         "&Esci",
@@ -1032,7 +1033,7 @@ def test_saving_over_the_open_file_makes_the_worker_forget_it(windows, tmp_path)
     with mock.patch.object(
         QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (pdf, ""))
     ):
-        mw._save_file()
+        mw._save_file_as()
     _pump()
 
     # The file is re-opened, so the worker may well hold a handle again --
@@ -1089,7 +1090,7 @@ def test_saving_over_the_open_file_then_saving_again_keeps_every_page(
     with mock.patch.object(
         QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (pdf, ""))
     ):
-        mw._save_file()
+        mw._save_file_as()
     _pump()
 
     ruotata = (base + 90) % 360
@@ -1598,7 +1599,7 @@ def test_dal_trascinamento_al_file_il_testo_sparisce(qapp, tmp_path, monkeypatch
 
     monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
     monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
-    mw._save_file()
+    mw._save_file_as()
     _pump()
 
     with fitz.open(out) as doc:
@@ -1626,7 +1627,7 @@ def test_il_trascinamento_regge_anche_ruotando_la_pagina(qapp, tmp_path, monkeyp
 
     monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
     monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
-    mw._save_file()
+    mw._save_file_as()
     _pump()
 
     with fitz.open(out) as doc:
@@ -1750,7 +1751,7 @@ def test_scrivere_nel_pannello_diventa_un_comando_e_finisce_nel_file(
         QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, ""))
     )
     monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
-    mw._save_file()
+    mw._save_file_as()
     _pump()
 
     assert _valori_del_file(out)["nome"] == "Anna"
@@ -1961,3 +1962,180 @@ def test_la_ricerca_non_marca_due_volte_lo_stesso_punto(
     assert sum(len(item.redactions) for item in mw._doc_model.pages) == 1
     assert mw._undo_stack.count() == 1, "la seconda ricerca non crea un comando"
     assert "Nessuna occorrenza" in mw._status.text()
+
+
+# --------------------------------------------------------------------- #
+#  Modifiche non salvate: Salva, il [*] nel titolo, la domanda prima di perderle
+# --------------------------------------------------------------------- #
+
+def _risposta(monkeypatch, bottone) -> list[str]:
+    """Risponde a QMessageBox.question con *bottone*, annotando le domande."""
+    domande: list[str] = []
+
+    def rispondi(*args, **kwargs):
+        domande.append(args[2])
+        return bottone
+
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(rispondi))
+    return domande
+
+
+def _chiudi(mw: MainWindow) -> bool:
+    """Consegna un QCloseEvent vero e dice se la finestra lo ha accettato."""
+    evento = QCloseEvent()
+    mw.closeEvent(evento)
+    return evento.isAccepted()
+
+
+def test_a_fresh_document_is_not_modified(windows, tmp_path, monkeypatch):
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=2)
+    mw = windows()
+    _open(mw, pdf)
+    domande = _risposta(monkeypatch, QMessageBox.StandardButton.Cancel)
+
+    assert not mw.is_modified()
+    assert not mw.isWindowModified()
+    assert mw.windowTitle() == "doc.pdf[*]"
+    assert _chiudi(mw), "niente da perdere: la finestra si chiude senza chiedere"
+    assert domande == []
+
+
+def test_an_edit_marks_the_title_and_undo_clears_it(windows, tmp_path):
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=2)
+    mw = windows()
+    _open(mw, pdf)
+
+    mw._thumb_bar.set_current_row(0)
+    mw._rotate_cw_clicked()
+    assert mw.is_modified() and mw.isWindowModified()
+
+    mw._undo_stack.undo()
+    assert not mw.is_modified(), "tornati al documento salvato: niente da salvare"
+    assert not mw.isWindowModified()
+
+
+def test_closing_with_changes_can_be_cancelled(windows, tmp_path, monkeypatch):
+    """Annulla: la finestra resta aperta, la modifica resta nel modello."""
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=3)
+    mw = windows()
+    _open(mw, pdf)
+    mw._delete_page()
+    domande = _risposta(monkeypatch, QMessageBox.StandardButton.Cancel)
+
+    assert not _chiudi(mw)
+    assert len(domande) == 1 and "doc.pdf" in domande[0]
+    assert mw._doc_model.page_count == 2
+    assert mw._thread.isRunning(), "una chiusura annullata non ferma il worker"
+
+
+def test_closing_with_changes_can_discard_them(windows, tmp_path, monkeypatch):
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=3)
+    mw = windows()
+    _open(mw, pdf)
+    mw._delete_page()
+    _risposta(monkeypatch, QMessageBox.StandardButton.Discard)
+
+    assert _chiudi(mw)
+    with fitz.open(pdf) as doc:
+        assert doc.page_count == 3, "«Non salvare» non scrive niente"
+
+
+def test_closing_with_changes_can_save_them(windows, tmp_path, monkeypatch):
+    """«Salva» passa da Ctrl+S: scrive sul file aperto, senza chiedere dove."""
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=3)
+    mw = windows()
+    _open(mw, pdf)
+    mw._delete_page()
+    _risposta(monkeypatch, QMessageBox.StandardButton.Save)
+
+    def _mai(*a, **k):
+        raise AssertionError("Salva non deve chiedere il nome del file")
+
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(_mai))
+
+    assert _chiudi(mw)
+    with fitz.open(pdf) as doc:
+        assert doc.page_count == 2
+
+
+def test_a_failed_save_keeps_the_window_open(windows, tmp_path, monkeypatch):
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=3)
+    mw = windows()
+    _open(mw, pdf)
+    mw._delete_page()
+    _risposta(monkeypatch, QMessageBox.StandardButton.Save)
+    monkeypatch.setattr(QMessageBox, "critical", staticmethod(lambda *a, **k: None))
+
+    def _guasto(*a, **k):
+        raise OSError("disco pieno")
+
+    monkeypatch.setattr(plico.main_window, "save_as", _guasto)
+
+    assert not _chiudi(mw), "il salvataggio è fallito: le modifiche ci sono ancora"
+    assert mw.is_modified()
+
+
+def test_save_as_moves_the_target_and_keeps_the_undo_history(windows, tmp_path, monkeypatch):
+    """Dopo «Salva con nome» Ctrl+S scrive lì, e l'annulla funziona ancora."""
+    pdf = str(tmp_path / "doc.pdf")
+    altro = str(tmp_path / "altro.pdf")
+    _make_pdf(pdf, pages=3)
+    mw = windows()
+    _open(mw, pdf)
+    mw._delete_page()
+
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (altro, "")))
+    assert mw._save_file_as()
+    assert not mw.is_modified()
+    assert mw.windowTitle() == "altro.pdf[*]"
+    assert mw._undo_stack.canUndo(), "le sorgenti non sono cambiate: l'annulla resta"
+
+    mw._thumb_bar.set_current_row(0)
+    mw._delete_page()
+    assert mw.is_modified()
+    assert mw._save_file()
+    with fitz.open(altro) as doc:
+        assert doc.page_count == 1
+    with fitz.open(pdf) as doc:
+        assert doc.page_count == 3, "Ctrl+S scrive sull'ultimo «Salva con nome»"
+
+
+def test_a_merge_counts_as_a_change(windows, tmp_path, monkeypatch):
+    """Unire non passa dall'undo stack, ma va salvato lo stesso."""
+    pdf = str(tmp_path / "doc.pdf")
+    secondo = str(tmp_path / "secondo.pdf")
+    _make_pdf(pdf, pages=2)
+    _make_pdf(secondo, pages=2)
+    mw = windows()
+    _open(mw, pdf)
+    mw.merge_path(secondo)
+    domande = _risposta(monkeypatch, QMessageBox.StandardButton.Cancel)
+
+    assert mw.is_modified() and mw.isWindowModified()
+    assert not _chiudi(mw)
+    assert len(domande) == 1
+
+
+def test_opening_another_file_asks_first(windows, tmp_path, monkeypatch):
+    """La domanda arriva prima del dialogo: Annulla non mostra nemmeno il file picker."""
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=3)
+    mw = windows()
+    _open(mw, pdf)
+    mw._delete_page()
+    domande = _risposta(monkeypatch, QMessageBox.StandardButton.Cancel)
+
+    def _mai(*a, **k):
+        raise AssertionError("con Annulla il dialogo di apertura non deve comparire")
+
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", staticmethod(_mai))
+
+    mw._open_file()
+    assert len(domande) == 1
+    assert mw._doc_model.page_count == 2

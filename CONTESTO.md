@@ -65,7 +65,7 @@ plico/
     └── test_integration.py   # MainWindow vera, offscreen: ~67 test end-to-end
 ```
 
-Gate di qualità attuale: **188 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **197 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
 (17 file sorgente).
 
 ---
@@ -383,6 +383,29 @@ editor che non si può salvare sarebbe una promessa non mantenuta, quindi i
 campi in sola lettura non vengono mostrati affatto.
 
 ## 8. Comandi e salvataggio
+
+### Modifiche non salvate (`MainWindow`)
+
+- **«Salvato» = l'indice clean del `QUndoStack`**, più un flag
+  `_merged_since_save`: l'unione non è un comando di undo, quindi senza il
+  flag chiudere subito dopo un'unione perderebbe le pagine unite in silenzio.
+  `is_modified()` combina i due; `_update_title()` mette nel titolo il nome
+  del file con `[*]` (solo il nome: il display name lo aggiunge Qt) ed è
+  collegato a `cleanChanged`, così un undo che riporta al salvato toglie
+  l'asterisco.
+- **`_save_target`** è il file su cui scrive `Ctrl+S` (`_save_file`): quello
+  aperto, oppure l'ultimo «Salva con nome» (`_save_file_as`). Entrambi passano
+  da `_save_to()`. Salvare *altrove* non cambia le sorgenti, quindi l'undo
+  resta (`_mark_saved` sposta solo l'indice clean); salvare *sopra* una
+  sorgente riapre il file (`_adopt_saved_file`, vedi §10) e l'undo riparte.
+  «Salva compresso» su un altro file è una copia e non segna il documento
+  come salvato.
+- **`_confirm_discard()`** chiede Salva / Non salvare / Annulla prima di
+  `closeEvent` e prima del dialogo di `_open_file` (non dopo: la domanda
+  riguarda il documento in vista). «Salva» passa da `_save_file`; un
+  salvataggio fallito o annullato lascia la finestra aperta. Nei test
+  `QMessageBox.question` va **monkeypatchato** (§10): il fixture `windows`
+  non chiama `close()`, quindi non incontra la domanda.
 
 `model/commands.py`: `RotatePage`, `DeletePage` (`pop` al redo, `insert`
 all'undo — lo stack è LIFO, quindi gli indici restano coerenti), `MovePage`.

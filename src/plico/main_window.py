@@ -60,6 +60,19 @@ class MainWindow(QMainWindow):
 
         # --- undo stack ---
         self._undo_stack = QUndoStack(self)
+        # The stack's clean index is what "saved" means for every undoable
+        # edit; the title's [*] follows it, including when an undo walks the
+        # document back to exactly what was saved.
+        self._undo_stack.cleanChanged.connect(self._update_title)
+
+        # --- what "Salva" writes to, and what the undo stack cannot see ---
+        # The file a plain Ctrl+S writes: the document opened, or the last
+        # "Salva con nome" target. None when nothing is open.
+        self._save_target: str | None = None
+        # A merge is not an undo command, so the stack stays clean through
+        # it; without this flag closing right after a merge would lose the
+        # merged pages without a word.
+        self._merged_since_save = False
 
         # --- render worker thread ---
         # The QThread is deliberately NOT parented to this window (or any
@@ -180,11 +193,14 @@ class MainWindow(QMainWindow):
             self._act(self.tr("A&pri…"), "document-open", "Ctrl+O", self._open_file)
         )
         file_menu.addAction(
+            self._act(self.tr("&Salva"), "document-save", "Ctrl+S", self._save_file)
+        )
+        file_menu.addAction(
             self._act(
-                self.tr("&Salva con nome…"),
+                self.tr("Salva con &nome…"),
                 "document-save-as",
                 "Ctrl+Shift+S",
-                self._save_file,
+                self._save_file_as,
             )
         )
         file_menu.addAction(
@@ -321,6 +337,10 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
 
     def _open_file(self) -> None:
+        # Asked before the file dialog: the question is about the document
+        # on screen, and answering it after picking a file is backwards.
+        if not self._confirm_discard():
+            return
         path, _ = QFileDialog.getOpenFileName(
             self,
             self.tr("Apri PDF"),
@@ -375,6 +395,9 @@ class MainWindow(QMainWindow):
         self._redact_act.setChecked(False)
         self._on_redaction_toggled(False)
         self._refresh_form_panel(0)
+        self._save_target = path
+        self._merged_since_save = False
+        self._update_title()
         self._status.setText(self.tr("Aperto: {0}").format(path))
 
     def _merge_file(self) -> None:
@@ -429,23 +452,43 @@ class MainWindow(QMainWindow):
         # Jump to the first merged page: the whole point of the gesture is to
         # check what was just appended, and lazily-rendered pages only appear
         # once they are on screen.
+        self._merged_since_save = True
+        self._update_title()
         first_new = self._doc_model.page_count - added
         self._page_view.ensure_page_visible(first_new)
         self._thumb_bar.set_current_row(first_new)
         self._status.setText(self.tr("Unite {0} pagine da: {1}").format(added, path))
 
-    def _save_file(self) -> None:
+    def _save_file(self) -> bool:
+        """Salva: write the document to the file it came from (Ctrl+S).
+
+        Returns whether the document was saved, so that the "unsaved
+        changes" question can tell a save from a cancelled dialog.
+        """
         if not self._doc_model.sources:
             QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
-            return
+            return False
+        if self._save_target is None:
+            return self._save_file_as()
+        return self._save_to(self._save_target)
+
+    def _save_file_as(self) -> bool:
+        """Salva con nome: ask where, then save there."""
+        if not self._doc_model.sources:
+            QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
+            return False
         path, _ = QFileDialog.getSaveFileName(
             self,
             self.tr("Salva con nome"),
-            self._doc_model.path or "",
+            self._save_target or "",
             self.tr("File PDF (*.pdf)"),
         )
         if not path:
-            return
+            return False
+        return self._save_to(path)
+
+    def _save_to(self, path: str) -> bool:
+        """Write the whole document to *path*; it becomes the "Salva" target."""
         # Computed BEFORE writing: os.replace() gives the target a new inode,
         # and afterwards it would no longer match the source it replaced.
         overwritten = self._doc_model.sources_at(path)
@@ -457,11 +500,67 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(
                 self, self.tr("Errore"), self.tr("Impossibile salvare:\n{0}").format(e)
             )
-            return
+            return False
         if overwritten:
+            # Re-opening resets the undo stack, the target and the title.
             self._adopt_saved_file(path, overwritten)
         else:
+            self._mark_saved(path)
             self._status.setText(self.tr("Salvato: {0}").format(path))
+        return True
+
+    def _mark_saved(self, path: str) -> None:
+        """The document as it is now has been written to *path*.
+
+        The model keeps its sources -- they are untouched -- so the undo
+        history survives; only the meaning of "unsaved" moves to this point.
+        """
+        self._save_target = path
+        self._merged_since_save = False
+        self._undo_stack.setClean()
+        self._update_title()
+
+    def is_modified(self) -> bool:
+        """Whether closing the document now would lose something."""
+        if not self._doc_model.sources:
+            return False
+        return self._merged_since_save or not self._undo_stack.isClean()
+
+    def _update_title(self) -> None:
+        """File name in the title, with the [*] that marks unsaved changes.
+
+        Only the name: Qt appends the application display name itself.
+        """
+        if self._save_target is None or not self._doc_model.sources:
+            self.setWindowTitle("Plico")
+        else:
+            self.setWindowTitle(f"{os.path.basename(self._save_target)}[*]")
+        self.setWindowModified(self.is_modified())
+
+    def _confirm_discard(self) -> bool:
+        """Ask before dropping unsaved changes; True means "go ahead".
+
+        Redactions and filled-in fields live only in the model until the
+        document is saved, so closing or opening another file would throw
+        them away without a trace. The answer "Salva" goes through the same
+        path as Ctrl+S, and a save that fails or is cancelled keeps the
+        document open.
+        """
+        if not self.is_modified():
+            return True
+        nome = os.path.basename(self._save_target or "") or self.tr("documento")
+        scelta = QMessageBox.question(
+            self,
+            self.tr("Modifiche non salvate"),
+            self.tr("«{0}» ha modifiche non salvate.\nVuoi salvarle?").format(nome),
+            QMessageBox.StandardButton.Save
+            | QMessageBox.StandardButton.Discard
+            | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Save,
+        )
+        if scelta == QMessageBox.StandardButton.Save:
+            return self._save_file()
+        return scelta == QMessageBox.StandardButton.Discard
 
     def _adopt_saved_file(self, path: str, overwritten: list[str]) -> None:
         """Bring the model back in line after a save that replaced a source.
@@ -487,7 +586,10 @@ class MainWindow(QMainWindow):
             # keeping them on screen would be the very bug this avoids.
             self._undo_stack.clear()
             self._doc_model.close()
+            self._save_target = None
+            self._merged_since_save = False
             self._refresh_form_panel()
+            self._update_title()
             return
         row = min(max(row, 0), self._doc_model.page_count - 1)
         self._thumb_bar.set_current_row(row)
@@ -867,6 +969,9 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         """Persist the UI state and shut the worker thread down cleanly."""
+        if not self._confirm_discard():
+            event.ignore()
+            return
         self._save_settings()
         self.shutdown_worker()
         event.accept()
