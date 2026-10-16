@@ -54,6 +54,6 @@ testpaths = ["tests"]
 # both end up with the launcher, the AppStream metadata and the icon in the
 # right place, without duplicating install commands.
 [tool.setuptools.data-files]
-"share/applications" = ["flatpak/io.github.gradia.Plico.desktop"]
-"share/metainfo" = ["flatpak/io.github.gradia.Plico.metainfo.xml"]
-"share/icons/hicolor/scalable/apps" = ["flatpak/io.github.gradia.Plico.svg"]
+"share/applications" = ["flatpak/io.github.gradia64.Plico.desktop"]
+"share/metainfo" = ["flatpak/io.github.gradia64.Plico.metainfo.xml"]
+"share/icons/hicolor/scalable/apps" = ["flatpak/io.github.gradia64.Plico.svg"]

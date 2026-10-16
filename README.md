@@ -125,11 +125,11 @@ Il packaging è in `flatpak/` ed è pensato per essere pubblicabile su Flathub.
 
 | File | Ruolo |
 | --- | --- |
-| `io.github.gradia.Plico.json` | manifest dell'applicazione |
+| `io.github.gradia64.Plico.json` | manifest dell'applicazione |
 | `python3-pymupdf.json` | modulo per PyMuPDF, con wheel e `sha256` fissati |
-| `io.github.gradia.Plico.desktop` | launcher (registra `application/pdf`) |
-| `io.github.gradia.Plico.metainfo.xml` | metadati AppStream |
-| `io.github.gradia.Plico.svg` | icona |
+| `io.github.gradia64.Plico.desktop` | launcher (registra `application/pdf`) |
+| `io.github.gradia64.Plico.metainfo.xml` | metadati AppStream |
+| `io.github.gradia64.Plico.svg` | icona |
 
 Tre scelte non ovvie:
 
@@ -156,9 +156,9 @@ flatpak install --user -y flathub org.flatpak.Builder//stable \
 # build + install
 flatpak run org.flatpak.Builder --force-clean --user --install \
     --install-deps-from=flathub \
-    build-dir flatpak/io.github.gradia.Plico.json
+    build-dir flatpak/io.github.gradia64.Plico.json
 
-flatpak run io.github.gradia.Plico
+flatpak run io.github.gradia64.Plico
 ```
 
 Per pubblicare su Flathub la sorgente `type: dir` del modulo `plico` va

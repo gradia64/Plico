@@ -535,7 +535,7 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
 
 ## 11. Flatpak
 
-I file stanno in `flatpak/`: `io.github.gradia.Plico.json` (manifest),
+I file stanno in `flatpak/`: `io.github.gradia64.Plico.json` (manifest),
 `python3-pymupdf.json` (modulo PyMuPDF con wheel e `sha256` fissati),
 `.desktop`, `.metainfo.xml`, `.svg`. Gli stessi file sono installati anche da
 `pip install .` tramite `[tool.setuptools.data-files]` in `pyproject.toml`,
@@ -563,11 +563,11 @@ curl -s -o /tmp/schema.json \
 /tmp/lintenv/bin/python -c "
 import json, jsonschema
 jsonschema.Draft7Validator(json.load(open('/tmp/schema.json'))).validate(
-    json.load(open('flatpak/io.github.gradia.Plico.json')))" && echo "manifest OK"
+    json.load(open('flatpak/io.github.gradia64.Plico.json')))" && echo "manifest OK"
 
 # 2. metadati AppStream e launcher
-appstreamcli validate --no-net flatpak/io.github.gradia.Plico.metainfo.xml
-desktop-file-validate flatpak/io.github.gradia.Plico.desktop
+appstreamcli validate --no-net flatpak/io.github.gradia64.Plico.metainfo.xml
+desktop-file-validate flatpak/io.github.gradia64.Plico.desktop
 
 # 3. build e installazione
 flatpak remote-add --user --if-not-exists flathub \
@@ -577,9 +577,9 @@ flatpak install --user -y flathub org.flatpak.Builder//stable \
 
 flatpak run org.flatpak.Builder --force-clean --user --install \
     --install-deps-from=flathub \
-    build-dir flatpak/io.github.gradia.Plico.json
+    build-dir flatpak/io.github.gradia64.Plico.json
 
-flatpak run io.github.gradia.Plico
+flatpak run io.github.gradia64.Plico
 ```
 
 Verifiche già eseguite con esito positivo: schema `flatpak-builder`
