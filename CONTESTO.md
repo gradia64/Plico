@@ -870,6 +870,50 @@ sostituita con la sorgente `git` del tag di rilascio.
   `self.tr()` su tutto il testo visibile, `QSettings` per geometria/dock/zoom);
   manca solo l'infrastruttura di traduzione vera (`.ts` + `lrelease`).
 
+**Punti aperti dalla review (ottobre 2026)**, dal più importante. Quando se ne
+chiude uno, va tolto da qui e la decisione va scritta nella sezione giusta.
+
+*Correttezza*
+
+- **«Salva con nome» sopra un file esistente non è atomico.** In
+  `save.py::_write_atomically`, se la destinazione esiste ma non è una
+  sorgente, la scorciatoia `if not overwriting and optimize is None` fa
+  scrivere `_write_pdf` direttamente sopra: un errore a metà distrugge quel
+  file. Basta passare sempre dal temporaneo;
+- **campi con lo stesso nome su più pagine.** `form_values` è per pagina e
+  `forms.write_fields()` aggiorna solo i widget della pagina in cui l'utente
+  ha scritto. Il `/V` però sta nel campo padre, condiviso: le altre pagine
+  restano col vecchio aspetto, e nei PDF uniti il risultato dipende
+  dall'ordine;
+- **byte contati due volte nella cache delle pagine.**
+  `PageView._cache_put` aggiunge i byte anche quando la key c'è già, senza
+  togliere quelli della pixmap sostituita. È raro, ma il budget di 64 MB
+  finisce per sfrattare più del dovuto.
+
+*Funzioni mancanti*
+
+- **PDF cifrati**: aprirli dà un errore generico. Serve `doc.needs_pass` +
+  `doc.authenticate()` in `DocumentModel._items_for` **e** nel worker, che
+  apre i file per conto suo (la password va quindi portata fin lì);
+- **l'unione non si annulla**: è l'unica modifica fuori dall'undo stack, ed è
+  il motivo per cui esiste `MainWindow._merged_since_save`. Un comando
+  `AppendDocument` toglierebbe il flag;
+- **annotazioni sopra le redazioni** (vedi §8): andrebbero eliminate quelle
+  che toccano un rettangolo di redazione.
+
+*Pulizia*
+
+- `MainWindow._on_doc_changed` non ha chiamanti: è codice morto;
+- i nomi dei comandi di undo (`model/commands.py`) sono f-string italiane
+  senza `tr()`, quindi non traducibili;
+- §13 vuole codice e commenti **in inglese**, ma docstring e commenti di
+  `optimize.py`, `compress.py` e parti di `main_window.py` sono in italiano
+  (spesso con `e`` al posto di «è»), come molti nomi di variabile (`pagina`,
+  `coperto`, `trovati`, `valori`, `scelta`, `nome`); anche i nomi dei test sono
+  misti;
+- `import fitz` stampa un avviso di deprecazione a ogni avvio: la migrazione a
+  `import pymupdf` va fatta tutta insieme (vedi §9).
+
 ---
 
 ## 13. Convenzioni
