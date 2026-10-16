@@ -3,6 +3,7 @@
 from PySide6.QtGui import QUndoCommand
 
 from .document import DocumentModel, PageItem
+from .redact import RedactionRect
 
 
 class RotatePage(QUndoCommand):
@@ -73,3 +74,52 @@ class MovePage(QUndoCommand):
         item = self._model.pages.pop(self._to)
         self._model.pages.insert(self._from, item)
         self._model.changed.emit()
+
+
+class AddRedaction(QUndoCommand):
+    """Mark a region of the page at *index* for redaction.
+
+    Nothing is burned into the PDF here: the rectangle is state of the
+    virtual page, and it only becomes a real redaction when the document is
+    materialised on save. That is what makes it undoable -- applying it
+    eagerly would rewrite the source page's content streams, and no undo
+    stack can put those back.
+    """
+
+    def __init__(self, model: DocumentModel, index: int, rect: RedactionRect) -> None:
+        super().__init__(f"Redazione su pagina {index + 1}")
+        self._model = model
+        self._index = index
+        self._rect = rect
+
+    def redo(self) -> None:
+        self._model.pages[self._index].redactions.append(self._rect)
+        self._model.page_changed.emit(self._index)
+
+    def undo(self) -> None:
+        # remove() matches by value; RedactionRect is frozen and comparable,
+        # so this finds the rectangle the command pushed and not a twin that
+        # happens to sit elsewhere in the list.
+        self._model.pages[self._index].redactions.remove(self._rect)
+        self._model.page_changed.emit(self._index)
+
+
+class RemoveRedaction(QUndoCommand):
+    """Take back the redaction *rect* from the page at *index*."""
+
+    def __init__(self, model: DocumentModel, index: int, rect: RedactionRect) -> None:
+        super().__init__(f"Annulla redazione su pagina {index + 1}")
+        self._model = model
+        self._index = index
+        self._rect = rect
+        # Remember where it was, so undo puts it back in the same position
+        # (overlapping rectangles are painted in order).
+        self._position = model.pages[index].redactions.index(rect)
+
+    def redo(self) -> None:
+        self._model.pages[self._index].redactions.pop(self._position)
+        self._model.page_changed.emit(self._index)
+
+    def undo(self) -> None:
+        self._model.pages[self._index].redactions.insert(self._position, self._rect)
+        self._model.page_changed.emit(self._index)

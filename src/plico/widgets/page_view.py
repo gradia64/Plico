@@ -11,12 +11,13 @@ Key design:
 from collections import OrderedDict
 from dataclasses import dataclass
 
-from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QBrush, QColor, QPainter, QPen, QPixmap
 from PySide6.QtGui import QPalette as QPaletteColor
-from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QLabel, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
 
 from ..model.document import PageItem
+from ..model.redact import RedactionRect, map_point, map_rect
 from ..rendering.worker import RenderRequest
 
 # --- constants ----------------------------------------------------------- #
@@ -26,14 +27,139 @@ PRELOAD = 200          # preload margin (px) beyond viewport
 CACHE_BUDGET = 64 * 1024 * 1024  # 64 MB byte budget for page cache
 FALLBACK_VIEWPORT_H = 800  # assumed height until the widget is sized
 
+# Redaction marks: a dark fill, so a marked region never reads as page
+# content, and a red frame so the mark itself is unmistakable.
+REDACTION_FILL = QColor(0, 0, 0, 190)
+REDACTION_BORDER = QColor(214, 48, 48)
+REDACTION_DRAG = QColor(214, 48, 48, 170)
+
+# Below this (in pixels) a press-and-release is a click, not a drag.
+CLICK_SLOP = 4.0
+
 
 # --- per-page canvas ----------------------------------------------------- #
+
+class _PageLabel(QLabel):
+    """One page: the rendered pixmap, with the redaction marks drawn on top.
+
+    Painting the marks here, rather than in a widget floating above the page,
+    buys three things at once: they are clipped to the page for free, they
+    follow the page through zoom and fit-width with no extra bookkeeping, and
+    a mouse coordinate arrives already in the page's own pixels.
+
+    The label never touches the model. It reports gestures to the view, which
+    reports them to the window, which pushes an undoable command — the same
+    route the thumbnail bar's drag & drop takes.
+    """
+
+    def __init__(self, view: "PageView") -> None:
+        super().__init__()
+        self._view = view
+        # Set by _rebuild_canvases(); None only between construction and that.
+        self.canvas: _Canvas | None = None
+        self._drag_from: QPointF | None = None
+        self._drag_to: QPointF | None = None
+
+    # -- coordinates ---------------------------------------------------- #
+
+    def _scale(self) -> float:
+        """Logical pixels per point, as laid out by the view."""
+        canvas = self.canvas
+        if canvas is None or canvas.scale <= 0.0:
+            return 1.0
+        return canvas.scale
+
+    def _to_page(self, point: QPointF) -> tuple[float, float]:
+        """Widget pixels → page space (unrotated PDF points)."""
+        canvas = self.canvas
+        assert canvas is not None
+        scale = self._scale()
+        return map_point(
+            point.x() / scale, point.y() / scale, canvas.item.page_matrix()
+        )
+
+    def _to_pixels(self, rect: RedactionRect) -> QRectF:
+        """Page-space rectangle → the widget rectangle to paint it in."""
+        canvas = self.canvas
+        assert canvas is not None
+        view_rect = map_rect(rect, canvas.item.view_matrix())
+        scale = self._scale()
+        return QRectF(
+            view_rect.x0 * scale,
+            view_rect.y0 * scale,
+            view_rect.width * scale,
+            view_rect.height * scale,
+        )
+
+    # -- painting ------------------------------------------------------- #
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        canvas = self.canvas
+        if canvas is None or not self._view.redaction_mode():
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        for rect in canvas.item.redactions:
+            area = self._to_pixels(rect)
+            painter.fillRect(area, QBrush(REDACTION_FILL))
+            painter.setPen(QPen(REDACTION_BORDER, 2))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(area)
+        if self._drag_from is not None and self._drag_to is not None:
+            painter.setPen(QPen(REDACTION_DRAG, 2, Qt.PenStyle.DashLine))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(QRectF(self._drag_from, self._drag_to).normalized())
+        painter.end()
+
+    # -- the gesture ---------------------------------------------------- #
+
+    def mousePressEvent(self, event) -> None:
+        if not self._view.redaction_mode() or event.button() != Qt.MouseButton.LeftButton:
+            super().mousePressEvent(event)
+            return
+        self._drag_from = event.position()
+        self._drag_to = self._drag_from
+        self.update()
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._drag_from is None:
+            super().mouseMoveEvent(event)
+            return
+        self._drag_to = event.position()
+        self.update()
+
+    def mouseReleaseEvent(self, event) -> None:
+        if self._drag_from is None or event.button() != Qt.MouseButton.LeftButton:
+            super().mouseReleaseEvent(event)
+            return
+        start = self._drag_from
+        end = event.position()
+        self._drag_from = None
+        self._drag_to = None
+        self.update()
+        if (end - start).manhattanLength() < CLICK_SLOP:
+            # A click rather than a drag: take back the mark under the cursor,
+            # if there is one. Topmost first, so the visible one wins.
+            canvas = self.canvas
+            assert canvas is not None
+            for rect in reversed(canvas.item.redactions):
+                if self._to_pixels(rect).contains(end):
+                    self._view.forget_redaction(canvas, rect)
+                    break
+            return
+        canvas = self.canvas
+        assert canvas is not None
+        self._view.commit_redaction(canvas, *self._to_page(start), *self._to_page(end))
+
 
 @dataclass
 class _Canvas:
     """One QLabel per page inside the scroll area's content widget."""
     item: PageItem
-    label: QLabel
+    label: _PageLabel
+    index: int = 0          # position in the page list, set on every rebuild
+    scale: float = 1.0      # logical pixels per point, set by _relayout()
     current_key: tuple | None = None
     pending_key: tuple | None = None
     width_pt: float = 0.0   # page width in points (post-rotation)
@@ -46,6 +172,11 @@ class _Canvas:
 
 class PageView(QScrollArea):
     """Central view: scrollable, zoomable, HiDPI-aware page rendering."""
+
+    # (page index, RedactionRect in page space). The view never mutates the
+    # model: it reports the gesture and MainWindow pushes an undoable command.
+    redaction_added = Signal(int, object)
+    redaction_removed = Signal(int, object)
 
     def __init__(self, worker, model=None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -63,6 +194,7 @@ class PageView(QScrollArea):
         # was too small when it was asked for.
         self._pending_scroll: int | None = None
         self._fit_mode = False
+        self._redaction_mode = False
         self._cache: OrderedDict[tuple, QPixmap] = OrderedDict()
         self._cache_bytes = 0
 
@@ -104,9 +236,13 @@ class PageView(QScrollArea):
         self._relayout()
         self._anchor_on(first_page)
 
-    def _on_page_changed(self, _row: int) -> None:
-        """A page changed in place (rotation): re-measure and re-render."""
+    def _on_page_changed(self, row: int) -> None:
+        """A page changed in place (rotation, redaction): re-measure, repaint."""
         self.refresh_geometry()
+        # A redaction changes no size, so setFixedSize() leaves the label
+        # exactly as it was and nothing would repaint without this nudge.
+        if 0 <= row < len(self._canvases):
+            self._canvases[row].label.update()
 
     @staticmethod
     def _identity(item: PageItem) -> tuple[int, int]:
@@ -145,14 +281,20 @@ class PageView(QScrollArea):
             return w_pt, h_pt
         return h_pt, w_pt
 
-    def _make_label(self) -> QLabel:
-        label = QLabel()
+    def _redaction_cursor(self) -> Qt.CursorShape:
+        if self._redaction_mode:
+            return Qt.CursorShape.CrossCursor
+        return Qt.CursorShape.ArrowCursor
+
+    def _make_label(self) -> _PageLabel:
+        label = _PageLabel(self)
         label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label.setBackgroundRole(QPaletteColor.ColorRole.Base)
         label.setAutoFillBackground(True)
         label.setText("Caricamento…")
         label.setStyleSheet("background-color: #f0f0f0;")
+        label.setCursor(self._redaction_cursor())
         return label
 
     def _rebuild_canvases(self) -> None:
@@ -171,13 +313,18 @@ class PageView(QScrollArea):
 
         self._canvases = []
         self._by_page = {}
-        for item in self._items:
+        for index, item in enumerate(self._items):
             page_id = self._identity(item)
             canvas = existing.pop(page_id) if page_id in existing else None
             if canvas is None:
-                canvas = _Canvas(item=item, label=self._make_label())
+                label = self._make_label()
+                canvas = _Canvas(item=item, label=label)
+                # The label paints its own marks, so it needs the way back to
+                # the item, the scale and the redaction list.
+                label.canvas = canvas
             else:
                 canvas.item = item
+            canvas.index = index
             canvas.width_pt, canvas.height_pt = self._oriented_size(item)
             self._layout.addWidget(canvas.label)
             self._canvases.append(canvas)
@@ -261,6 +408,10 @@ class PageView(QScrollArea):
             w_px = max(1, w_px)
             h_px = max(1, h_px)
             c.label.setFixedSize(QSize(w_px, h_px))
+            # Logical pixels per point, for the redaction overlay: it has to
+            # convert in both directions, and fit-width changes this without
+            # touching `_zoom`.
+            c.scale = w_px / c.width_pt if c.width_pt > 0 else 1.0
             c.y_px = y_px
             c.height_px = h_px
             y_px += h_px + spacing
@@ -380,6 +531,40 @@ class PageView(QScrollArea):
         while self._cache_bytes > CACHE_BUDGET and len(self._cache) > 1:
             _, old = self._cache.popitem(last=False)
             self._cache_bytes -= old.width() * old.height() * 4
+
+    # ------------------------------------------------------------------ #
+    #  Redazione
+    # ------------------------------------------------------------------ #
+
+    def redaction_mode(self) -> bool:
+        """Whether a drag on a page draws a mark instead of doing nothing."""
+        return self._redaction_mode
+
+    def set_redaction_mode(self, active: bool) -> None:
+        """Turn the redaction tool on or off, for every page at once."""
+        self._redaction_mode = bool(active)
+        cursor = self._redaction_cursor()
+        for c in self._canvases:
+            c.label.setCursor(cursor)
+            # The marks are painted only while the tool is on, so leaving it
+            # has to wipe them off the screen immediately.
+            c.label.update()
+
+    def commit_redaction(
+        self, canvas: _Canvas, x0: float, y0: float, x1: float, y1: float
+    ) -> None:
+        """A rectangle was dragged on *canvas*: report it, in page space."""
+        width, height = canvas.item.unrotated_size
+        rect = RedactionRect.from_corners(x0, y0, x1, y1).clamped_to(width, height)
+        # A stray click, or a rectangle dragged entirely off the page, is not
+        # a mark: refusing it here keeps an invisible box in the undo stack.
+        if rect.width < 1.0 or rect.height < 1.0:
+            return
+        self.redaction_added.emit(canvas.index, rect)
+
+    def forget_redaction(self, canvas: _Canvas, rect: RedactionRect) -> None:
+        """Ask for *rect* to be taken back off *canvas*."""
+        self.redaction_removed.emit(canvas.index, rect)
 
     # ------------------------------------------------------------------ #
     #  Selection / navigation helpers

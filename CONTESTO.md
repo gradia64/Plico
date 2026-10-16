@@ -44,24 +44,26 @@ plico/
 │   ├── main_window.py        # finestra, menu, toolbar, dock, QSettings, dialogs
 │   ├── model/
 │   │   ├── document.py       # DocumentModel, PageItem  ← il cuore
-│   │   ├── commands.py       # RotatePage, DeletePage, MovePage (QUndoCommand)
+│   │   ├── commands.py       # RotatePage, DeletePage, MovePage, AddRedaction…
+│   │   ├── redact.py         # rettangoli di redazione e matrici di rotazione
 │   │   ├── save.py           # save_as, save_compressed, extract_pages, parse_page_ranges
 │   │   └── optimize.py       # livelli di compressione, optimize_in_place  ← pikepdf
 │   ├── rendering/
 │   │   └── worker.py         # RenderWorker: unico proprietario degli handle fitz
 │   └── widgets/
-│       ├── page_view.py      # QScrollArea: rendering su richiesta, zoom, HiDPI
+│       ├── page_view.py      # QScrollArea: rendering su richiesta, zoom, HiDPI, redazione
 │       ├── thumbnail_bar.py  # QListView + modello + cache, caricamento lazy
 │       └── compress.py       # scelta del livello, format_size, task sul thread pool
 └── tests/
     ├── test_model.py         # modello, comandi, salvataggio, parse_page_ranges
     ├── test_worker.py        # il worker di rendering in isolamento
     ├── test_optimize.py      # i livelli di compressione e optimize_in_place
-    └── test_integration.py   # MainWindow vera, offscreen: ~48 test end-to-end
+    ├── test_redact.py        # rotazione e rimozione *vera* del testo
+    └── test_integration.py   # MainWindow vera, offscreen: ~58 test end-to-end
 ```
 
-Gate di qualità attuale: **96 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
-(14 file sorgente).
+Gate di qualità attuale: **136 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+(15 file sorgente).
 
 ---
 
@@ -132,10 +134,22 @@ venivano mostrate **verticali e capovolte**. Il test di regressione è
 il test che deve fallire. (Era un caso non coperto perché tutti i PDF di test
 erano generati con `/Rotate 0`.)
 
+4. **I rettangoli disegnati col mouse nascono in spazio vista.** Il puntatore
+   arriva in `page.rect` **con la rotazione dell'utente già applicata**, cioè
+   nello spazio di una pagina con `/Rotate = total_rotation`; `add_redact_annot()`
+   invece vuole lo spazio **non ruotato**. Verificato: `search_for("SEGRETO")`
+   restituisce lo stesso `Rect` con `/Rotate` a 0 e a 90, ed è quello che
+   `apply_redactions()` consuma. I rettangoli di redazione si conservano quindi
+   in **spazio pagina**, e le due conversioni stanno in `model/redact.py`
+   (`rotation_matrix` / `derotation_matrix`, solo multipli di 90). Tenerli in
+   spazio vista sarebbe un bug silenzioso: ruotando la pagina *dopo* averli
+   disegnati, il salvataggio successivo annerirebbe il paragrafo accanto.
+
 La regola in una riga:
 
 > **Al renderer va `item.rotation`; la vista scambia largo/alto su
-> `item.rotation`; solo il salvataggio conosce `total_rotation`.**
+> `item.rotation`; solo il salvataggio conosce `total_rotation`; i rettangoli
+> di redazione si conservano in spazio pagina, non in spazio vista.**
 
 ---
 
@@ -407,6 +421,35 @@ finestra. I segnali sono connessi **solo a metodi legati di QObject** — un
 lambda verrebbe eseguito nel thread emittente e toccherebbe widget dalla
 thread sbagliata.
 
+### Redazione vera (`model/redact.py`)
+
+La differenza fra una redazione e un rettangolo nero: **il testo se ne va**.
+`add_redact_annot()` + `apply_redactions()` riscrivono i content stream e
+tolgono davvero le parole; un rettangolo disegnato sopra lascerebbe il
+contenuto copiabile e ricercabile, che è la trappola da cui questa funzione
+esiste.
+
+- `PageItem.redactions` è una lista di `RedactionRect` in **spazio pagina**
+  (vedi §4): ruotare la pagina dopo non sposta la redazione;
+- `AddRedaction` / `RemoveRedaction` sono `QUndoCommand` come gli altri, quindi
+  una redazione disegnata per sbaglio si annulla con Ctrl+Z;
+- `save.py` le applica **dopo** `page.set_rotation(item.total_rotation)`, una
+  volta per pagina, passando il rettangolo così com'è: lo spazio pagina è
+  esattamente quello che `add_redact_annot()` vuole. `apply_redactions()`
+  **preserva la `/Rotate`** e consuma le annotazioni, quindi non serve
+  riapplicare la rotazione;
+- vale per `save_as` **e** per `save_compressed`: comprimere un documento
+  redatto non fa riapparire niente;
+- la vista **non tocca il modello**: `PageView` emette `redaction_added` /
+  `redaction_removed` e `MainWindow` spinge il comando sullo stack, esattamente
+  come per il drag & drop delle miniature.
+
+Limiti da conoscere: `apply_redactions()` con i valori di default
+(`images=2`, `graphics=1`) elimina anche la **grafica vettoriale** che tocca il
+rettangolo — un bordo o una tabella a cavallo del segno possono sparire; e la
+redazione non tocca i **metadati** (`/Info`, XMP, i nomi dei livelli), che
+possono contenere lo stesso segreto.
+
 ---
 
 ## 9. Ambiente di sviluppo
@@ -498,6 +541,12 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
   che è successo spiando `worker.render_requested` mentre `_pending` cresceva
   correttamente. In quel caso asserire sullo **stato** (`_pending`), non sul
   segnale.
+- **`PySide6.QtTest` non è disponibile** in questa installazione: un test che
+  simula il mouse deve costruire `QMouseEvent` a mano. La forma da usare è
+  quella a **6 argomenti con la posizione globale** — quella a 5 è segnalata
+  come deprecata da Qt 6 e sporca l'output di pytest:
+  `QMouseEvent(tipo, punto, punto, Qt.MouseButton.LeftButton, …)`; gli eventi si
+  consegnano poi a `label.mousePressEvent/mouseMoveEvent/mouseReleaseEvent`.
 
 ### Geometria e visibilità
 
@@ -656,16 +705,17 @@ sostituita con la sorgente `git` del tag di rilascio.
 **Roadmap lunga, dall'idea originale** (in ordine di difficoltà percepita):
 
 1. compilare **form** e **firmare**;
-2. **redaction vera**: rimozione effettiva del testo, non un rettangolo nero
-   sopra. Qui il documento va mutato e la struttura a "servizio documentale"
-   va estesa, non aggirata;
+2. **redaction vera** — ✅ **fatta**, vedi §8;
 3. **OCR** integrato (Tesseract);
 4. **modifica minima del testo** — la parte difficile, ma è il vero
    differenziale rispetto a PDF Arranger e simili.
 
 **Debito tecnico noto:**
 
-- la compressione ha tre livelli fissi e li applica a **tutto** il documento:
+- la redazione si disegna solo a mano, un rettangolo alla volta: niente
+  selezione di testo o di area, niente "trova tutte le occorrenze di una
+  parola", e i metadati (`/Info`, XMP) non vengono ripuliti — per un uso
+  forense servirebbe anche quello;
   non si può ancora scegliere "solo le immagini" o escludere delle pagine, e
   il guadagno si vede solo a lavoro finito (niente stima prima di partire);
 - `PageView._on_screen_changed` esiste ma **non è connesso** (fu rimosso

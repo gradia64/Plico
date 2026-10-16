@@ -36,6 +36,24 @@ def _contiguous_runs(items: list[PageItem]) -> Iterator[list[PageItem]]:
         yield run
 
 
+def _redact(page: fitz.Page, item: PageItem) -> None:
+    """Burn *item*'s redaction rectangles into *page*.
+
+    ``add_redact_annot`` expects coordinates in the page's UNROTATED space,
+    which is exactly the space the model stores its rectangles in, so there
+    is nothing to convert here. ``apply_redactions`` then removes the text
+    under the box, blanks the overlapping image pixels and drops the line art
+    that crosses it -- and it leaves the page's /Rotate alone, so it can run
+    after ``set_rotation`` without changing the orientation we just wrote.
+
+    This is the point of no return: the words are gone from the content
+    stream, not merely covered up.
+    """
+    for rect in item.redactions:
+        page.add_redact_annot(fitz.Rect(*rect.as_tuple()))
+    page.apply_redactions()
+
+
 def _write_pdf(
     model: DocumentModel, out_path: str, pages: list[int] | None = None
 ) -> None:
@@ -66,7 +84,10 @@ def _write_pdf(
                 # Rotation is per page, so it is applied after the bulk copy.
                 base = len(out) - len(run)
                 for offset, item in enumerate(run):
-                    out[base + offset].set_rotation(item.total_rotation)
+                    page = out[base + offset]
+                    page.set_rotation(item.total_rotation)
+                    if item.redactions:
+                        _redact(page, item)
             if len(out) == 0:
                 # A PDF with zero pages is not a useful artefact; fail loudly
                 # rather than writing a file the user cannot open.

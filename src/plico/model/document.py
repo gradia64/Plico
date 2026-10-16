@@ -1,15 +1,24 @@
 """Document model: a list of virtual pages over one or more immutable PDFs.
 
 The model never writes to a PDF. It holds a list of *virtual pages*, each of
-which points at a page of a source document, and the only state it adds is the
-rotation offset the user chose. Every other feature (undo/redo, rendering,
-saving, splitting) is derived from that list.
+which points at a page of a source document, and the only state it adds is
+what the user changed about that page: the rotation offset and the regions to
+redact. Every other feature (undo/redo, rendering, saving, splitting) is
+derived from that list.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import fitz
 from PySide6.QtCore import QObject, Signal
+
+from .redact import (
+    Matrix,
+    RedactionRect,
+    derotation_matrix,
+    rotation_matrix,
+    unrotated_size,
+)
 
 
 @dataclass
@@ -35,11 +44,36 @@ class PageItem:
     # still has to be composed on top of these numbers.
     width_pt: float = 0.0
     height_pt: float = 0.0
+    # Regions to blank out, in PAGE space (unrotated PDF points) -- not in
+    # screen coordinates. A redaction marks a region of the *document*: kept
+    # on screen it would rotate away from the words it was drawn over, and
+    # the next save would blacken the wrong paragraph.
+    redactions: list[RedactionRect] = field(default_factory=list)
 
     @property
     def total_rotation(self) -> int:
         """Composite rotation that gets written to the output PDF."""
         return (self.base_rotation + self.rotation) % 360
+
+    @property
+    def unrotated_size(self) -> tuple[float, float]:
+        """Page size with the base /Rotate undone.
+
+        ``width_pt``/``height_pt`` are already oriented by the page's own
+        /Rotate, so for the odd quarter-turns the two are the other way
+        round. This is the size a redaction rectangle lives in.
+        """
+        return unrotated_size(self.width_pt, self.height_pt, self.base_rotation)
+
+    def view_matrix(self) -> Matrix:
+        """Map page space to what is on screen, user rotation included."""
+        width, height = self.unrotated_size
+        return rotation_matrix(width, height, self.total_rotation)
+
+    def page_matrix(self) -> Matrix:
+        """The inverse of :meth:`view_matrix`: from the screen to the page."""
+        width, height = self.unrotated_size
+        return derotation_matrix(width, height, self.total_rotation)
 
 
 class DocumentModel(QObject):

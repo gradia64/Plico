@@ -12,8 +12,8 @@ from unittest import mock
 
 import fitz
 import pytest
-from PySide6.QtCore import QSettings, QThreadPool
-from PySide6.QtGui import QAction, QIcon, QImage
+from PySide6.QtCore import QEvent, QPointF, QSettings, Qt, QThreadPool
+from PySide6.QtGui import QAction, QIcon, QImage, QMouseEvent
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -26,6 +26,7 @@ import plico.main_window
 from plico.main_window import MainWindow
 from plico.model import LEVELS_BY_KEY
 from plico.model.commands import DeletePage, RotatePage
+from plico.model.redact import RedactionRect, map_rect, rotation_matrix
 from plico.model.save import save_as
 from plico.widgets.thumbnail_bar import (
     THUMB_ZOOM,
@@ -1242,3 +1243,253 @@ def test_a_failed_compression_arrives_as_a_message(qapp, tmp_path, monkeypatch, 
 
     assert errori and "Impossibile comprimere" in errori[0], errori
     assert mw._progress is None, "anche fallendo, il dialogo di avanzamento deve sparire"
+
+
+# --------------------------------------------------------------------- #
+#  Redazione: la modalita`, il trascinamento e il giro completo
+# --------------------------------------------------------------------- #
+
+def _pdf_da_redigere(path: str) -> None:
+    """Due parole ben distanti: una da togliere, una da ritrovare."""
+    with fitz.open() as doc:
+        pagina = doc.new_page(width=595, height=842)
+        pagina.insert_text((100, 100), "SEGRETO", fontsize=20)
+        pagina.insert_text((100, 700), "PUBBLICO", fontsize=20)
+        doc.save(path)
+
+
+def _evento(tipo: QEvent.Type, pos: tuple[int, int]) -> QMouseEvent:
+    # La forma con posizione globale e` l'unica che Qt 6 non segnala come
+    # deprecata; la posizione locale e` quella che l'etichetta legge.
+    punto = QPointF(*pos)
+    return QMouseEvent(
+        tipo,
+        punto,
+        punto,
+        Qt.MouseButton.LeftButton,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+
+
+def _trascina(label, da: tuple[int, int], a: tuple[int, int]) -> None:
+    """Un trascinamento vero: premuta, spostamento, rilascio.
+
+    QtTest non e` disponibile in questa installazione di PySide6, quindi gli
+    eventi si costruiscono a mano e si consegnano alla stessa etichetta che li
+    riceverebbe dall'utente. Con ``da == a`` diventa un clic secco.
+    """
+    label.mousePressEvent(_evento(QEvent.Type.MouseButtonPress, da))
+    if a != da:
+        label.mouseMoveEvent(_evento(QEvent.Type.MouseMove, a))
+    label.mouseReleaseEvent(_evento(QEvent.Type.MouseButtonRelease, a))
+
+
+def _pixel_di(canvas, pdf: str, parola: str) -> tuple[tuple[int, int], tuple[int, int]]:
+    """Dove sta *parola* sullo schermo, calcolato senza usare la vista.
+
+    Serve a non chiedere alla PageView dove ha messo la parola e poi
+    verificare che l'abbia messa li`: si parte da ``search_for`` di fitz e si
+    applica la stessa matrice che usa MuPDF (fissata da tests/test_redact.py).
+    """
+    with fitz.open(pdf) as doc:
+        area = doc[0].search_for(parola)[0]
+    rect = RedactionRect.from_corners(area.x0, area.y0, area.x1, area.y1)
+    larghezza, altezza = canvas.item.unrotated_size
+    in_vista = map_rect(rect, rotation_matrix(larghezza, altezza, canvas.item.total_rotation))
+    return (
+        (int(in_vista.x0 * canvas.scale), int(in_vista.y0 * canvas.scale)),
+        (int(in_vista.x1 * canvas.scale), int(in_vista.y1 * canvas.scale)),
+    )
+
+
+def test_la_redazione_e_una_modalita_nel_menu_modifica(windows):
+    mw = windows()
+    voci = {
+        azione.text().replace("&", ""): azione
+        for azione in mw.menuBar().actions()[1].menu().actions()
+    }
+    assert "Redazione" in voci, sorted(voci)
+    assert voci["Redazione"].isCheckable(), "e` una modalita`, non un comando secco"
+    assert voci["Redazione"].shortcut().toString() == "Ctrl+Shift+X"
+
+
+def test_la_redazione_senza_documento_avvisa(qapp, monkeypatch, windows):
+    mw = windows()
+
+    avvisi: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        staticmethod(lambda _parent, _title, text, *a, **k: avvisi.append(text)),
+    )
+
+    mw._redact_act.trigger()
+
+    assert avvisi and "Nessun documento" in avvisi[0]
+    assert not mw._redact_act.isChecked(), "la spunta deve tornare indietro"
+    assert not mw._page_view.redaction_mode()
+
+
+def test_la_modalita_redazione_si_accende_e_si_spegne(qapp, tmp_path, windows):
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=3)
+    mw = windows()
+    _open(mw, pdf)
+
+    mw._redact_act.trigger()
+    assert mw._redact_act.isChecked()
+    assert mw._page_view.redaction_mode()
+
+    mw._redact_act.trigger()
+    assert not mw._redact_act.isChecked()
+    assert not mw._page_view.redaction_mode()
+
+
+def test_esc_esce_dalla_redazione(qapp, tmp_path, windows):
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=1)
+    mw = windows()
+    _open(mw, pdf)
+
+    mw._redact_act.trigger()
+    assert mw._page_view.redaction_mode()
+
+    mw._escape_act.trigger()
+
+    assert not mw._redact_act.isChecked()
+    assert not mw._page_view.redaction_mode()
+
+
+def test_aprire_un_altro_documento_spegne_la_redazione(qapp, tmp_path, windows):
+    """Altrimenti il primo trascinamento segnerebbe una pagina mai vista."""
+    primo = str(tmp_path / "primo.pdf")
+    secondo = str(tmp_path / "secondo.pdf")
+    _make_pdf(primo, pages=1)
+    _make_pdf(secondo, pages=1)
+
+    mw = windows()
+    _open(mw, primo)
+    mw._redact_act.trigger()
+    assert mw._page_view.redaction_mode()
+
+    _open(mw, secondo)
+
+    assert not mw._redact_act.isChecked()
+    assert not mw._page_view.redaction_mode()
+
+
+def test_trascinare_sulla_pagina_crea_una_redazione(qapp, tmp_path, windows):
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=1)
+    mw = windows()
+    _open(mw, pdf)
+
+    mw._redact_act.trigger()
+    canvas = mw._page_view._canvases[0]
+
+    _trascina(canvas.label, (20, 20), (120, 80))
+    _pump(0.1)
+
+    redazioni = mw._doc_model.pages[0].redactions
+    assert len(redazioni) == 1, "il trascinamento non ha lasciato una redazione"
+    rect = redazioni[0]
+    larghezza, altezza = mw._doc_model.pages[0].unrotated_size
+    assert 0.0 <= rect.x0 < rect.x1 <= larghezza
+    assert 0.0 <= rect.y0 < rect.y1 <= altezza
+    assert mw._undo_stack.count() == 1
+    assert mw._undo_stack.undoText() == "Redazione su pagina 1"
+
+
+def test_annullare_il_comando_toglie_la_redazione(qapp, tmp_path, windows):
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=1)
+    mw = windows()
+    _open(mw, pdf)
+
+    mw._redact_act.trigger()
+    canvas = mw._page_view._canvases[0]
+    _trascina(canvas.label, (20, 20), (120, 80))
+    assert len(mw._doc_model.pages[0].redactions) == 1
+
+    mw._undo_stack.undo()
+
+    assert mw._doc_model.pages[0].redactions == []
+
+    mw._undo_stack.redo()
+    assert len(mw._doc_model.pages[0].redactions) == 1
+
+
+def test_un_clic_su_una_zona_la_annulla(qapp, tmp_path, windows):
+    """Un clic secco e` il modo di riprendersi un rettangolo sbagliato."""
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=1)
+    mw = windows()
+    _open(mw, pdf)
+
+    mw._redact_act.trigger()
+    canvas = mw._page_view._canvases[0]
+    _trascina(canvas.label, (20, 20), (120, 80))
+    assert len(mw._doc_model.pages[0].redactions) == 1
+
+    # Un clic al centro della zona appena disegnata.
+    _trascina(canvas.label, (70, 50), (70, 50))
+    _pump(0.1)
+
+    assert mw._doc_model.pages[0].redactions == []
+    assert mw._undo_stack.undoText() == "Annulla redazione su pagina 1"
+
+
+def test_dal_trascinamento_al_file_il_testo_sparisce(qapp, tmp_path, monkeypatch, windows):
+    """Il giro completo: si disegna sulla parola, si salva, la parola non c'e` piu`."""
+    pdf = str(tmp_path / "doc.pdf")
+    out = str(tmp_path / "out.pdf")
+    _pdf_da_redigere(pdf)
+
+    mw = windows()
+    _open(mw, pdf)
+
+    mw._redact_act.trigger()
+    canvas = mw._page_view._canvases[0]
+    da, a = _pixel_di(canvas, pdf, "SEGRETO")
+    _trascina(canvas.label, da, a)
+    assert len(mw._doc_model.pages[0].redactions) == 1
+
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    mw._save_file()
+    _pump()
+
+    with fitz.open(out) as doc:
+        testo = doc[0].get_text()
+    assert "SEGRETO" not in testo, "il giro completo non ha rimosso il testo"
+    assert "PUBBLICO" in testo, "la redazione ha portato via anche il resto"
+
+
+def test_il_trascinamento_regge_anche_ruotando_la_pagina(qapp, tmp_path, monkeypatch, windows):
+    """Dove il rettangolo puo` finire nel posto sbagliato: pagina ruotata."""
+    pdf = str(tmp_path / "doc.pdf")
+    out = str(tmp_path / "out.pdf")
+    _pdf_da_redigere(pdf)
+
+    mw = windows()
+    _open(mw, pdf)
+    mw._doc_model.pages[0].rotation = 90
+    mw._page_view.refresh_geometry()
+
+    mw._redact_act.trigger()
+    canvas = mw._page_view._canvases[0]
+    assert canvas.item.total_rotation == 90
+    da, a = _pixel_di(canvas, pdf, "SEGRETO")
+    _trascina(canvas.label, da, a)
+
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    mw._save_file()
+    _pump()
+
+    with fitz.open(out) as doc:
+        assert doc[0].rotation == 90
+        testo = doc[0].get_text()
+    assert "SEGRETO" not in testo, "ruotando, il rettangolo e` finito altrove"
+    assert "PUBBLICO" in testo

@@ -6,7 +6,7 @@ comprimerli.
 
 > Il file PDF non si tocca mai finché non salvi.
 
-## Caratteristiche MVP
+## Caratteristiche
 
 - **Ruotare, eliminare, riordinare** pagine (drag & drop nella barra miniature)
 - **Unire** un altro PDF: le sue pagine si aggiungono a quelle già aperte
@@ -22,6 +22,9 @@ comprimerli.
 - **Salvataggio** su file temporaneo: il PDF di partenza non si tocca
 - **Salva compresso** a tre livelli, con il guadagno mostrato a fine lavoro —
   e il livello "leggera" è senza perdita
+- **Redazione vera**: si trascina un rettangolo sui dati da eliminare e al
+  salvataggio il testo viene **rimosso**, non coperto — quel che resta non è
+  più copiabile né ricercabile
 
 ### Requisito di accettazione
 
@@ -41,13 +44,14 @@ plico/
     ├── main_window.py         # MainWindow + wiring worker/model/view
     ├── model/
     │   ├── document.py        # DocumentModel, PageItem
-    │   ├── commands.py        # QUndoCommand: RotatePage, DeletePage, MovePage
+    │   ├── commands.py        # QUndoCommand: RotatePage, DeletePage, MovePage…
+    │   ├── redact.py          # rettangoli di redazione, matrici di rotazione
     │   ├── save.py            # save_as(), save_compressed(), extract_pages()
     │   └── optimize.py        # livelli di compressione, optimize_in_place()
     ├── rendering/
     │   └── worker.py          # RenderWorker in QThread
     └── widgets/
-        ├── page_view.py       # QScrollArea: rendering on demand, fit-width, HiDPI
+        ├── page_view.py       # QScrollArea: rendering on demand, fit-width, HiDPI, redazione
         ├── thumbnail_bar.py   # QListView + modello + cache, caricamento lazy
         └── compress.py        # dialogo del livello, format_size, task
 ```
@@ -114,6 +118,23 @@ il lavoro sulle immagini (un JPEG da 3,4 MB su 3 pagine resta al 100% con
 
 La compressione gira in un thread separato, quindi la finestra resta reattiva
 anche sui file grandi.
+
+### Redazione: il testo se ne va davvero
+
+`Ctrl+Shift+X` attiva lo strumento: si trascina un rettangolo sui dati da
+eliminare, un clic secco su una zona la annulla, `Esc` esce. Le zone restano
+**modificabili finché non salvi** — sono comandi undo come gli altri (`Ctrl+Z`)
+e l'anteprima scura sulla pagina mostra esattamente dove finiranno.
+
+Al salvataggio PyMuPDF riscrive i content stream e **toglie** le parole che
+ricadono nella zona: nel file non restano né il testo né l'immagine sotto il
+rettangolo. Un rettangolo nero disegnato sopra — quello che fanno parecchi
+strumenti — lascerebbe il segreto copiabile e ricercabile.
+
+Due cose da sapere: si redige solo quello che si disegna a mano (niente
+ricerca automatica di parole, e i metadati del PDF non vengono ripuliti), e
+`apply_redactions()` elimina anche la grafica vettoriale che tocca il
+rettangolo, quindi un bordo o una tabella a cavallo del segno possono sparire.
 
 ### Integrazione desktop (KDE)
 

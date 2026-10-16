@@ -4,7 +4,7 @@ import os
 from collections.abc import Callable
 
 from PySide6.QtCore import QMetaObject, QSettings, Qt, QThread, QThreadPool
-from PySide6.QtGui import QAction, QIcon, QUndoStack
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QUndoStack
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -22,11 +22,14 @@ from PySide6.QtWidgets import (
 )
 
 from .model import (
+    AddRedaction,
     CompressionLevel,
     CompressionResult,
     DeletePage,
     DocumentModel,
     MovePage,
+    RedactionRect,
+    RemoveRedaction,
     RotatePage,
     extract_pages,
     parse_page_ranges,
@@ -103,6 +106,10 @@ class MainWindow(QMainWindow):
         # an undoable command.
         self._thumb_bar.move_requested.connect(self._move_page)
         self._thumb_bar.page_selected.connect(self._on_page_selected)
+        # The same route the bar's drag & drop takes: the view reports the
+        # gesture, the window pushes the undoable command.
+        self._page_view.redaction_added.connect(self._add_redaction)
+        self._page_view.redaction_removed.connect(self._remove_redaction)
         dock = QDockWidget(self.tr("Miniature"), self)
         dock.setObjectName("thumbnail_dock")
         dock.setWidget(self._thumb_bar)
@@ -208,6 +215,31 @@ class MainWindow(QMainWindow):
         )
         edit_menu.addAction(self._delete_act)
 
+        edit_menu.addSeparator()
+
+        self._redact_act = self._act(
+            self.tr("&Redazione"), "edit-cut", "Ctrl+Shift+X", self._on_redaction_toggled
+        )
+        # A mode, not a one-shot command: it stays on while the user works
+        # through a page, and the marks it collects are only painted — they
+        # are burned into the PDF when the document is saved.
+        self._redact_act.setCheckable(True)
+        self._redact_act.setToolTip(
+            self.tr(
+                "Trascina sui dati da eliminare; un clic su una zona la annulla.\n"
+                "Le redazioni diventano definitive solo al salvataggio."
+            )
+        )
+        edit_menu.addAction(self._redact_act)
+
+        # Esc leaves the tool whatever has focus. It sets the check state
+        # directly: setChecked() does not emit `triggered`, so the mode is
+        # turned off explicitly instead of through the menu slot.
+        self._escape_act = QAction(self)
+        self._escape_act.setShortcut(QKeySequence(Qt.Key.Key_Escape))
+        self._escape_act.triggered.connect(self._leave_redaction)
+        self.addAction(self._escape_act)
+
         view_menu = menubar.addMenu(self.tr("&Visualizza"))
 
         self._fit_act = self._act(
@@ -312,6 +344,10 @@ class MainWindow(QMainWindow):
         # clears the selection, and the bar would otherwise restore the
         # previous document's row.)
         self._thumb_bar.set_current_row(0)
+        # Never carry the redaction tool over into another document: the next
+        # drag would mark a page the user has not even looked at.
+        self._redact_act.setChecked(False)
+        self._on_redaction_toggled(False)
         self._status.setText(self.tr("Aperto: {0}").format(path))
 
     def _merge_file(self) -> None:
@@ -631,6 +667,40 @@ class MainWindow(QMainWindow):
         # MovePage emits ``changed``; the view reorders itself.
         self._undo_stack.push(MovePage(self._doc_model, from_row, to_row))
         self._thumb_bar.set_current_row(to_row)
+
+    # ------------------------------------------------------------------ #
+    #  Redazione (undo commands)
+    # ------------------------------------------------------------------ #
+
+    def _on_redaction_toggled(self, active: bool) -> None:
+        """Enter or leave the redaction tool."""
+        if active and not self._doc_model.sources:
+            # Nothing to redact. Put the check mark back; setChecked() does
+            # not emit `triggered`, so this cannot recurse.
+            self._redact_act.setChecked(False)
+            QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
+            return
+        self._page_view.set_redaction_mode(active)
+        if active:
+            self._status.setText(
+                self.tr("Redazione: trascina sui dati da eliminare; un clic su una zona la annulla.")
+            )
+        else:
+            self._status.setText(self.tr("Pronto"))
+
+    def _leave_redaction(self) -> None:
+        """Esc: leave the tool, leaving the marks where they are."""
+        if self._redact_act.isChecked():
+            self._redact_act.setChecked(False)
+            self._on_redaction_toggled(False)
+
+    def _add_redaction(self, index: int, rect: RedactionRect) -> None:
+        """A rectangle was drawn on page *index*."""
+        self._undo_stack.push(AddRedaction(self._doc_model, index, rect))
+
+    def _remove_redaction(self, index: int, rect: RedactionRect) -> None:
+        """An existing mark was clicked away."""
+        self._undo_stack.push(RemoveRedaction(self._doc_model, index, rect))
 
     # ------------------------------------------------------------------ #
     #  Lifecycle
