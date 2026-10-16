@@ -9,6 +9,7 @@ from typing import TypeVar
 import fitz
 
 from .document import DocumentModel, PageItem
+from .forms import write_fields
 from .optimize import CompressionLevel, CompressionResult, Progress, optimize_in_place
 
 _T = TypeVar("_T")
@@ -54,6 +55,21 @@ def _redact(page: fitz.Page, item: PageItem) -> None:
     page.apply_redactions()
 
 
+def _fill_fields(page: fitz.Page, item: PageItem) -> None:
+    """Write the user's values into the form fields of *page*.
+
+    Order matters twice over. Fields are written **before** the redactions, so
+    a value the user typed can never be lost to a page that also carries a
+    redaction, and so a redaction drawn over a field takes that field with it --
+    which is what a redaction is for. And *page* must be the live object from
+    ``out[...]``: a widget keeps a weak reference to its page, so a temporary
+    would be collected before the first ``update()``.
+    """
+    if not item.form_values:
+        return
+    write_fields(page, item.form_values)
+
+
 def _write_pdf(
     model: DocumentModel, out_path: str, pages: list[int] | None = None
 ) -> None:
@@ -86,6 +102,7 @@ def _write_pdf(
                 for offset, item in enumerate(run):
                     page = out[base + offset]
                     page.set_rotation(item.total_rotation)
+                    _fill_fields(page, item)
                     if item.redactions:
                         _redact(page, item)
             if len(out) == 0:

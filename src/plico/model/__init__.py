@@ -1,5 +1,13 @@
-from .commands import AddRedaction, DeletePage, MovePage, RemoveRedaction, RotatePage
+from .commands import (
+    AddRedaction,
+    DeletePage,
+    MovePage,
+    RemoveRedaction,
+    RotatePage,
+    SetFieldValue,
+)
 from .document import DocumentModel, PageItem
+from .forms import Field, read_fields, write_fields
 from .optimize import (
     LEVELS,
     LEVELS_BY_KEY,
@@ -18,14 +26,18 @@ __all__ = [
     "CompressionResult",
     "DeletePage",
     "DocumentModel",
+    "Field",
     "MovePage",
     "PageItem",
     "RedactionRect",
     "RemoveRedaction",
     "RotatePage",
+    "SetFieldValue",
     "extract_pages",
     "optimize_in_place",
     "parse_page_ranges",
+    "read_fields",
     "save_as",
     "save_compressed",
+    "write_fields",
 ]

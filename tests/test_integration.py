@@ -16,9 +16,12 @@ from PySide6.QtCore import QEvent, QPointF, QSettings, Qt, QThreadPool
 from PySide6.QtGui import QAction, QIcon, QImage, QMouseEvent
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
+    QComboBox,
     QDialog,
     QFileDialog,
     QInputDialog,
+    QLineEdit,
     QMessageBox,
 )
 
@@ -1493,3 +1496,202 @@ def test_il_trascinamento_regge_anche_ruotando_la_pagina(qapp, tmp_path, monkeyp
         testo = doc[0].get_text()
     assert "SEGRETO" not in testo, "ruotando, il rettangolo e` finito altrove"
     assert "PUBBLICO" in testo
+
+
+# --------------------------------------------------------------------- #
+#  Form AcroForm: il pannello, il clic sulla pagina e il salvataggio
+# --------------------------------------------------------------------- #
+
+def _aggiungi_campo(pagina, nome: str, tipo: int, rect, valore=None) -> None:
+    """Un campo sul modulo di prova. La pagina deve essere viva."""
+    widget = fitz.Widget()
+    widget.field_name = nome
+    widget.field_type = tipo
+    widget.rect = fitz.Rect(*rect)
+    if valore is not None:
+        widget.field_value = valore
+    pagina.add_widget(widget)
+    widget.update()
+
+
+def _pdf_modulo(path: str, pagine: int = 1) -> None:
+    """Un modulo con un campo di testo e una casella, sull'ultima pagina."""
+    with fitz.open() as doc:
+        for _ in range(max(0, pagine - 1)):
+            doc.new_page(width=595, height=842)
+        pagina = doc.new_page(width=595, height=842)
+        pagina.insert_text((72, 60), "Modulo", fontsize=16)
+        _aggiungi_campo(
+            pagina, "nome", fitz.PDF_WIDGET_TYPE_TEXT, (72, 100, 300, 128), "vecchio"
+        )
+        _aggiungi_campo(pagina, "accetto", fitz.PDF_WIDGET_TYPE_CHECKBOX, (72, 140, 92, 160))
+        doc.save(path, garbage=4, deflate=True)
+
+
+def _valori_del_file(path: str) -> dict[str, str]:
+    with fitz.open(path) as doc:
+        pagina = doc[0]
+        return {w.field_name or "": w.field_value or "" for w in pagina.widgets() or ()}
+
+
+def _editor_di(mw: MainWindow, nome: str):
+    """L'editor che il pannello ha costruito per *nome*."""
+    return mw._form_panel._editors[nome]
+
+
+def _scrivi_nel_pannello(mw: MainWindow, nome: str, valore: str) -> None:
+    """Simula la digitazione nel pannello.
+
+    QtTest non esiste in questa installazione, quindi per il campo di testo si
+    mette il valore nell'editor e si emette lo stesso segnale che Qt emette
+    digitando. Casella e tendina emettono da sole, quindi li` basta agire.
+    """
+    editor = _editor_di(mw, nome)
+    if isinstance(editor, QCheckBox):
+        editor.setChecked(valore not in ("", "Off"))
+        return
+    if isinstance(editor, QComboBox):
+        editor.setCurrentText(valore)
+        return
+    assert isinstance(editor, QLineEdit), editor
+    editor.setText(valore)
+    editor.textEdited.emit(valore)
+
+
+def test_il_pannello_mostra_i_campi_della_pagina(qapp, tmp_path, windows):
+    pdf = str(tmp_path / "modulo.pdf")
+    _pdf_modulo(pdf)
+
+    mw = windows()
+    _open(mw, pdf)
+
+    pannello = mw._form_panel
+    assert pannello.page() == 0
+    assert set(pannello._editors) == {"nome", "accetto"}
+    assert _editor_di(mw, "nome").text() == "vecchio"
+    assert not _editor_di(mw, "accetto").isChecked()
+
+
+def test_senza_documento_il_pannello_e_vuoto(qapp, windows):
+    mw = windows()
+    assert mw._form_panel._editors == {}
+
+
+def test_il_pannello_segue_la_pagina_scelta(qapp, tmp_path, windows):
+    """I campi stanno su una pagina: cambiando pagina cambiano loro."""
+    pdf = str(tmp_path / "due.pdf")
+    _pdf_modulo(pdf, pagine=2)
+
+    mw = windows()
+    _open(mw, pdf)
+    assert mw._form_panel._editors == {}, "la prima pagina non ha campi"
+
+    mw._thumb_bar.set_current_row(1)
+    _pump()
+
+    assert set(mw._form_panel._editors) == {"nome", "accetto"}
+
+
+def test_scrivere_nel_pannello_diventa_un_comando_e_finisce_nel_file(
+    qapp, tmp_path, monkeypatch, windows
+):
+    pdf = str(tmp_path / "modulo.pdf")
+    out = str(tmp_path / "out.pdf")
+    _pdf_modulo(pdf)
+
+    mw = windows()
+    _open(mw, pdf)
+
+    _scrivi_nel_pannello(mw, "nome", "Anna")
+
+    assert mw._doc_model.pages[0].form_values["nome"] == "Anna"
+    assert mw._undo_stack.count() == 1
+    assert mw._undo_stack.undoText() == "Campo «nome» su pagina 1"
+
+    monkeypatch.setattr(
+        QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, ""))
+    )
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    mw._save_file()
+    _pump()
+
+    assert _valori_del_file(out)["nome"] == "Anna"
+    assert _valori_del_file(pdf)["nome"] == "vecchio", "la sorgente non si tocca"
+
+
+def test_undo_toglie_la_modifica_del_pannello(qapp, tmp_path, windows):
+    pdf = str(tmp_path / "modulo.pdf")
+    _pdf_modulo(pdf)
+
+    mw = windows()
+    _open(mw, pdf)
+    _scrivi_nel_pannello(mw, "nome", "Anna")
+
+    mw._undo_stack.undo()
+
+    assert "nome" not in mw._doc_model.pages[0].form_values
+
+
+def test_la_casella_del_pannello_registra_lo_stato(qapp, tmp_path, windows):
+    pdf = str(tmp_path / "modulo.pdf")
+    _pdf_modulo(pdf)
+
+    mw = windows()
+    _open(mw, pdf)
+
+    _scrivi_nel_pannello(mw, "accetto", "Yes")
+    assert mw._doc_model.pages[0].form_values["accetto"] == "Yes"
+
+    mw._undo_stack.undo()
+    assert "accetto" not in mw._doc_model.pages[0].form_values
+
+
+def test_un_clic_sulla_pagina_seleziona_il_campo(qapp, tmp_path, windows):
+    """Il clic non compila: dice al pannello quale campo si sta guardando."""
+    pdf = str(tmp_path / "modulo.pdf")
+    _pdf_modulo(pdf)
+
+    mw = windows()
+    _open(mw, pdf)
+
+    canvas = mw._page_view._canvases[0]
+    campo = next(c for c in canvas.item.form_fields if c.name == "nome")
+    dentro = (
+        int((campo.rect[0] + campo.rect[2]) / 2 * canvas.scale),
+        int((campo.rect[1] + campo.rect[3]) / 2 * canvas.scale),
+    )
+    _trascina(canvas.label, dentro, dentro)  # da == a: un clic secco
+
+    assert mw._page_view.selected_field() == (0, "nome")
+    assert mw._form_panel.focusWidget() is not None
+
+
+def test_un_clic_fuori_dai_campi_non_seleziona_niente(qapp, tmp_path, windows):
+    pdf = str(tmp_path / "modulo.pdf")
+    _pdf_modulo(pdf)
+
+    mw = windows()
+    _open(mw, pdf)
+
+    canvas = mw._page_view._canvases[0]
+    _trascina(canvas.label, (5, 700), (5, 700))
+
+    assert mw._page_view.selected_field() is None
+
+
+def test_il_valore_disegnato_viene_dal_modello(qapp, tmp_path, windows):
+    """L'anteprima sulla pagina deve seguire il modello, non il file."""
+    pdf = str(tmp_path / "modulo.pdf")
+    _pdf_modulo(pdf)
+
+    mw = windows()
+    _open(mw, pdf)
+
+    canvas = mw._page_view._canvases[0]
+    campo = next(c for c in canvas.item.form_fields if c.name == "nome")
+    assert canvas.label._valore_mostrato(canvas.item, campo) == "vecchio"
+
+    _scrivi_nel_pannello(mw, "nome", "Anna")
+
+    assert canvas.label._valore_mostrato(canvas.item, campo) == "Anna"
+    assert campo.value == "vecchio", "il descrittore resta quello del file"

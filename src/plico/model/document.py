@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 import fitz
 from PySide6.QtCore import QObject, Signal
 
+from .forms import Field, read_fields
 from .redact import (
     Matrix,
     RedactionRect,
@@ -49,6 +50,15 @@ class PageItem:
     # on screen it would rotate away from the words it was drawn over, and
     # the next save would blacken the wrong paragraph.
     redactions: list[RedactionRect] = field(default_factory=list)
+    # The form fields the SOURCE page offers, read once when the document is
+    # opened. A field is an annotation, not content: it belongs to the source,
+    # so it is described here instead of being re-read on every repaint.
+    form_fields: list[Field] = field(default_factory=list)
+    # What the user typed into those fields, by field name. Only the fields
+    # that were actually touched appear: an absent name means "leave whatever
+    # the file already had", which is NOT the same as an empty value -- clearing
+    # a field on purpose is a change, and it has to survive the save.
+    form_values: dict[str, str] = field(default_factory=dict)
 
     @property
     def total_rotation(self) -> int:
@@ -103,19 +113,29 @@ class DocumentModel(QObject):
 
     def _items_for(self, source_id: int, path: str) -> list[PageItem]:
         """Read *path* read-only and describe it as virtual pages."""
+        items: list[PageItem] = []
         with fitz.open(path) as doc:
-            return [
-                PageItem(
-                    source_index=i,
-                    base_rotation=p.rotation,
-                    source_id=source_id,
-                    # page.rect already includes the base /Rotate, so these
-                    # are the oriented dimensions the view must lay out with.
-                    width_pt=p.rect.width,
-                    height_pt=p.rect.height,
+            # A document with no form at all does not earn a per-page widget
+            # scan, and this is a document-level property.
+            modulo = bool(doc.is_form_pdf)
+            for i in range(doc.page_count):
+                # The page must stay alive in a local: a widget keeps a weak
+                # reference to the page it came from, so ``read_fields(doc[i])``
+                # would hand back fields that can never be written.
+                pagina = doc[i]
+                items.append(
+                    PageItem(
+                        source_index=i,
+                        base_rotation=pagina.rotation,
+                        source_id=source_id,
+                        # page.rect already includes the base /Rotate, so these
+                        # are the oriented dimensions the view must lay out with.
+                        width_pt=pagina.rect.width,
+                        height_pt=pagina.rect.height,
+                        form_fields=read_fields(pagina) if modulo else [],
+                    )
                 )
-                for i, p in enumerate(doc)
-            ]
+        return items
 
     def open(self, path: str) -> None:
         """Open *path* read-only, replacing the virtual page list entirely."""

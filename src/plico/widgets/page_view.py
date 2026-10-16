@@ -17,6 +17,7 @@ from PySide6.QtGui import QPalette as QPaletteColor
 from PySide6.QtWidgets import QLabel, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
 
 from ..model.document import PageItem
+from ..model.forms import CHECKBOX, UNCHECKED, Field
 from ..model.redact import RedactionRect, map_point, map_rect
 from ..rendering.worker import RenderRequest
 
@@ -35,6 +36,14 @@ REDACTION_DRAG = QColor(214, 48, 48, 170)
 
 # Below this (in pixels) a press-and-release is a click, not a drag.
 CLICK_SLOP = 4.0
+
+# Form fields, drawn over the page: a light wash says "there is a field here",
+# and the selected one is picked out so that the page and the panel agree.
+FIELD_WASH = QColor(64, 120, 200, 26)
+FIELD_BORDER = QColor(64, 120, 200, 150)
+FIELD_SELECTED_WASH = QColor(230, 145, 40, 40)
+FIELD_SELECTED_BORDER = QColor(214, 138, 48)
+FIELD_TEXT = QColor(20, 20, 20)
 
 
 # --- per-page canvas ----------------------------------------------------- #
@@ -78,11 +87,11 @@ class _PageLabel(QLabel):
             point.x() / scale, point.y() / scale, canvas.item.page_matrix()
         )
 
-    def _to_pixels(self, rect: RedactionRect) -> QRectF:
-        """Page-space rectangle → the widget rectangle to paint it in."""
+    def _rect_pixels(self, rect: tuple[float, float, float, float]) -> QRectF:
+        """A page-space rectangle → the widget rectangle to paint it in."""
         canvas = self.canvas
         assert canvas is not None
-        view_rect = map_rect(rect, canvas.item.view_matrix())
+        view_rect = map_rect(RedactionRect(*rect), canvas.item.view_matrix())
         scale = self._scale()
         return QRectF(
             view_rect.x0 * scale,
@@ -91,15 +100,30 @@ class _PageLabel(QLabel):
             view_rect.height * scale,
         )
 
+    def _to_pixels(self, rect: RedactionRect) -> QRectF:
+        """Like :meth:`_rect_pixels`, for a redaction rectangle."""
+        return self._rect_pixels(rect.as_tuple())
+
     # -- painting ------------------------------------------------------- #
 
     def paintEvent(self, event) -> None:
         super().paintEvent(event)
         canvas = self.canvas
-        if canvas is None or not self._view.redaction_mode():
+        if canvas is None:
             return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        # Fields are always drawn: they are how the user finds what can be
+        # filled in. Redactions only while the tool is on, so that a page
+        # carrying marks still reads as a page.
+        self._paint_fields(painter)
+        if self._view.redaction_mode():
+            self._paint_redactions(painter)
+        painter.end()
+
+    def _paint_redactions(self, painter: QPainter) -> None:
+        canvas = self.canvas
+        assert canvas is not None
         for rect in canvas.item.redactions:
             area = self._to_pixels(rect)
             painter.fillRect(area, QBrush(REDACTION_FILL))
@@ -110,12 +134,85 @@ class _PageLabel(QLabel):
             painter.setPen(QPen(REDACTION_DRAG, 2, Qt.PenStyle.DashLine))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(QRectF(self._drag_from, self._drag_to).normalized())
-        painter.end()
+
+    def _paint_fields(self, painter: QPainter) -> None:
+        """Draw this page's form fields, each with the value it will hold.
+
+        The value comes from the MODEL, not from the widget: after a save the
+        two agree, but before it the model is the only thing that knows what is
+        about to be written into the file.
+        """
+        canvas = self.canvas
+        assert canvas is not None
+        item = canvas.item
+        if not item.form_fields:
+            return
+        scelto = self._view.selected_field()
+        for campo in item.form_fields:
+            area = self._rect_pixels(campo.rect)
+            acceso = scelto == (canvas.index, campo.name)
+            painter.fillRect(
+                area, QBrush(FIELD_SELECTED_WASH if acceso else FIELD_WASH)
+            )
+            spessore = 2 if acceso else 1
+            bordo = FIELD_SELECTED_BORDER if acceso else FIELD_BORDER
+            painter.setPen(QPen(bordo, spessore))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(area)
+            testo = self._valore_mostrato(item, campo)
+            if testo:
+                self._paint_value(painter, area, campo, testo)
+
+    @staticmethod
+    def _valore_mostrato(item: PageItem, campo: Field) -> str:
+        valore = item.form_values.get(campo.name, campo.value)
+        if campo.kind == CHECKBOX:
+            # A checkbox has no text of its own: it is ticked, or it is not.
+            return "X" if valore not in ("", UNCHECKED) else ""
+        return valore
+
+    @staticmethod
+    def _paint_value(
+        painter: QPainter, area: QRectF, campo: Field, testo: str
+    ) -> None:
+        """Write *testo* inside *area*, clipped so it can never spill out."""
+        dentro = area.adjusted(3.0, 2.0, -3.0, -2.0)
+        if dentro.width() <= 1.0 or dentro.height() <= 1.0:
+            return
+        painter.save()
+        painter.setClipRect(dentro)
+        painter.setPen(QPen(FIELD_TEXT))
+        font = painter.font()
+        font.setPixelSize(max(6, min(int(dentro.height() * 0.7), 18)))
+        painter.setFont(font)
+        bandiere = int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        if campo.multiline:
+            painter.drawText(dentro, bandiere | int(Qt.TextFlag.TextWordWrap), testo)
+        else:
+            painter.drawText(dentro, bandiere, testo)
+        painter.restore()
 
     # -- the gesture ---------------------------------------------------- #
 
+    def _select_field_under(self, point: QPointF) -> None:
+        """Tell the view which form field, if any, sits under *point*.
+
+        Last match wins, because that is the one painted on top.
+        """
+        canvas = self.canvas
+        if canvas is None:
+            return
+        for campo in reversed(canvas.item.form_fields):
+            if self._rect_pixels(campo.rect).contains(point):
+                self._view.report_field_click(canvas.index, campo.name)
+                return
+
     def mousePressEvent(self, event) -> None:
-        if not self._view.redaction_mode() or event.button() != Qt.MouseButton.LeftButton:
+        if event.button() != Qt.MouseButton.LeftButton:
+            super().mousePressEvent(event)
+            return
+        if not self._view.redaction_mode():
+            self._select_field_under(event.position())
             super().mousePressEvent(event)
             return
         self._drag_from = event.position()
@@ -177,6 +274,9 @@ class PageView(QScrollArea):
     # model: it reports the gesture and MainWindow pushes an undoable command.
     redaction_added = Signal(int, object)
     redaction_removed = Signal(int, object)
+    # (page index, field name): a click landed on a form field drawn on the
+    # page. The view fills nothing — it only says where the user pointed.
+    field_clicked = Signal(int, str)
 
     def __init__(self, worker, model=None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -195,6 +295,9 @@ class PageView(QScrollArea):
         self._pending_scroll: int | None = None
         self._fit_mode = False
         self._redaction_mode = False
+        # The (page index, field name) the form panel is editing, so the field
+        # can be picked out on the page. None when nothing is selected.
+        self._selected_field: tuple[int, str] | None = None
         self._cache: OrderedDict[tuple, QPixmap] = OrderedDict()
         self._cache_bytes = 0
 
@@ -285,6 +388,24 @@ class PageView(QScrollArea):
         if self._redaction_mode:
             return Qt.CursorShape.CrossCursor
         return Qt.CursorShape.ArrowCursor
+
+    # ------------------------------------------------------------------ #
+    #  Form fields
+    # ------------------------------------------------------------------ #
+
+    def selected_field(self) -> tuple[int, str] | None:
+        """The (page index, field name) the panel is editing, if any."""
+        return self._selected_field
+
+    def set_selected_field(self, row: int, name: str | None) -> None:
+        """Highlight field *name* of page *row*; ``None`` clears it."""
+        self._selected_field = None if name is None else (row, name)
+        for canvas in self._canvases:
+            canvas.label.update()
+
+    def report_field_click(self, row: int, name: str) -> None:
+        """A click landed on a form field: the window decides what happens."""
+        self.field_clicked.emit(row, name)
 
     def _make_label(self) -> _PageLabel:
         label = _PageLabel(self)

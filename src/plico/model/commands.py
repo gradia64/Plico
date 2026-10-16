@@ -123,3 +123,60 @@ class RemoveRedaction(QUndoCommand):
     def undo(self) -> None:
         self._model.pages[self._index].redactions.insert(self._position, self._rect)
         self._model.page_changed.emit(self._index)
+
+
+class SetFieldValue(QUndoCommand):
+    """Write *value* into the form field *name* of the page at *index*.
+
+    Like a redaction, this touches nothing on disk: it records what the user
+    typed, and ``save.py`` writes it into the widget when the document is
+    materialised. Only the fields that were touched end up in
+    ``PageItem.form_values``, so "leave the file's value alone" and "the user
+    emptied this field" stay distinguishable.
+    """
+
+    # Any non-zero id tells Qt the command may be merged; mergeWith decides.
+    _ID = 0x504C
+
+    def __init__(
+        self, model: DocumentModel, index: int, name: str, value: str
+    ) -> None:
+        super().__init__(f"Campo «{name}» su pagina {index + 1}")
+        self._model = model
+        self._index = index
+        self._name = name
+        self._new = value
+        self._was_set = name in model.pages[index].form_values
+        self._old = model.pages[index].form_values.get(name, "")
+
+    def id(self) -> int:
+        return self._ID
+
+    def mergeWith(self, other: QUndoCommand) -> bool:
+        """Fold a later edit of the SAME field into this command.
+
+        A QLineEdit emits one signal per keystroke: without merging, typing a
+        ten-character value would cost ten Ctrl+Z presses to take back. The
+        original value is kept from the first command, so the merged entry
+        still undoes the whole field in one step.
+        """
+        if not isinstance(other, SetFieldValue):
+            return False
+        if other._index != self._index or other._name != self._name:
+            return False
+        self._new = other._new
+        return True
+
+    def redo(self) -> None:
+        self._model.pages[self._index].form_values[self._name] = self._new
+        self._model.page_changed.emit(self._index)
+
+    def undo(self) -> None:
+        valori = self._model.pages[self._index].form_values
+        if self._was_set:
+            valori[self._name] = self._old
+        else:
+            # The field had no entry before this command: drop it again, so
+            # that "untouched" does not become "set to the file's own value".
+            valori.pop(self._name, None)
+        self._model.page_changed.emit(self._index)

@@ -44,26 +44,29 @@ plico/
 │   ├── main_window.py        # finestra, menu, toolbar, dock, QSettings, dialogs
 │   ├── model/
 │   │   ├── document.py       # DocumentModel, PageItem  ← il cuore
-│   │   ├── commands.py       # RotatePage, DeletePage, MovePage, AddRedaction…
+│   │   ├── commands.py       # RotatePage, DeletePage, MovePage, AddRedaction, SetFieldValue…
 │   │   ├── redact.py         # rettangoli di redazione e matrici di rotazione
+│   │   ├── forms.py          # campi AcroForm: lettura, scrittura, svuotamento
 │   │   ├── save.py           # save_as, save_compressed, extract_pages, parse_page_ranges
 │   │   └── optimize.py       # livelli di compressione, optimize_in_place  ← pikepdf
 │   ├── rendering/
 │   │   └── worker.py         # RenderWorker: unico proprietario degli handle fitz
 │   └── widgets/
-│       ├── page_view.py      # QScrollArea: rendering su richiesta, zoom, HiDPI, redazione
+│       ├── page_view.py      # QScrollArea: rendering, zoom, HiDPI, redazione, campi
 │       ├── thumbnail_bar.py  # QListView + modello + cache, caricamento lazy
+│       ├── form_panel.py     # dock «Modulo»: un editor per ogni campo della pagina
 │       └── compress.py       # scelta del livello, format_size, task sul thread pool
 └── tests/
     ├── test_model.py         # modello, comandi, salvataggio, parse_page_ranges
     ├── test_worker.py        # il worker di rendering in isolamento
     ├── test_optimize.py      # i livelli di compressione e optimize_in_place
     ├── test_redact.py        # rotazione e rimozione *vera* del testo
-    └── test_integration.py   # MainWindow vera, offscreen: ~58 test end-to-end
+    ├── test_forms.py         # campi AcroForm: letti, scritti, riletti dal file
+    └── test_integration.py   # MainWindow vera, offscreen: ~67 test end-to-end
 ```
 
-Gate di qualità attuale: **136 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
-(15 file sorgente).
+Gate di qualità attuale: **164 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+(17 file sorgente).
 
 ---
 
@@ -362,6 +365,17 @@ riceve tutti i `rendered` e scarta quelli che non sono suoi, in base al tag in
 
 ---
 
+### `FormPanel` (`widgets/form_panel.py`)
+
+Il dock «Modulo»: un editor per ogni campo **modificabile** della pagina in
+vista (`QLineEdit`, `QPlainTextEdit` per i multilinea, `QCheckBox`,
+`QComboBox`). È deliberatamente sottile — mostra i campi che il modello già
+descrive e riferisce cosa scrive l'utente, senza mai **possedere** la verità: i
+valori stanno in `PageItem.form_values`, quindi un cambio di pagina, un undo o
+una rotazione si limitano a ridisegnare la stessa funzione del modello. Un
+editor che non si può salvare sarebbe una promessa non mantenuta, quindi i
+campi in sola lettura non vengono mostrati affatto.
+
 ## 8. Comandi e salvataggio
 
 `model/commands.py`: `RotatePage`, `DeletePage` (`pop` al redo, `insert`
@@ -449,6 +463,40 @@ Limiti da conoscere: `apply_redactions()` con i valori di default
 rettangolo — un bordo o una tabella a cavallo del segno possono sparire; e la
 redazione non tocca i **metadati** (`/Info`, XMP, i nomi dei livelli), che
 possono contenere lo stesso segreto.
+
+### Compilazione dei form (`model/forms.py`)
+
+Un campo AcroForm non è contenuto: è un'**annotazione** con un valore, e il
+valore sta nel dizionario del campo. Compilarlo significa scrivere nel widget e
+chiamare `update()` mentre la pagina che si sta salvando è ancora viva.
+
+- `PageItem.form_fields` è la **descrizione** dei campi che la sorgente offre
+  (`Field`: nome, tipo, valore, `rect` in spazio pagina, scelte, multiline),
+  letta una volta in `_items_for()` — e solo se `doc.is_form_pdf`, che è una
+  proprietà di documento e risparmia una scansione per ogni pagina;
+- `PageItem.form_values` è un dizionario nome → valore con **solo i campi
+  toccati**: un nome assente significa «lascia quello che c'era», che non è la
+  stessa cosa di un valore vuoto (`""` è una modifica dell'utente e deve
+  arrivare al file);
+- `SetFieldValue` è un `QUndoCommand` con `id()`/`mergeWith()`: un `QLineEdit`
+  emette un segnale **per tasto**, e senza fusione scrivere «Anna» costerebbe
+  quattro Ctrl+Z. Fonde solo modifiche consecutive **allo stesso campo** e
+  conserva il valore del primo comando, così un undo disfa il campo intero;
+- `save.py` chiama `_fill_fields()` **prima** di `_redact()`: una redazione
+  sopra un campo deve portarselo via, e un valore appena scritto non deve
+  sparire per una redazione altrove sulla stessa pagina;
+- vale per `save_as` **e** per `save_compressed`: `clean=True` conserva il
+  modulo e i suoi valori (verificato);
+- i tipi modificabili sono **testo**, **casella** e **tendina/lista**. I
+  **radiobutton** restano fuori: PyMuPDF non li sa costruire (`ValueError: bad
+  xref`) e li rilegge con un `rect` assurdo (`±INT32_MAX`), quindi
+  `read_fields()` li scarta e non si offre un editor per ciò che non si
+  riuscirebbe a salvare. Le **firme** appartengono alla tappa della firma.
+
+La vista disegna i campi sulla pagina (`_paint_fields`, con il valore preso dal
+**modello** e non dal file) e un clic su un campo seleziona l'editor
+corrispondente nel pannello: `PageView` emette `field_clicked` e `MainWindow`
+decide, esattamente come per la redazione.
 
 ---
 
@@ -597,8 +645,20 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
   pixel, quindi un `traceback` stampato diventa qualche megabyte di «log»
   binario. Per costruire un'immagine di prova si usa
   `QImage(campioni, w, h, w * 3, QImage.Format.Format_RGB888).save(path, "JPEG", 95)`.
-- `clean=True` riscrive i content stream: è la vincita della compressione, ma
-  è anche il passo da tenere d'occhio quando arriveranno form e annotazioni.
+- `clean=True` riscrive i content stream: è la vincita della compressione. Sui
+  form è **verificato**: i campi e i loro valori sopravvivono a `clean=True`.
+- **Un widget tiene un riferimento debole alla sua pagina.** `page.widgets()`
+  su una pagina temporanea (`doc[0].widgets()`) funziona in lettura, ma il
+  primo `update()` dopo fallisce con `RuntimeError: Annot is not bound to a
+  page` (e `widget.parent` arriva a `ReferenceError`). La pagina va tenuta in
+  una variabile locale: in `document.py` il ciclo è esplicito proprio per
+  questo, e `save.py` usa l'oggetto vivo di `out[...]`.
+- **Svuotare un campo non è `field_value = ""`.** Misurato: così `/V` resta al
+  valore vecchio; forzare `/V` a `()` da solo svuota il valore ma lascia
+  l'**aspetto** vecchio *disegnato* sulla pagina (inchiostro 793 su 793). La
+  sola sequenza che svuota e ridipinge è `field_value = ""` → `/V` a `()` →
+  `update()` (inchiostro 0). Per questo `write_fields()` chiama
+  `_clear_value()`, che risale anche a `/Parent`.
 
 ### Test
 
@@ -620,11 +680,12 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
 
 ### Attenzione
 
-- Esiste una directory `build/` **stantia** alla radice, residuo di un
-  `pip install`: contiene copie dei sorgenti. Una ricerca globale la trova e
-  si rischia di modificare la copia invece dell'originale. `build-dir/` e
-  `.flatpak-builder/` sono gli artefatti della build Flatpak, anche loro
-  ignorati da git.
+- `build/`, `build-dir/` e `.flatpak-builder/` (residui di `pip install` e
+  della build Flatpak) sono stati **rimossi**: contenevano copie dei sorgenti e
+  una ricerca globale poteva far modificare la copia invece dell'originale. La
+  build Flatpak ora tiene la cache **fuori dal progetto**, con
+  `--state-dir=$HOME/.cache/plico-flatpak/state` e la build directory in
+  `$HOME/.cache/plico-flatpak/build`.
 
 ---
 
@@ -704,7 +765,9 @@ sostituita con la sorgente `git` del tag di rilascio.
 
 **Roadmap lunga, dall'idea originale** (in ordine di difficoltà percepita):
 
-1. compilare **form** e **firmare**;
+1. compilare **form** — ✅ **fatto**, vedi §8 — e **firmare**, che resta da
+   fare e va per ultimo: una firma non sopravvive a nessuna modifica
+   successiva;
 2. **redaction vera** — ✅ **fatta**, vedi §8;
 3. **OCR** integrato (Tesseract);
 4. **modifica minima del testo** — la parte difficile, ma è il vero
@@ -716,8 +779,13 @@ sostituita con la sorgente `git` del tag di rilascio.
   selezione di testo o di area, niente "trova tutte le occorrenze di una
   parola", e i metadati (`/Info`, XMP) non vengono ripuliti — per un uso
   forense servirebbe anche quello;
-  non si può ancora scegliere "solo le immagini" o escludere delle pagine, e
-  il guadagno si vede solo a lavoro finito (niente stima prima di partire);
+- la compressione ha tre livelli fissi, applicati a tutto il documento: non si
+  può ancora scegliere "solo le immagini" o escludere delle pagine, e il
+  guadagno si vede solo a lavoro finito (niente stima prima di partire);
+- i form si compilano **dal pannello**, non scrivendo sulla pagina: il clic su
+  un campo lo seleziona nel dock «Modulo», ma non si digita in-place. I
+  radiobutton non sono modificabili e le firme non sono ancora gestite (vedi
+  §8);
 - `PageView._on_screen_changed` esiste ma **non è connesso** (fu rimosso
   perché `self.window()` è `None` durante la costruzione): il rendering HiDPI
   oggi non reagisce al cambio di monitor a finestra aperta;

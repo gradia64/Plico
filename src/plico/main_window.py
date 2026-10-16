@@ -31,12 +31,14 @@ from .model import (
     RedactionRect,
     RemoveRedaction,
     RotatePage,
+    SetFieldValue,
     extract_pages,
     parse_page_ranges,
     save_as,
 )
 from .rendering import RenderWorker
 from .widgets.compress import CompressionDialog, CompressionTask, format_size
+from .widgets.form_panel import FormPanel
 from .widgets.page_view import PageView
 from .widgets.thumbnail_bar import ThumbnailBar, ThumbnailCache
 
@@ -121,6 +123,17 @@ class MainWindow(QMainWindow):
         self._undo_view = QUndoView(self._undo_stack)
         undo_dock.setWidget(self._undo_view)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, undo_dock)
+
+        # --- form dock ---
+        self._form_panel = FormPanel()
+        self._form_panel.value_changed.connect(self._on_field_edited)
+        # The same route redactions take: the view reports where the user
+        # pointed, and the window decides what to do about it.
+        self._page_view.field_clicked.connect(self._on_field_clicked)
+        self._form_dock = QDockWidget(self.tr("Modulo"), self)
+        self._form_dock.setObjectName("form_dock")
+        self._form_dock.setWidget(self._form_panel)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self._form_dock)
 
         # --- menus / toolbar ---
         self._setup_menus()
@@ -348,6 +361,7 @@ class MainWindow(QMainWindow):
         # drag would mark a page the user has not even looked at.
         self._redact_act.setChecked(False)
         self._on_redaction_toggled(False)
+        self._refresh_form_panel(0)
         self._status.setText(self.tr("Aperto: {0}").format(path))
 
     def _merge_file(self) -> None:
@@ -626,6 +640,11 @@ class MainWindow(QMainWindow):
     def _on_page_selected(self, row: int) -> None:
         """Keep the main view aligned with the thumbnail selection."""
         self._page_view.ensure_page_visible(row)
+        # The form panel follows the page the user is on: a field belongs to
+        # one page, so showing another page's fields would be a lie. The
+        # highlight is dropped with the page it belonged to.
+        self._page_view.set_selected_field(row, None)
+        self._refresh_form_panel(row)
 
     def _rotate_cw_clicked(self) -> None:
         self._rotate_selected(90)
@@ -701,6 +720,46 @@ class MainWindow(QMainWindow):
     def _remove_redaction(self, index: int, rect: RedactionRect) -> None:
         """An existing mark was clicked away."""
         self._undo_stack.push(RemoveRedaction(self._doc_model, index, rect))
+
+    # ------------------------------------------------------------------ #
+    #  Form fields (an AcroForm field is state of the virtual page too)
+    # ------------------------------------------------------------------ #
+
+    def _refresh_form_panel(self, row: int | None = None) -> None:
+        """Show the fields of *row*, defaulting to the selected page."""
+        if row is None:
+            row = self._thumb_bar.current_row()
+        if not (0 <= row < len(self._doc_model.pages)):
+            self._form_panel.set_page(0, [], {})
+            self._page_view.set_selected_field(0, None)
+            return
+        item = self._doc_model.pages[row]
+        self._form_panel.set_page(row, item.form_fields, item.form_values)
+
+    def _on_field_edited(self, name: str, value: str) -> None:
+        """The user changed a field in the panel: record it, undoably."""
+        row = self._form_panel.page()
+        if not (0 <= row < len(self._doc_model.pages)):
+            return
+        item = self._doc_model.pages[row]
+        # What the save would write right now: the model's value, or the one
+        # the file already carries when the field was never touched.
+        originale = next(
+            (campo.value for campo in item.form_fields if campo.name == name), ""
+        )
+        if item.form_values.get(name, originale) == value:
+            return
+        self._undo_stack.push(SetFieldValue(self._doc_model, row, name, value))
+
+    def _on_field_clicked(self, row: int, name: str) -> None:
+        """A field drawn on the page was clicked: edit it in the panel."""
+        self._refresh_form_panel(row)
+        # Tell the view which field is selected, so that the page picks it out
+        # too: the panel and the page must agree on what is being edited.
+        self._page_view.set_selected_field(row, name)
+        self._form_panel.select_field(name)
+        self._form_dock.show()
+        self._form_dock.raise_()
 
     # ------------------------------------------------------------------ #
     #  Lifecycle

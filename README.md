@@ -25,6 +25,9 @@ comprimerli.
 - **Redazione vera**: si trascina un rettangolo sui dati da eliminare e al
   salvataggio il testo viene **rimosso**, non coperto — quel che resta non è
   più copiabile né ricercabile
+- **Compilare i form AcroForm**: il dock «Modulo» mostra i campi della pagina
+  in vista — testo, anche multiriga, caselle e tendine — e i valori finiscono
+  nel file al salvataggio, con undo/redo
 
 ### Requisito di accettazione
 
@@ -44,15 +47,17 @@ plico/
     ├── main_window.py         # MainWindow + wiring worker/model/view
     ├── model/
     │   ├── document.py        # DocumentModel, PageItem
-    │   ├── commands.py        # QUndoCommand: RotatePage, DeletePage, MovePage…
+    │   ├── commands.py        # QUndoCommand: RotatePage, DeletePage, AddRedaction, SetFieldValue…
     │   ├── redact.py          # rettangoli di redazione, matrici di rotazione
+    │   ├── forms.py           # campi AcroForm: lettura, scrittura, svuotamento
     │   ├── save.py            # save_as(), save_compressed(), extract_pages()
     │   └── optimize.py        # livelli di compressione, optimize_in_place()
     ├── rendering/
     │   └── worker.py          # RenderWorker in QThread
     └── widgets/
-        ├── page_view.py       # QScrollArea: rendering on demand, fit-width, HiDPI, redazione
+        ├── page_view.py       # QScrollArea: rendering, fit-width, HiDPI, redazione, campi
         ├── thumbnail_bar.py   # QListView + modello + cache, caricamento lazy
+        ├── form_panel.py      # dock «Modulo»: un editor per ogni campo
         └── compress.py        # dialogo del livello, format_size, task
 ```
 
@@ -136,6 +141,26 @@ ricerca automatica di parole, e i metadati del PDF non vengono ripuliti), e
 `apply_redactions()` elimina anche la grafica vettoriale che tocca il
 rettangolo, quindi un bordo o una tabella a cavallo del segno possono sparire.
 
+### Form: compilare il PDF, non solo leggerlo
+
+Il dock **Modulo** (a destra) elenca i campi della pagina in vista: testo
+(anche multiriga), caselle e tendine. Un clic su un campo sulla pagina lo
+seleziona nel pannello — si scrive lì, non dentro la pagina. I valori restano
+**modificabili finché non salvi** e passano per gli stessi undo/redo del resto
+(`Ctrl+Z`).
+
+Un campo AcroForm non è contenuto del PDF, ma un'annotazione con un valore, e
+Plico lo tratta come tale: la **descrizione** dei campi arriva dalla sorgente,
+i **valori** che scrivi vivono nel modello, e `save.py` li applica mentre
+materializza le pagine — prima delle redazioni, così una redazione sopra un
+campo se lo porta via. Il valore disegnato sulla pagina è quello del modello,
+cioè quello che *sarà* nel file.
+
+Un campo viene scritto **solo se lo tocchi**: uno mai aperto conserva il valore
+che aveva nella sorgente, che non è la stessa cosa di svuotarlo. I pulsanti
+radio non sono modificabili — PyMuPDF non li sa costruire e li rilegge male — e
+le firme appartengono alla tappa successiva.
+
 ### Integrazione desktop (KDE)
 
 - **Icone dal tema** (`QIcon.fromTheme`: `document-open`, `document-save-as`,
@@ -209,10 +234,14 @@ flatpak remote-add --user --if-not-exists flathub \
 flatpak install --user -y flathub org.flatpak.Builder//stable \
     org.kde.Sdk//6.11 io.qt.PySide.BaseApp//6.11
 
-# build + install
+# build + install. La cache sta FUORI dal progetto: build-dir/ e
+# .flatpak-builder/ dentro l'albero vengono trovati dalle ricerche globali e
+# contengono copie dei sorgenti.
 flatpak run org.flatpak.Builder --force-clean --user --install \
     --install-deps-from=flathub \
-    build-dir flatpak/io.github.gradia64.Plico.json
+    --state-dir="$HOME/.cache/plico-flatpak/state" \
+    "$HOME/.cache/plico-flatpak/build" \
+    flatpak/io.github.gradia64.Plico.json
 
 flatpak run io.github.gradia64.Plico
 ```
@@ -223,8 +252,9 @@ sostituita con la sorgente `git` del tag di rilascio.
 ## Sviluppo
 
 ```bash
-# test (senza display, grazie a QT_QPA_PLATFORM=offscreen)
-QT_QPA_PLATFORM=offscreen pytest
+# test (senza display, grazie a QT_QPA_PLATFORM=offscreen).
+# NB: pytest non è in .venv/bin, quindi si passa da python -m
+QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q
 
 # lint + tipi
 ruff check src/ tests/
