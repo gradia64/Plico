@@ -45,20 +45,23 @@ plico/
 │   ├── model/
 │   │   ├── document.py       # DocumentModel, PageItem  ← il cuore
 │   │   ├── commands.py       # RotatePage, DeletePage, MovePage (QUndoCommand)
-│   │   └── save.py           # save_as, extract_pages, parse_page_ranges
+│   │   ├── save.py           # save_as, save_compressed, extract_pages, parse_page_ranges
+│   │   └── optimize.py       # livelli di compressione, optimize_in_place  ← pikepdf
 │   ├── rendering/
 │   │   └── worker.py         # RenderWorker: unico proprietario degli handle fitz
 │   └── widgets/
 │       ├── page_view.py      # QScrollArea: rendering su richiesta, zoom, HiDPI
-│       └── thumbnail_bar.py  # QListView + modello + cache, caricamento lazy
+│       ├── thumbnail_bar.py  # QListView + modello + cache, caricamento lazy
+│       └── compress.py       # scelta del livello, format_size, task sul thread pool
 └── tests/
     ├── test_model.py         # modello, comandi, salvataggio, parse_page_ranges
     ├── test_worker.py        # il worker di rendering in isolamento
-    └── test_integration.py   # MainWindow vera, offscreen: ~40 test end-to-end
+    ├── test_optimize.py      # i livelli di compressione e optimize_in_place
+    └── test_integration.py   # MainWindow vera, offscreen: ~48 test end-to-end
 ```
 
-Gate di qualità attuale: **72 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
-(12 file sorgente).
+Gate di qualità attuale: **96 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+(14 file sorgente).
 
 ---
 
@@ -368,6 +371,42 @@ La rotazione di più pagine selezionate va raggruppata con
   o vuoti: scartare pagine in silenzio durante una divisione sarebbe peggio
   che rifiutare.
 
+### Compressione mirata (`model/optimize.py`)
+
+Due passate **senza perdita** più una sola con perdita, e le misure dicono
+che l'ordine conta:
+
+- `clean=True` di PyMuPDF (mutool clean) è **la vincita grossa**: un PDF si
+  porta dietro centinaia di content stream minuscoli (uno per ogni
+  `insert_text`, per ogni copia di pagina) e fonderli vale 188 KB → 12 KB su
+  20 pagine di testo (6,3%). `garbage=4, deflate=True` da soli si fermano al
+  99,4% e `pikepdf` da solo all'89,1%; `subset_fonts()` non aggiunge nulla;
+- `pikepdf`/qpdf aggiunge object stream, deduplicazione e un secondo
+  passaggio Flate (`compress_streams`, `recompress_flate`,
+  `ObjectStreamMode.generate`, `StreamDecodeLevel.generalized`);
+- `doc.rewrite_images(dpi_threshold, dpi_target, quality)` è **l'unico passo
+  con perdita**, e sulle scansioni decide tutto: un JPEG da 3,4 MB su 3
+  pagine resta al 100% con `light`, scende al 52,0% con `medium` e al 35,9%
+  con `strong`.
+
+I tre livelli sono `light` (immagini intatte), `medium` (200 → 150 dpi,
+qualità 80) e `strong` (150 → 96 dpi, qualità 60) — `LEVELS` in
+`optimize.py`, l'unico posto dove cambiare i numeri.
+
+`optimize_in_place(path, level, progress)` adotta il risultato **solo se è
+più piccolo** (un PDF già ottimizzato non deve crescere) e sostituisce il
+file con `os.replace` conservandone i permessi. `save_compressed(model,
+out_path, level)` passa da `_write_atomically` come `save_as`: prima
+materializza il documento virtuale (quindi il file compresso rispetta
+eliminazioni, riordini e rotazioni), poi lo comprime, sempre su un
+temporaneo nella stessa directory. La sorgente non viene mai toccata.
+
+La compressione gira su `QThreadPool` con un `QRunnable`, non sul thread dei
+render: sono due lavori indipendenti e un PDF grande non deve congelare la
+finestra. I segnali sono connessi **solo a metodi legati di QObject** — un
+lambda verrebbe eseguito nel thread emittente e toccherebbe widget dalla
+thread sbagliata.
+
 ---
 
 ## 9. Ambiente di sviluppo
@@ -504,6 +543,13 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
   tutto il problema scrivendo su un temporaneo e facendo `os.replace()`.
 - `fitz.Matrix` non ha attributi `x0` / `xy`: per le rotazioni si usa
   `prerotate()`.
+- `fitz.Pixmap(csRGB, w, h, bytes)` **non è una firma valida** in 1.28.
+  Peggio: l'eccezione che solleva incorpora nel messaggio L'INTERO buffer di
+  pixel, quindi un `traceback` stampato diventa qualche megabyte di «log»
+  binario. Per costruire un'immagine di prova si usa
+  `QImage(campioni, w, h, w * 3, QImage.Format.Format_RGB888).save(path, "JPEG", 95)`.
+- `clean=True` riscrive i content stream: è la vincita della compressione, ma
+  è anche il passo da tenere d'occhio quando arriveranno form e annotazioni.
 
 ### Test
 
@@ -536,10 +582,11 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
 ## 11. Flatpak
 
 I file stanno in `flatpak/`: `io.github.gradia64.Plico.json` (manifest),
-`python3-pymupdf.json` (modulo PyMuPDF con wheel e `sha256` fissati),
-`.desktop`, `.metainfo.xml`, `.svg`. Gli stessi file sono installati anche da
-`pip install .` tramite `[tool.setuptools.data-files]` in `pyproject.toml`,
-così c'è una sola fonte di verità.
+`python3-pymupdf.json` e `python3-pikepdf.json` (i moduli delle due
+dipendenze, con wheel e `sha256` fissati), `.desktop`, `.metainfo.xml`,
+`.svg`. Gli stessi file sono installati anche da `pip install .` tramite
+`[tool.setuptools.data-files]` in `pyproject.toml`, così c'è una sola fonte
+di verità.
 
 Scelte non ovvie (documentate anche nel README):
 
@@ -548,6 +595,13 @@ Scelte non ovvie (documentate anche nel README):
   non duplica Qt e pip non prova nemmeno a scaricare PySide6 da PyPI.
 - **PyMuPDF da wheel `manylinux` `cp310-abi3`** e non da sorgente: compilare
   MuPDF dentro il manifest vorrebbe dire `swig` e minuti di build.
+- **pikepdf da wheel `cp313` con `--no-deps`**: pikepdf dichiara `Pillow`,
+  `lxml` e `packaging`, ma `open()` e `save()` non li importano — verificato
+  bloccando `PIL` e `lxml` con `sys.meta_path` — e la BaseApp ha già
+  `packaging`. La wheel va scelta per l'interprete della BaseApp (3.13), non
+  per quello del venv. Se un giorno servissero le API sulle immagini
+  (`pikepdf.PdfImage`) o il supporto PDF/A, andrebbero aggiunte anche le
+  loro wheel.
 - **`build-options.env` è un OGGETTO, non una lista**:
   `{"BASEAPP_REMOVE_WEBENGINE": "1", ...}`. Il README della BaseApp mostra la
   forma a lista, ma il parser e lo schema ufficiale vogliono l'oggetto. È
@@ -611,8 +665,9 @@ sostituita con la sorgente `git` del tag di rilascio.
 
 **Debito tecnico noto:**
 
-- `pikepdf` era previsto per la compressione mirata: oggi si usa
-  `garbage=4, deflate=True` di PyMuPDF, che è già qualcosa ma non tutto;
+- la compressione ha tre livelli fissi e li applica a **tutto** il documento:
+  non si può ancora scegliere "solo le immagini" o escludere delle pagine, e
+  il guadagno si vede solo a lavoro finito (niente stima prima di partire);
 - `PageView._on_screen_changed` esiste ma **non è connesso** (fu rimosso
   perché `self.window()` è `None` durante la costruzione): il rendering HiDPI
   oggi non reagisce al cambio di monitor a finestra aperta;

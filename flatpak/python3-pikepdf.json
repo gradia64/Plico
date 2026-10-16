@@ -1,0 +1,14 @@
+{
+  "name": "python3-pikepdf",
+  "buildsystem": "simple",
+  "build-commands": [
+    "pip3 install --no-index --no-deps --prefix=/app pikepdf-10.17.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl"
+  ],
+  "sources": [
+    {
+      "type": "file",
+      "url": "https://files.pythonhosted.org/packages/25/87/2b42abe9399cf5d526c17ca5c21fea45afec2c84c223cd37d22fd85d0728/pikepdf-10.17.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "sha256": "3df92d71de08569bea46e9b7e98c7b76dd69fbb0749b7f7acbedb373552983fe"
+    }
+  ]
+}

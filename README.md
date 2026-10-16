@@ -1,6 +1,8 @@
 # Plico
 
-Un vero editor PDF nativo per Linux, costruito con **Qt6** e **PySide6** + **PyMuPDF**.
+Un vero editor PDF nativo per Linux, costruito con **Qt6** e **PySide6**, con
+**PyMuPDF** per leggere e renderizzare i PDF e **pikepdf** (qpdf) per
+comprimerli.
 
 > Il file PDF non si tocca mai finché non salvi.
 
@@ -17,7 +19,9 @@ Un vero editor PDF nativo per Linux, costruito con **Qt6** e **PySide6** + **PyM
 - **Rendering lazy**: si renderizzano solo le pagine visibili, non l'intero
   documento
 - **Cache** a budget di byte per le pagine, LRU per le miniature
-- **Salvataggio** con compressione `garbage=4` + `deflate=True`
+- **Salvataggio** su file temporaneo: il PDF di partenza non si tocca
+- **Salva compresso** a tre livelli, con il guadagno mostrato a fine lavoro —
+  e il livello "leggera" è senza perdita
 
 ### Requisito di accettazione
 
@@ -38,12 +42,14 @@ plico/
     ├── model/
     │   ├── document.py        # DocumentModel, PageItem
     │   ├── commands.py        # QUndoCommand: RotatePage, DeletePage, MovePage
-    │   └── save.py            # save_as(), extract_pages(), parse_page_ranges()
+    │   ├── save.py            # save_as(), save_compressed(), extract_pages()
+    │   └── optimize.py        # livelli di compressione, optimize_in_place()
     ├── rendering/
     │   └── worker.py          # RenderWorker in QThread
     └── widgets/
         ├── page_view.py       # QScrollArea: rendering on demand, fit-width, HiDPI
-        └── thumbnail_bar.py   # QListView + modello + cache, caricamento lazy
+        ├── thumbnail_bar.py   # QListView + modello + cache, caricamento lazy
+        └── compress.py        # dialogo del livello, format_size, task
 ```
 
 ### Concetto chiave
@@ -87,6 +93,28 @@ Dopo un'unione le sorgenti sono più d'una, quindi il controllo copre **tutte**
 le sorgenti: salvare sopra uno qualsiasi dei PDF aperti passa per il file
 temporaneo, perché PyMuPDF non può scrivere in un documento che sta leggendo.
 
+### Compressione: dove si guadagna davvero
+
+"Salva compresso" (`Ctrl+Shift+C`) scrive una copia più piccola del documento
+virtuale — quindi rispetta eliminazioni, riordini e rotazioni — e lascia
+intatti i PDF di partenza.
+
+| Livello | Cosa fa | Senza perdita? |
+| --- | --- | --- |
+| **Leggera** | fonde i content stream frammentati, compatta la struttura | sì |
+| **Media** | come sopra, più immagini oltre 200 dpi riportate a 150 (qualità 80) | no |
+| **Forte** | immagini oltre 150 dpi riportate a 96 (qualità 60) | no |
+
+Il guadagno più grosso non viene dalle immagini ma da `clean` di mutool: un
+PDF che ha subito copie e modifiche si porta dietro centinaia di content
+stream minuscoli, e fonderli vale, su un documento di testo, 188 KB → 12 KB
+(6%). Su una scansione invece la struttura non ha niente da dare, e conta solo
+il lavoro sulle immagini (un JPEG da 3,4 MB su 3 pagine resta al 100% con
+"leggera", scende al 52% con "media" e al 36% con "forte").
+
+La compressione gira in un thread separato, quindi la finestra resta reattiva
+anche sui file grandi.
+
 ### Integrazione desktop (KDE)
 
 - **Icone dal tema** (`QIcon.fromTheme`: `document-open`, `document-save-as`,
@@ -105,6 +133,7 @@ temporaneo, perché PyMuPDF non può scrivere in un documento che sta leggendo.
 - Python ≥ 3.11
 - PySide6 ≥ 6.7
 - PyMuPDF (pymupdf) ≥ 1.23
+- pikepdf ≥ 9 (compressione mirata)
 
 ## Installazione
 
@@ -127,11 +156,12 @@ Il packaging è in `flatpak/` ed è pensato per essere pubblicabile su Flathub.
 | --- | --- |
 | `io.github.gradia64.Plico.json` | manifest dell'applicazione |
 | `python3-pymupdf.json` | modulo per PyMuPDF, con wheel e `sha256` fissati |
+| `python3-pikepdf.json` | modulo per pikepdf, con wheel e `sha256` fissati |
 | `io.github.gradia64.Plico.desktop` | launcher (registra `application/pdf`) |
 | `io.github.gradia64.Plico.metainfo.xml` | metadati AppStream |
 | `io.github.gradia64.Plico.svg` | icona |
 
-Tre scelte non ovvie:
+Quattro scelte non ovvie:
 
 - **`base: io.qt.PySide.BaseApp`** invece di installare PySide6 con pip. La
   BaseApp di Flathub contiene già PySide6 compilato e allineato al Qt di
@@ -142,6 +172,11 @@ Tre scelte non ovvie:
 - **PyMuPDF da wheel `manylinux`** (`cp310-abi3`, valida per ogni Python ≥ 3.10,
   quindi anche per il 3.13 del runtime) e non da sorgente: compilare MuPDF
   dentro il manifest vorrebbe dire `swig` e parecchi minuti di build.
+- **pikepdf da wheel `cp313`** (l'interprete della BaseApp, che non è quello
+  del venv) **installata con `--no-deps`**: pikepdf dichiara `Pillow`, `lxml` e
+  `packaging`, ma `open()` e `save()` non li importano, e `packaging` è già
+  nella BaseApp. Se servissero le API sulle immagini o il supporto PDF/A
+  andrebbero aggiunte anche le loro wheel.
 - **`cleanup-commands: /app/cleanup-BaseApp.sh`**, richiesto dalla BaseApp.
 
 Costruire e installare nella propria utenza:

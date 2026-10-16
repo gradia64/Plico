@@ -12,10 +12,11 @@ from unittest import mock
 
 import fitz
 import pytest
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QSettings, QThreadPool
 from PySide6.QtGui import QAction, QIcon, QImage
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QFileDialog,
     QInputDialog,
     QMessageBox,
@@ -23,6 +24,7 @@ from PySide6.QtWidgets import (
 
 import plico.main_window
 from plico.main_window import MainWindow
+from plico.model import LEVELS_BY_KEY
 from plico.model.commands import DeletePage, RotatePage
 from plico.model.save import save_as
 from plico.widgets.thumbnail_bar import (
@@ -1031,3 +1033,212 @@ def test_saving_over_the_open_file_makes_the_worker_forget_it(windows, tmp_path)
     assert mw._worker._docs == {}, "il worker tiene ancora il documento sovrascritto"
     with fitz.open(pdf) as doc:
         assert doc.page_count == 4 - 1
+
+
+# --------------------------------------------------------------------- #
+#  Salva compresso: la stessa voce di menu, il documento di prima
+# --------------------------------------------------------------------- #
+
+def _frammentato(path: str, pagine: int = 20) -> None:
+    """Un PDF nella forma in cui i PDF veri arrivano: tante pagine, tanti stream.
+
+    ``insert_text`` crea un oggetto per ogni chiamata, quindi il documento si
+    porta dietro centinaia di content stream minuscoli. E' il caso in cui la
+    compressione ha davvero qualcosa da fare.
+    """
+    with fitz.open() as doc:
+        for i in range(pagine):
+            pagina = doc.new_page(width=595, height=842)
+            for k in range(40):
+                pagina.insert_text(
+                    (60, 60 + k * 18),
+                    f"Paragrafo {k} della pagina {i + 1}: contenuto ripetuto per occupare spazio.",
+                    fontsize=10,
+                )
+        doc.save(path, deflate=True)
+
+
+def _livello_scelto(monkeypatch, chiave: str = "light", accettato: bool = True) -> None:
+    """Sostituisce il dialogo del livello con una risposta immediata."""
+
+    class _Dialogo:
+        def __init__(self, parent=None) -> None:
+            self.level = LEVELS_BY_KEY[chiave]
+
+        def exec(self) -> object:
+            return QDialog.DialogCode.Accepted if accettato else QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(plico.main_window, "CompressionDialog", _Dialogo)
+
+
+def _attendi_compressione() -> None:
+    """Aspetta il thread pool, poi consegna i segnali accodati alla GUI.
+
+    La compressione gira su un QRunnable: ``finished`` arriva alla finestra
+    come connessione accodata, quindi serve anche un giro di eventi.
+    """
+    QThreadPool.globalInstance().waitForDone()
+    _pump()
+
+
+def test_la_voce_compresso_e_nel_menu_file(windows):
+    """La voce di menu esiste, nella posizione in cui l'utente la cerca."""
+    mw = windows()
+    voci = [azione.text().replace("&", "") for azione in mw.menuBar().actions()[0].menu().actions()]
+    assert "Salva compresso…" in voci
+
+
+def test_nome_proposto_accanto_all_originale(windows, tmp_path):
+    pdf = str(tmp_path / "relazione.pdf")
+    _make_pdf(pdf, pages=2)
+
+    mw = windows()
+    _open(mw, pdf)
+
+    assert mw._proposed_compressed_path() == str(tmp_path / "relazione-compresso.pdf")
+
+
+def test_compress_writes_a_smaller_copy_and_leaves_the_source_alone(
+    qapp, tmp_path, monkeypatch, windows
+):
+    """Percorre la voce di menu per intero, con i dialoghi finti."""
+    pdf = str(tmp_path / "doc.pdf")
+    _frammentato(pdf)
+    out = str(tmp_path / "doc-compresso.pdf")
+    prima = os.path.getsize(pdf)
+
+    mw = windows()
+    _open(mw, pdf)
+
+    messaggi: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "information",
+        staticmethod(lambda _parent, _title, text, *a, **k: messaggi.append(text)),
+    )
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
+    _livello_scelto(monkeypatch, "light")
+
+    mw._compress_file()
+    _attendi_compressione()
+
+    assert os.path.getsize(out) < prima * 0.5, "il file compresso non e` piu` piccolo"
+    with fitz.open(out) as doc:
+        assert doc.page_count == 20
+        assert "della pagina 1" in doc[0].get_text()
+    assert os.path.getsize(pdf) == prima, "la sorgente non si tocca"
+    assert messaggi and "Prima:" in messaggi[0], f"il guadagno va raccontato: {messaggi}"
+    assert mw._progress is None, "il dialogo di avanzamento deve sparire"
+    assert mw._compression_task is None
+
+
+def test_compress_writes_the_virtual_document(qapp, tmp_path, monkeypatch, windows):
+    """Anche il file compresso rispetta eliminazioni e rotazioni."""
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=5)
+    out = str(tmp_path / "out.pdf")
+
+    mw = windows()
+    _open(mw, pdf)
+    DeletePage(mw._doc_model, 0).redo()
+    RotatePage(mw._doc_model, 0, 90).redo()
+
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    _livello_scelto(monkeypatch, "light")
+
+    mw._compress_file()
+    _attendi_compressione()
+
+    with fitz.open(out) as doc:
+        assert doc.page_count == 4
+        assert doc[0].rotation == 90
+
+
+def test_compress_can_be_cancelled_at_the_level_dialog(qapp, tmp_path, monkeypatch, windows):
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=3)
+    out = str(tmp_path / "out.pdf")
+
+    mw = windows()
+    _open(mw, pdf)
+
+    chiamate: list[str] = []
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *a, **k: (chiamate.append("chiesto"), (out, ""))[1]),
+    )
+    _livello_scelto(monkeypatch, "light", accettato=False)
+
+    mw._compress_file()
+
+    assert chiamate == [], "annullare il livello non deve chiedere un file"
+    assert not os.path.exists(out)
+
+
+def test_compress_without_a_document_warns(qapp, monkeypatch, windows):
+    mw = windows()
+
+    avvisi: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        staticmethod(lambda _parent, _title, text, *a, **k: avvisi.append(text)),
+    )
+    aperti: list[str] = []
+    monkeypatch.setattr(plico.main_window, "CompressionDialog", lambda *a, **k: aperti.append("x"))
+
+    mw._compress_file()
+
+    assert aperti == [], "senza documento non si sceglie nemmeno il livello"
+    assert avvisi and "Nessun documento" in avvisi[0]
+
+
+def test_compressing_over_the_open_file_evicts_the_stale_handle(
+    qapp, tmp_path, monkeypatch, windows
+):
+    """Come per save_as: os.replace() cambia l'inode sotto i piedi del worker."""
+    pdf = str(tmp_path / "doc.pdf")
+    _frammentato(pdf, pagine=6)
+
+    mw = windows()
+    _open(mw, pdf)
+    assert pdf in mw._worker._docs, "il worker non ha aperto la sorgente"
+
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (pdf, "")))
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    _livello_scelto(monkeypatch, "light")
+
+    mw._compress_file()
+    _attendi_compressione()
+
+    assert mw._worker._docs == {}, "il worker tiene ancora il documento sovrascritto"
+    with fitz.open(pdf) as doc:
+        assert doc.page_count == 6
+
+
+def test_a_failed_compression_arrives_as_a_message(qapp, tmp_path, monkeypatch, windows):
+    """Un errore nel thread di lavoro deve arrivare all'utente, non sparire."""
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=3)
+    # Una cartella che non esiste: il temporaneo non si puo` nemmeno creare.
+    out = str(tmp_path / "inesistente" / "out.pdf")
+
+    mw = windows()
+    _open(mw, pdf)
+
+    errori: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "critical",
+        staticmethod(lambda _parent, _title, text, *a, **k: errori.append(text)),
+    )
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
+    _livello_scelto(monkeypatch, "light")
+
+    mw._compress_file()
+    _attendi_compressione()
+
+    assert errori and "Impossibile comprimere" in errori[0], errori
+    assert mw._progress is None, "anche fallendo, il dialogo di avanzamento deve sparire"

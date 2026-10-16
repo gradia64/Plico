@@ -3,16 +3,18 @@
 import os
 from collections.abc import Callable
 
-from PySide6.QtCore import QMetaObject, QSettings, Qt, QThread
+from PySide6.QtCore import QMetaObject, QSettings, Qt, QThread, QThreadPool
 from PySide6.QtGui import QAction, QIcon, QUndoStack
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QDockWidget,
     QFileDialog,
     QInputDialog,
     QLabel,
     QMainWindow,
     QMessageBox,
+    QProgressDialog,
     QToolBar,
     QUndoView,
     QVBoxLayout,
@@ -20,6 +22,8 @@ from PySide6.QtWidgets import (
 )
 
 from .model import (
+    CompressionLevel,
+    CompressionResult,
     DeletePage,
     DocumentModel,
     MovePage,
@@ -29,6 +33,7 @@ from .model import (
     save_as,
 )
 from .rendering import RenderWorker
+from .widgets.compress import CompressionDialog, CompressionTask, format_size
 from .widgets.page_view import PageView
 from .widgets.thumbnail_bar import ThumbnailBar, ThumbnailCache
 
@@ -72,6 +77,12 @@ class MainWindow(QMainWindow):
 
         # --- caches ---
         self._thumbnail_cache = ThumbnailCache(maxsize=60)
+
+        # --- compressione: gira nel thread pool, non in quello dei render ---
+        self._compression_task: CompressionTask | None = None
+        self._progress: QProgressDialog | None = None
+        self._compression_path = ""
+        self._compression_overwritten: list[str] = []
 
         # --- central widget (PageView handles its own rendering) ---
         self._page_view = PageView(self._worker, self._doc_model)
@@ -168,9 +179,16 @@ class MainWindow(QMainWindow):
                 self._extract_pages,
             )
         )
+        file_menu.addAction(
+            self._act(
+                self.tr("Salva &compresso…"),
+                "archive-insert",
+                "Ctrl+Shift+C",
+                self._compress_file,
+            )
+        )
         file_menu.addSeparator()
         file_menu.addAction(self._act(self.tr("&Esci"), "application-exit", "Ctrl+Q", self.close))
-
         edit_menu = menubar.addMenu(self.tr("&Modifica"))
 
         undo_act = self._undo_stack.createUndoAction(self, self.tr("Annulla"))
@@ -399,6 +417,121 @@ class MainWindow(QMainWindow):
                 continue
         return sources
 
+    # ------------------------------------------------------------------ #
+    #  Compressione
+    # ------------------------------------------------------------------ #
+
+    def _compress_file(self) -> None:
+        """Scrive una copia compressa del documento materializzato.
+
+        Non e` un'alternativa a "Salva con nome": il contenuto e` lo stesso,
+        solo piu` piccolo -- eliminazioni, riordini e rotazioni compresi. I
+        PDF di partenza non vengono toccati.
+        """
+        if not self._doc_model.sources:
+            QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
+            return
+
+        scelta = CompressionDialog(self)
+        if scelta.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            self.tr("Salva compresso"),
+            self._proposed_compressed_path(),
+            self.tr("File PDF (*.pdf)"),
+        )
+        if not path:
+            return
+        self._start_compression(path, scelta.level)
+
+    def _proposed_compressed_path(self) -> str:
+        """``documento.pdf`` -> ``documento-compresso.pdf``."""
+        origine = self._doc_model.path or ""
+        radice, estensione = os.path.splitext(origine)
+        if not radice:
+            return str(os.path.expanduser("~"))
+        return f"{radice}-compresso{estensione or '.pdf'}"
+
+    def _start_compression(self, path: str, level: CompressionLevel) -> None:
+        # Va calcolato PRIMA di scrivere: comprimendo sopra un sorgente il
+        # file cambia inode, e dopo il confronto non riconoscerebbe piu`
+        # l'originale.
+        self._compression_overwritten = self._sources_overwritten_by(path)
+        self._compression_path = path
+
+        progresso = QProgressDialog(self)
+        progresso.setWindowTitle(self.tr("Salva compresso"))
+        progresso.setLabelText(self.tr("Compressione in corso…"))
+        progresso.setRange(0, 100)
+        # Il lavoro non e` interrompibile a meta`: meglio non offrire un
+        # pulsante che non potrebbe mantenere quello che promette.
+        progresso.setCancelButton(None)
+        progresso.setWindowModality(Qt.WindowModality.WindowModal)
+        progresso.setMinimumDuration(0)
+        progresso.setAutoClose(False)
+        progresso.setAutoReset(False)
+        progresso.setValue(0)
+        self._progress = progresso
+
+        attivita = CompressionTask(self._doc_model, path, level)
+        attivita.signals.progress.connect(progresso.setValue)
+        attivita.signals.finished.connect(self._on_compression_finished)
+        attivita.signals.failed.connect(self._on_compression_failed)
+        # Finche` il pool non ha finito qualcuno deve tenere vivo il task.
+        self._compression_task = attivita
+        QThreadPool.globalInstance().start(attivita)
+
+    def _on_compression_finished(self, result: CompressionResult) -> None:
+        self._close_progress()
+        path = self._compression_path
+
+        # Come in _save_file: os.replace() cambia l'inode, quindi il worker
+        # terrebbe aperto il documento vecchio sotto quel percorso.
+        for source in self._compression_overwritten:
+            self._worker.evict_requested.emit(source)
+        self._status.setText(self.tr("Compresso: {0}").format(path))
+
+        if result.shrank:
+            QMessageBox.information(
+                self,
+                self.tr("Salva compresso"),
+                self.tr(
+                    "Scritto:\n{0}\n\nPrima: {1}\nDopo: {2}\nRisparmiato: {3} ({4}%)"
+                ).format(
+                    path,
+                    format_size(result.source_size),
+                    format_size(result.output_size),
+                    format_size(result.saved_bytes),
+                    result.percent_saved,
+                ),
+            )
+        else:
+            QMessageBox.information(
+                self,
+                self.tr("Salva compresso"),
+                self.tr(
+                    "Scritto:\n{0}\n\nQuesto file non aveva niente da guadagnare: "
+                    "e` rimasto di {1}."
+                ).format(path, format_size(result.source_size)),
+            )
+
+    def _on_compression_failed(self, messaggio: str) -> None:
+        self._close_progress()
+        QMessageBox.critical(
+            self,
+            self.tr("Errore"),
+            self.tr("Impossibile comprimere:\n{0}").format(messaggio),
+        )
+
+    def _close_progress(self) -> None:
+        if self._progress is not None:
+            self._progress.close()
+            self._progress.deleteLater()
+            self._progress = None
+        self._compression_task = None
+
     def _extract_pages(self) -> None:
         """Split: write a typed page selection to a separate file.
 
@@ -551,6 +684,9 @@ class MainWindow(QMainWindow):
           2. Quit the loop and wait, so the thread is no longer running
              when the window -- and this object -- are destroyed.
         """
+        # Una compressione in corso gira nel thread pool e sta scrivendo un
+        # file: aspettarla evita che il processo esca a meta` scrittura.
+        QThreadPool.globalInstance().waitForDone()
         if not self._thread.isRunning():
             return
         QMetaObject.invokeMethod(

@@ -8,6 +8,10 @@ requires-python = ">=3.11"
 dependencies = [
     "PySide6>=6.7",
     "pymupdf>=1.23",
+    # Compressione mirata: qpdf via i suoi binding. `recompress_flate` e
+    # `ObjectStreamMode.generate` (le due opzioni che fanno il lavoro)
+    # esistono da pikepdf 9.
+    "pikepdf>=9.0",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -17,6 +21,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 
 [project.optional-dependencies]

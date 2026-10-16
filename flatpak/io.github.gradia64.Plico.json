@@ -24,6 +24,7 @@
   ],
   "modules": [
     "python3-pymupdf.json",
+    "python3-pikepdf.json",
     {
       "name": "plico",
       "buildsystem": "simple",

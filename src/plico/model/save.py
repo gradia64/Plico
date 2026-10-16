@@ -3,11 +3,15 @@
 import contextlib
 import os
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from typing import TypeVar
 
 import fitz
 
 from .document import DocumentModel, PageItem
+from .optimize import CompressionLevel, CompressionResult, Progress, optimize_in_place
+
+_T = TypeVar("_T")
 
 
 def _contiguous_runs(items: list[PageItem]) -> Iterator[list[PageItem]]:
@@ -74,13 +78,21 @@ def _write_pdf(
 
 
 def _write_atomically(
-    model: DocumentModel, target: str, pages: list[int] | None
-) -> None:
+    model: DocumentModel,
+    target: str,
+    pages: list[int] | None,
+    optimize: Callable[[str], _T] | None = None,
+) -> _T | None:
     """Write *target*, never destroying the file currently being read.
 
     PyMuPDF cannot write to a document it is reading, so when the target is
     the open source the output goes to a temporary file in the same
     directory and replaces the original only once written successfully.
+
+    *optimize*, when given, is handed the freshly written file -- still a
+    temporary, so a failure leaves *target* untouched -- and its return value
+    is passed back to the caller. A post-processing step forces the
+    temporary-file route even when the target is not one of the sources.
     """
     # Merging means several sources; overwriting ANY of them would have
     # PyMuPDF writing to a file it is still reading.
@@ -89,18 +101,21 @@ def _write_atomically(
         for src in model.sources
     )
 
-    if not overwriting:
+    if not overwriting and optimize is None:
         _write_pdf(model, target, pages)
-        return
+        return None
 
     directory = os.path.dirname(target)
     fd, tmp_path = tempfile.mkstemp(dir=directory, suffix=".pdf.tmp")
     os.close(fd)
     try:
         _write_pdf(model, tmp_path, pages)
+        result = optimize(tmp_path) if optimize is not None else None
         # Keep the original file's permissions across the swap.
-        os.chmod(tmp_path, os.stat(target).st_mode & 0o7777)
+        if os.path.exists(target):
+            os.chmod(tmp_path, os.stat(target).st_mode & 0o7777)
         os.replace(tmp_path, target)
+        return result
     except BaseException:
         # Never leave a half-written temp file behind.
         with contextlib.suppress(OSError):
@@ -119,6 +134,32 @@ def save_as(model: DocumentModel, out_path: str) -> None:
     """
     assert model.sources, "No document open"
     _write_atomically(model, os.path.abspath(out_path), None)
+
+
+def save_compressed(
+    model: DocumentModel,
+    out_path: str,
+    level: CompressionLevel,
+    progress: Progress | None = None,
+) -> CompressionResult:
+    """Come :func:`save_as`, ma comprime il risultato prima di scriverlo.
+
+    La compressione lavora sul documento **materializzato** (eliminazioni,
+    riordini e rotazioni compresi), quindi il file che esce e` esattamente
+    quello che avrebbe scritto :func:`save_as`, solo piu` piccolo. I PDF
+    sorgente non vengono toccati nemmeno quando *out_path* e` uno di loro:
+    il passaggio passa comunque da un temporaneo.
+    """
+    assert model.sources, "No document open"
+    result = _write_atomically(
+        model,
+        os.path.abspath(out_path),
+        None,
+        optimize=lambda path: optimize_in_place(path, level, progress),
+    )
+    # `optimize` e` sempre fornito qui, quindi il risultato c'e` sempre.
+    assert result is not None
+    return result
 
 
 def extract_pages(model: DocumentModel, out_path: str, indices: list[int]) -> None:
