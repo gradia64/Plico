@@ -146,3 +146,89 @@ def test_worker_reports_a_mupdf_error_as_a_failure(tmp_path):
 
     assert seen == []
     assert failed == [key]
+
+
+def _encrypted_pdf(path, password: str = "segreta") -> str:
+    """One page with a word on it, locked with *password*."""
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "SEGRETO", fontsize=24)
+    doc.save(
+        str(path),
+        encryption=pymupdf.PDF_ENCRYPT_AES_256,
+        owner_pw="proprietario",
+        user_pw=password,
+    )
+    doc.close()
+    return str(path)
+
+
+def _has_ink(image) -> bool:
+    """Whether anything was drawn: an empty page renders uniformly white."""
+    return any(
+        image.pixel(x, y) != 0xFFFFFF
+        for y in range(0, min(150, image.height()), 3)
+        for x in range(0, min(300, image.width()), 3)
+    )
+
+
+def test_a_locked_source_renders_nothing_and_does_not_raise(tmp_path):
+    """The worker never asks for a password: it fails that page and moves on."""
+    path = _encrypted_pdf(tmp_path / "cifrato.pdf")
+
+    worker = RenderWorker()
+    seen = []
+    failed = []
+    worker.rendered.connect(lambda key, img: seen.append(key))
+    worker.render_failed.connect(failed.append)
+
+    key = ("page", 0, 0, 0, 1.0, 1.0)
+    worker._render(RenderRequest(key, path, 0, 1.0, 0))
+
+    assert seen == []
+    assert failed == [key]
+
+
+def test_authenticate_unlocks_the_document(tmp_path):
+    """After the password arrives, the same page really has its content."""
+    path = _encrypted_pdf(tmp_path / "cifrato.pdf")
+
+    worker = RenderWorker()
+    images = []
+    worker.rendered.connect(lambda key, img: images.append(img))
+
+    worker.authenticate(path, "segreta")
+    assert path in worker._docs
+
+    worker._render(RenderRequest(("page", 0, 0, 0, 1.0, 1.0), path, 0, 1.0, 0))
+
+    assert len(images) == 1
+    assert _has_ink(images[0]), "la pagina decifrata deve mostrare il suo testo"
+
+
+def test_a_failed_render_does_not_poison_the_handle(tmp_path):
+    """The sequence the window produces: locked render, password, render again.
+
+    MuPDF leaves a handle that touched a page of a locked document unable to
+    decrypt anything afterwards -- measured, ``authenticate`` then reports
+    success and the text comes back empty, with "aes padding out of range"
+    from the library. Nothing here ever touches a page before the unlock, and
+    this test watches that order hold: a blank render is still a valid QImage,
+    so the assertion is on the ink, not on the image existing.
+    """
+    path = _encrypted_pdf(tmp_path / "cifrato.pdf")
+
+    worker = RenderWorker()
+    failed = []
+    images = []
+    worker.render_failed.connect(failed.append)
+    worker.rendered.connect(lambda key, img: images.append(img))
+    key = ("page", 0, 0, 0, 1.0, 1.0)
+
+    worker._render(RenderRequest(key, path, 0, 1.0, 0))  # still locked
+    worker.authenticate(path, "segreta")
+    worker._render(RenderRequest(key, path, 0, 1.0, 0))
+
+    assert len(failed) == 1
+    assert len(images) == 1
+    assert _has_ink(images[0]), "la pagina e` tornata vuota dopo lo sblocco"

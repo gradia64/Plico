@@ -5,6 +5,11 @@ which points at a page of a source document, and the only state it adds is
 what the user changed about that page: the rotation offset and the regions to
 redact. Every other feature (undo/redo, rendering, saving, splitting) is
 derived from that list.
+
+An encrypted source is unlocked *before* anything reads a page from it, and
+the password is kept for the session: the same file is opened again by the
+worker (to render) and by the save (to copy the pages), and neither has a
+chance to ask the user. See :func:`open_for_reading`.
 """
 
 import os
@@ -21,6 +26,42 @@ from .redact import (
     rotation_matrix,
     unrotated_size,
 )
+
+
+class PasswordRequired(Exception):
+    """A PDF is encrypted and the password given was missing or wrong.
+
+    ``wrong`` tells the two cases apart: both send the user to the same
+    prompt, but only the second one has something to apologise for.
+    """
+
+    def __init__(self, path: str, wrong: bool = False) -> None:
+        super().__init__(path)
+        self.path = path
+        self.wrong = wrong
+
+
+def open_for_reading(path: str, password: str | None = None) -> pymupdf.Document:
+    """Open *path* read-only, unlocking it BEFORE anything reads a page.
+
+    The order is the whole point, and it is not a stylistic one. On a locked
+    document the first page access raises ("document closed or encrypted"),
+    and the failed access leaves the handle unable to decrypt its content
+    streams afterwards: measured, a later ``authenticate("segreta")`` reports
+    success and ``get_text()`` comes back empty, with MuPDF printing "aes
+    padding out of range". A handle that cannot be unlocked here is closed and
+    never handed out, so nobody can inherit that state.
+
+    ``needs_pass`` is the question "is this file encrypted?", not "is it still
+    locked?" -- it stays true after a successful authenticate. A file whose
+    *user* password is empty opens without a prompt, which is the common case
+    for a document that only carries an owner password.
+    """
+    doc = pymupdf.open(path)
+    if doc.needs_pass and (password is None or doc.authenticate(password) == 0):
+        doc.close()
+        raise PasswordRequired(path, wrong=password is not None)
+    return doc
 
 
 @dataclass
@@ -120,6 +161,10 @@ class DocumentModel(QObject):
         self.pages: list[PageItem] = []
         self.sources: list[str] = []
         self.path: str | None = None
+        # path -> password, only for the files that needed one. Session
+        # scoped, and deliberately NOT cleared when another document is
+        # opened: re-opening the same protected file must not ask again.
+        self.passwords: dict[str, str] = {}
 
     @property
     def page_sizes(self) -> list[tuple[float, float]]:
@@ -134,10 +179,12 @@ class DocumentModel(QObject):
         """
         return [(item.width_pt, item.height_pt) for item in self.pages]
 
-    def _items_for(self, source_id: int, path: str) -> list[PageItem]:
+    def _items_for(
+        self, source_id: int, path: str, password: str | None = None
+    ) -> list[PageItem]:
         """Read *path* read-only and describe it as virtual pages."""
         items: list[PageItem] = []
-        with pymupdf.open(path) as doc:
+        with open_for_reading(path, password) as doc:
             # A document with no form at all does not earn a per-page widget
             # scan, and this is a document-level property.
             has_form = bool(doc.is_form_pdf)
@@ -160,21 +207,54 @@ class DocumentModel(QObject):
                 )
         return items
 
-    def open(self, path: str) -> None:
-        """Open *path* read-only, replacing the virtual page list entirely."""
-        self.pages = self._items_for(0, path)
+    def read_source(
+        self, source_id: int, path: str, password: str | None = None
+    ) -> list[PageItem]:
+        """Describe *path* as virtual pages, without touching the model.
+
+        The caller gets the pages first and decides afterwards: a merge can
+        find out that the file brings no page *before* it becomes an undo
+        step, and a file that refuses to open leaves the document untouched.
+
+        Remembers *password* on success. The same file is opened again by the
+        worker (to render it) and by the save (to copy the pages), and neither
+        of them has anybody to ask.
+        """
+        items = self._items_for(source_id, path, password)
+        if password is not None:
+            self.passwords[path] = password
+        return items
+
+    def open(self, path: str, password: str | None = None) -> None:
+        """Open *path* read-only, replacing the virtual page list entirely.
+
+        Raises :class:`PasswordRequired` when the file is encrypted and the
+        password is missing or wrong. Nothing is written before that point, so
+        a document that refuses to open leaves the model exactly as it was.
+        """
+        self.set_pages(self.read_source(0, path, password), path)
+
+    def set_pages(self, items: list[PageItem], path: str) -> None:
+        """Install *items* as the whole document, without opening anything.
+
+        The counterpart of :meth:`read_source`, for a caller that has to look
+        at the pages before committing to them: the window reads the new file
+        first and resets its views only afterwards, so a password that never
+        arrives cannot leave it showing an empty page 1.
+        """
+        self.pages = list(items)
         self.sources = [path]
         self.path = path
         self.changed.emit()
 
-    def append_document(self, path: str) -> int:
+    def append_document(self, path: str, password: str | None = None) -> int:
         """Merge: append every page of *path* after the current ones.
 
         Returns the number of pages added. The new source is registered only
         after it has been read successfully, so a corrupt file leaves the
         model exactly as it was.
         """
-        items = self._items_for(len(self.sources), path)
+        items = self.read_source(len(self.sources), path, password)
         if not items:
             return 0
         self.sources.append(path)
@@ -223,7 +303,8 @@ class DocumentModel(QObject):
             for index, item in enumerate(self.pages):
                 doc = handles.get(item.source_id)
                 if doc is None:
-                    doc = pymupdf.open(self.sources[item.source_id])
+                    source = self.sources[item.source_id]
+                    doc = open_for_reading(source, self.passwords.get(source))
                     handles[item.source_id] = doc
                 # Bound to a local on purpose: a widget-like object read from a
                 # temporary page would be collected with it.
@@ -249,5 +330,6 @@ class DocumentModel(QObject):
     def close(self) -> None:
         self.pages.clear()
         self.sources.clear()
+        self.passwords.clear()
         self.path = None
         self.changed.emit()

@@ -9,8 +9,8 @@ import pytest
 from PySide6.QtCore import QCoreApplication
 from PySide6.QtGui import QUndoStack
 
-from plico.model.commands import DeletePage, MovePage, RotatePage
-from plico.model.document import DocumentModel, PageItem
+from plico.model.commands import AppendDocument, DeletePage, MovePage, RotatePage
+from plico.model.document import DocumentModel, PageItem, PasswordRequired
 from plico.model.save import _contiguous_runs, extract_pages, parse_page_ranges, save_as
 
 # --- fixtures -------------------------------------------------------------
@@ -329,3 +329,187 @@ def test_the_destination_file_keeps_its_permissions(mixed_model, tmp_path):
     save_as(mixed_model, destination)
 
     assert os.stat(destination).st_mode & 0o777 == 0o640
+
+
+# --- encrypted sources -----------------------------------------------------
+
+SEGRETA = "segreta"
+
+
+def _encrypted_pdf(
+    path, password: str = SEGRETA, user_password: str | None = None
+) -> str:
+    """One page with a readable word, locked with *password*."""
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((72, 100), "PAGINA SEGRETA", fontsize=20)
+    doc.save(
+        str(path),
+        encryption=pymupdf.PDF_ENCRYPT_AES_256,
+        owner_pw="proprietario",
+        user_pw=password if user_password is None else user_password,
+    )
+    doc.close()
+    return str(path)
+
+
+def test_an_encrypted_file_asks_for_a_password(qapp, tmp_path):
+    """``open`` refuses without a password and leaves the model untouched."""
+    path = _encrypted_pdf(tmp_path / "cifrato.pdf")
+
+    model = DocumentModel()
+    with pytest.raises(PasswordRequired) as raised:
+        model.open(path)
+
+    assert raised.value.path == path
+    assert raised.value.wrong is False
+    assert model.pages == []
+    assert model.sources == []
+
+
+def test_a_wrong_password_is_reported_as_wrong(qapp, tmp_path):
+    path = _encrypted_pdf(tmp_path / "cifrato.pdf")
+
+    model = DocumentModel()
+    with pytest.raises(PasswordRequired) as raised:
+        model.open(path, "sbagliata")
+
+    assert raised.value.wrong is True
+    assert model.pages == []
+
+
+def test_the_password_opens_the_file_and_is_kept(qapp, tmp_path):
+    """It is kept because the worker and the save have to open the file again."""
+    path = _encrypted_pdf(tmp_path / "cifrato.pdf")
+
+    model = DocumentModel()
+    model.open(path, SEGRETA)
+
+    assert model.page_count == 1
+    assert model.passwords == {path: SEGRETA}
+
+
+def test_an_owner_only_password_is_not_asked_for(qapp, tmp_path):
+    """An empty user password is the common case: it must open unasked."""
+    path = _encrypted_pdf(tmp_path / "solo-proprietario.pdf", user_password="")
+
+    model = DocumentModel()
+    model.open(path)
+
+    assert model.page_count == 1
+    assert model.passwords == {}
+
+
+def test_saving_an_encrypted_source_needs_it_again(qapp, tmp_path):
+    """The save opens the sources on its own: without the password, no pages."""
+    path = _encrypted_pdf(tmp_path / "cifrato.pdf")
+    out = tmp_path / "out.pdf"
+
+    model = DocumentModel()
+    model.open(path, SEGRETA)
+    save_as(model, str(out))
+
+    with pymupdf.open(out) as saved:
+        assert "PAGINA SEGRETA" in saved[0].get_text()
+
+
+def test_the_saved_copy_of_an_encrypted_file_is_plain(qapp, tmp_path):
+    """The output is rebuilt from pages, so it carries no encryption."""
+    path = _encrypted_pdf(tmp_path / "cifrato.pdf")
+    out = tmp_path / "out.pdf"
+
+    model = DocumentModel()
+    model.open(path, SEGRETA)
+    save_as(model, str(out))
+
+    with pymupdf.open(out) as saved:
+        assert saved.needs_pass == 0
+
+
+def test_merging_an_encrypted_file_asks_too(mixed_model, qapp, tmp_path):
+    path = _encrypted_pdf(tmp_path / "cifrato.pdf")
+
+    with pytest.raises(PasswordRequired):
+        mixed_model.append_document(path)
+
+    assert mixed_model.page_count == 3, "il rifiuto non deve toccare il modello"
+    assert mixed_model.append_document(path, SEGRETA) == 1
+    assert mixed_model.page_count == 4
+    assert mixed_model.passwords == {path: SEGRETA}
+
+
+# --- merging is undoable ---------------------------------------------------
+
+def _one_page_pdf(path, text: str) -> str:
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((72, 100), text, fontsize=20)
+    doc.save(str(path))
+    doc.close()
+    return str(path)
+
+
+def _merge(model, path: str) -> QUndoStack:
+    """Merge *path* the way the window does: read the pages, then push."""
+    items = model.read_source(len(model.sources), path)
+    stack = QUndoStack()
+    stack.push(AppendDocument(model, len(model.sources), path, items))
+    return stack
+
+
+def test_a_merge_goes_on_the_undo_stack(mixed_model, mixed_pdf, qapp, tmp_path):
+    other = _one_page_pdf(tmp_path / "altro.pdf", "AGGIUNTA")
+
+    stack = _merge(mixed_model, other)
+
+    assert mixed_model.page_count == 4
+    assert mixed_model.sources == [mixed_pdf, other]
+    assert stack.count() == 1
+    assert not stack.isClean(), "un'unione non ancora salvata e` una modifica"
+    assert stack.undoText() == "Unisci «altro.pdf»"
+
+
+def test_undoing_a_merge_takes_the_pages_away(mixed_model, mixed_pdf, qapp, tmp_path):
+    other = _one_page_pdf(tmp_path / "altro.pdf", "AGGIUNTA")
+
+    stack = _merge(mixed_model, other)
+    stack.undo()
+
+    assert mixed_model.page_count == 3
+    assert mixed_model.sources == [mixed_pdf]
+    assert stack.isClean(), "tornati al documento di partenza"
+
+
+def test_redoing_a_merge_puts_them_back(mixed_model, mixed_pdf, qapp, tmp_path):
+    other = _one_page_pdf(tmp_path / "altro.pdf", "AGGIUNTA")
+
+    stack = _merge(mixed_model, other)
+    stack.undo()
+    stack.redo()
+
+    assert mixed_model.page_count == 4
+    assert mixed_model.sources == [mixed_pdf, other]
+    assert [item.source_id for item in mixed_model.pages] == [0, 0, 0, 1]
+    assert mixed_model.pages[-1].source_index == 0
+
+
+def test_two_merges_undo_in_reverse_order(mixed_model, mixed_pdf, qapp, tmp_path):
+    first = _one_page_pdf(tmp_path / "primo.pdf", "PRIMO")
+    second = _one_page_pdf(tmp_path / "secondo.pdf", "SECONDO")
+    stack = QUndoStack()
+    for path in (first, second):
+        items = mixed_model.read_source(len(mixed_model.sources), path)
+        stack.push(AppendDocument(mixed_model, len(mixed_model.sources), path, items))
+
+    assert mixed_model.sources == [mixed_pdf, first, second]
+    stack.undo()
+    assert mixed_model.sources == [mixed_pdf, first]
+    stack.undo()
+    assert mixed_model.sources == [mixed_pdf]
+    assert mixed_model.page_count == 3
+
+    stack.redo()
+    stack.redo()
+    assert mixed_model.sources == [mixed_pdf, first, second]
+    assert mixed_model.page_count == 5
+    assert [item.source_id for item in mixed_model.pages] == [0, 0, 0, 1, 2]

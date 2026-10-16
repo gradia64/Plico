@@ -2162,3 +2162,186 @@ def test_opening_another_file_asks_first(windows, tmp_path, monkeypatch):
     mw._open_file()
     assert len(domande) == 1
     assert mw._doc_model.page_count == 2
+
+
+# --------------------------------------------------------------------------- #
+#  Encrypted documents: the password dialog
+# --------------------------------------------------------------------------- #
+
+
+def _encrypted_pdf(
+    path: str, password: str = "segreta", pages: int = 2, text: str = "Pagina"
+) -> str:
+    """*pages* pages with something on them, locked with *password*."""
+    doc = pymupdf.open()
+    for i in range(pages):
+        page = doc.new_page(width=595, height=842)
+        page.insert_text((72, 72), f"{text} {i + 1}", fontsize=24)
+    doc.save(
+        path,
+        encryption=pymupdf.PDF_ENCRYPT_AES_256,
+        owner_pw="proprietario",
+        user_pw=password,
+    )
+    doc.close()
+    return path
+
+
+def _answers(monkeypatch, *replies: str) -> list[str]:
+    """Answer the password dialog with *replies*, and return the labels shown."""
+    asked: list[str] = []
+    queue = iter(replies)
+
+    def get_text(parent, title, label, *args, **kwargs):
+        asked.append(label)
+        return (next(queue), True)
+
+    monkeypatch.setattr(QInputDialog, "getText", staticmethod(get_text))
+    return asked
+
+
+def test_opening_an_encrypted_file_asks_for_the_password(windows, tmp_path, monkeypatch):
+    """The dialog names the file, and the answer unlocks it everywhere."""
+    pdf = _encrypted_pdf(str(tmp_path / "cifrato.pdf"))
+    asked = _answers(monkeypatch, "segreta")
+
+    mw = windows()
+    assert mw.open_path(pdf) is True
+
+    assert mw._doc_model.page_count == 2
+    assert len(asked) == 1 and "cifrato.pdf" in asked[0]
+    # The render thread opens the file on its own: it needs the password too.
+    assert mw._worker._passwords[pdf] == "segreta"
+
+
+def test_the_page_of_an_encrypted_file_is_rendered(windows, tmp_path, monkeypatch):
+    """A request sent while the file was still locked would stay unanswered.
+
+    The view holds its requests back until the worker has the password; this
+    is what checks that the hold is released, because the pixels have to
+    arrive on their own.
+    """
+    pdf = _encrypted_pdf(str(tmp_path / "cifrato.pdf"), pages=1, text="PUBBLICO")
+    _answers(monkeypatch, "segreta")
+
+    mw = windows()
+    assert mw.open_path(pdf) is True
+    _pump()
+
+    pixmap = mw._page_view._canvases[0].label.pixmap()
+    assert not pixmap.isNull()
+    image = pixmap.toImage()
+    assert any(
+        image.pixel(x, y) != image.pixel(0, 0)
+        for y in range(0, 150, 3)
+        for x in range(0, 300, 3)
+    ), "la pagina decifrata e` rimasta vuota"
+
+
+def test_a_wrong_password_is_asked_again(windows, tmp_path, monkeypatch):
+    pdf = _encrypted_pdf(str(tmp_path / "cifrato.pdf"))
+    asked = _answers(monkeypatch, "sbagliata", "segreta")
+
+    mw = windows()
+    assert mw.open_path(pdf) is True
+
+    assert len(asked) == 2
+    assert "errata" in asked[1]
+    assert mw._doc_model.page_count == 2
+    assert mw._worker._passwords[pdf] == "segreta"
+
+
+def test_giving_up_leaves_the_document_on_screen(windows, tmp_path, monkeypatch):
+    """Cancel, and nothing moves: same pages, same "to save" state."""
+    plain = str(tmp_path / "normale.pdf")
+    _make_pdf(plain, pages=3)
+    locked = _encrypted_pdf(str(tmp_path / "cifrato.pdf"))
+    monkeypatch.setattr(
+        QInputDialog, "getText", staticmethod(lambda *a, **k: ("", False))
+    )
+
+    mw = windows()
+    _open(mw, plain)
+    before = mw.is_modified()
+
+    assert mw.open_path(locked) is False
+
+    assert mw._doc_model.sources == [plain]
+    assert mw._doc_model.page_count == 3
+    assert len(mw._page_view._canvases) == 3
+    assert mw.is_modified() == before
+
+
+# --------------------------------------------------------------------------- #
+#  Merging: it is an undoable command now
+# --------------------------------------------------------------------------- #
+
+
+def test_merging_from_the_window_is_undoable(windows, tmp_path):
+    first = str(tmp_path / "primo.pdf")
+    second = str(tmp_path / "secondo.pdf")
+    _make_pdf(first, pages=2, text="Uno")
+    _make_pdf(second, pages=3, text="Due")
+
+    mw = windows()
+    _open(mw, first)
+    assert not mw.is_modified()
+
+    mw.merge_path(second)
+    _pump()
+
+    assert mw._doc_model.page_count == 5
+    assert mw._undo_stack.count() == 1
+    assert mw._undo_stack.undoText() == "Unisci «secondo.pdf»"
+    assert mw.is_modified(), "un'unione non ancora salvata e` una modifica"
+    assert mw._status.text().startswith("Unite 3 pagine")
+
+    mw._undo_stack.undo()
+    _pump()
+
+    assert mw._doc_model.page_count == 2
+    assert mw._doc_model.sources == [first]
+    assert not mw.is_modified()
+
+    mw._undo_stack.redo()
+    _pump()
+
+    assert mw._doc_model.page_count == 5
+    assert len(mw._page_view._canvases) == 5
+
+
+def test_merging_an_encrypted_file_asks_for_the_password(windows, tmp_path, monkeypatch):
+    plain = str(tmp_path / "primo.pdf")
+    _make_pdf(plain, pages=1)
+    locked = _encrypted_pdf(str(tmp_path / "cifrato.pdf"), pages=1, text="PUBBLICO")
+    asked = _answers(monkeypatch, "segreta")
+
+    mw = windows()
+    _open(mw, plain)
+
+    mw.merge_path(locked)
+    _pump()
+
+    assert len(asked) == 1
+    assert mw._doc_model.page_count == 2
+    assert mw._worker._passwords[locked] == "segreta"
+
+
+def test_merging_an_encrypted_file_can_be_cancelled(windows, tmp_path, monkeypatch):
+    """No password, no pages — and no undo step either."""
+    plain = str(tmp_path / "primo.pdf")
+    _make_pdf(plain, pages=1)
+    locked = _encrypted_pdf(str(tmp_path / "cifrato.pdf"), pages=1)
+    monkeypatch.setattr(
+        QInputDialog, "getText", staticmethod(lambda *a, **k: ("", False))
+    )
+
+    mw = windows()
+    _open(mw, plain)
+
+    mw.merge_path(locked)
+    _pump()
+
+    assert mw._doc_model.page_count == 1
+    assert mw._undo_stack.count() == 0, "un'unione annullata non e` un passo di undo"
+    assert not mw.is_modified()

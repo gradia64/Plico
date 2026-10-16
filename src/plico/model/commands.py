@@ -7,6 +7,8 @@ command is not there yet. The context is the class name, which is what
 lupdate expects for a string that belongs to one class.
 """
 
+import os
+
 from PySide6.QtCore import QCoreApplication
 from PySide6.QtGui import QUndoCommand
 
@@ -82,6 +84,43 @@ class MovePage(QUndoCommand):
     def undo(self) -> None:
         item = self._model.pages.pop(self._to)
         self._model.pages.insert(self._from, item)
+        self._model.changed.emit()
+
+
+class AppendDocument(QUndoCommand):
+    """Merge: append the pages of another document after the current ones.
+
+    The pages are read *before* the command is constructed, and handed over
+    as ``items``: that is what lets a file that brings no page -- or that
+    refuses to open -- leave the document untouched instead of parking an
+    empty step on the undo stack. Reading them once also means ``redo`` never
+    goes back to a file the user may have changed in the meantime, and it is
+    why the source is registered here rather than by the model.
+    """
+
+    def __init__(
+        self, model: DocumentModel, source_id: int, path: str, items: list[PageItem]
+    ) -> None:
+        name = QCoreApplication.translate("AppendDocument", "Unisci «{0}»")
+        super().__init__(name.format(os.path.basename(path)))
+        self._model = model
+        self._source_id = source_id
+        self._path = path
+        self._items = items
+
+    def redo(self) -> None:
+        assert self._source_id == len(self._model.sources), (
+            "the undo stack is LIFO: a merge can only be redone on top of "
+            "exactly the sources it was read against"
+        )
+        self._model.sources.append(self._path)
+        self._model.pages.extend(self._items)
+        self._model.changed.emit()
+
+    def undo(self) -> None:
+        count = len(self._items)
+        del self._model.pages[len(self._model.pages) - count :]
+        self._model.sources.pop()
         self._model.changed.emit()
 
 

@@ -23,10 +23,11 @@ Scopo dichiarato: un progetto longevo, da far crescere a tappe, non un MVP usa
 e getta. La roadmap lunga (§12) è parte del progetto, non un extra.
 
 **Stato attuale: l'MVP è chiuso.** Fanno parte dell'MVP e sono implementati e
-testati: aprire, unire più PDF, ruotare, eliminare, riordinare, dividere
-(estrarre un sottoinsieme), comprimere in salvataggio, annulla/ripristina,
-rendering asincrono, cache, integrazione desktop KDE, packaging Flatpak.
-Versione `0.1.0`, licenza GPL-3.0-or-later.
+testati: aprire (anche i file **cifrati**, con la password), unire più PDF
+(l'unione si **annulla** con Ctrl+Z come ogni altra modifica), ruotare,
+eliminare, riordinare, dividere (estrarre un sottoinsieme), comprimere in
+salvataggio, annulla/ripristina, rendering asincrono, cache, integrazione
+desktop KDE, packaging Flatpak. Versione `0.1.0`, licenza GPL-3.0-or-later.
 
 ---
 
@@ -62,10 +63,10 @@ plico/
     ├── test_optimize.py      # i livelli di compressione e optimize_in_place
     ├── test_redact.py        # rotazione e rimozione *vera* del testo
     ├── test_forms.py         # campi AcroForm: letti, scritti, riletti dal file
-    └── test_integration.py   # MainWindow vera, offscreen: 88 test end-to-end
+    └── test_integration.py   # MainWindow vera, offscreen: 94 test end-to-end
 ```
 
-Gate di qualità attuale: **205 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **226 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
 (17 file sorgente).
 
 ---
@@ -188,12 +189,39 @@ class PageItem:
   render;
 - `sources: list[str]` — i percorsi dei PDF aperti;
 - `page_count` (property);
-- `open(path)` — sostituisce tutto, aprendo in sola lettura;
-- `append_document(path) -> int` — **unire**: accoda tutte le pagine di un
-  altro PDF. La sorgente viene registrata *dopo* essere stata letta con
-  successo, così un file corrotto lascia il modello esattamente com'era;
+- `open(path, password=None)` — sostituisce tutto, aprendo in sola lettura;
+- `read_source(source_id, path, password=None) -> list[PageItem]` — descrive
+  *path* come pagine virtuali **senza toccare il modello**. È il passo che si
+  può fare prima di impegnarsi, e da lì passa tutto il resto: `open()` è
+  `set_pages(read_source(...), path)` e `append_document()` è
+  `read_source()` + accodamento. Ricorda la password in `passwords[path]`;
+- `set_pages(items, path)` — installa *items* come documento intero, senza
+  aprire niente. Serve alla finestra, che legge **prima** e resetta le viste
+  **dopo**: un documento che non si apre non deve lasciare a schermo una
+  pagina 1 vuota;
+- `append_document(path, password=None) -> int` — **unire**: accoda tutte le
+  pagine di un altro PDF. La sorgente viene registrata *dopo* essere stata
+  letta con successo, così un file corrotto lascia il modello esattamente
+  com'era;
+- `passwords: dict[str, str]` — path → password. Serve perché lo stesso file
+  viene riaperto due volte **da altri**: dal worker (per renderizzarlo) e dal
+  salvataggio (per copiarne le pagine), e nessuno dei due ha qualcuno a cui
+  chiedere. Lo riempie `read_source`, lo svuota `close()`;
 - `source_for(item) -> str`;
 - segnali `changed` (struttura) e `page_changed(int)` (modifica in loco).
+
+I PDF cifrati passano da due nomi di modulo:
+
+- `PasswordRequired` (`Exception`, in `model/document.py`), con `path` e
+  `wrong`: la finestra deve poter dire «password errata» al secondo tentativo
+  e distinguerlo dal primo;
+- `open_for_reading(path, password=None) -> pymupdf.Document` — **l'unico**
+  punto in cui Plico apre in lettura un PDF esistente. Autentica prima di
+  leggere qualunque pagina: su un handle bloccato la prima lettura lo lascia
+  incapace di decifrare per sempre (misurato, §10), quindi l'ordine è la
+  sostanza e non uno stile. Un file senza password utente si apre senza
+  chiedere nulla.
+
 
 **Le viste osservano il modello**, non vengono "puntate" dalla finestra. È una
 scelta deliberata: aggiornare le viste a mano dopo ogni comando significa
@@ -242,6 +270,18 @@ e:
 - riceve il **percorso** nel `RenderRequest` invece di dipendere da un
   messaggio "apri" precedente: non c'è alcun ordinamento fra thread da
   sbagliare, e una pagina non viene mai resa dal documento sbagliato.
+
+**Le password arrivano al worker, non se le fa chiedere.**
+`RenderWorker.authenticate(path, password)` è uno slot `@Slot(str, str)` — il
+nome è pubblico proprio perché `QMetaObject.invokeMethod()` lo cerca per
+stringa, e con la `_` davanti non lo trova: `No such method
+RenderWorker::authenticate(QString,QString)`, e la password non arriva a
+nessuno. Memorizza la password e **riapre subito** l'handle. La finestra lo
+invoca con `BlockingQueuedConnection` mentre la vista tiene indietro le
+richieste (`PageView.set_paused(True)`): la connessione è bloccante perché
+l'handle dev'essere aperto e decifrato **prima** che il worker serva il primo
+render di quelle pagine, e mettere la password in coda dietro le richieste che
+abilita sarebbe peggio che inutile. `shutdown()` svuota `_passwords`.
 
 Chi chiede un render segna la `key` come "in volo". Se il worker non riesce a
 produrre l'immagine — sorgente sparita, pagina fuori intervallo, documento
@@ -394,13 +434,13 @@ campi in sola lettura non vengono mostrati affatto.
 
 ### Modifiche non salvate (`MainWindow`)
 
-- **«Salvato» = l'indice clean del `QUndoStack`**, più un flag
-  `_merged_since_save`: l'unione non è un comando di undo, quindi senza il
-  flag chiudere subito dopo un'unione perderebbe le pagine unite in silenzio.
-  `is_modified()` combina i due; `_update_title()` mette nel titolo il nome
-  del file con `[*]` (solo il nome: il display name lo aggiunge Qt) ed è
-  collegato a `cleanChanged`, così un undo che riporta al salvato toglie
-  l'asterisco.
+- **«Salvato» = l'indice clean del `QUndoStack`**, e basta. L'unione è un
+  comando come gli altri (`AppendDocument`, §8), quindi anche le pagine unite
+  sono coperte da Ctrl+Z e il flag `_merged_since_save` non esiste più:
+  `is_modified()` è `not self._undo_stack.isClean()`. `_update_title()` mette
+  nel titolo il nome del file con `[*]` (solo il nome: il display name lo
+  aggiunge Qt) ed è collegato a `cleanChanged`, così un undo che riporta al
+  salvato toglie l'asterisco.
 - **`_save_target`** è il file su cui scrive `Ctrl+S` (`_save_file`): quello
   aperto, oppure l'ultimo «Salva con nome» (`_save_file_as`). Entrambi passano
   da `_save_to()`. Salvare *altrove* non cambia le sorgenti, quindi l'undo
@@ -414,11 +454,31 @@ campi in sola lettura non vengono mostrati affatto.
   salvataggio fallito o annullato lascia la finestra aperta. Nei test
   `QMessageBox.question` va **monkeypatchato** (§10): il fixture `windows`
   non chiama `close()`, quindi non incontra la domanda.
+- **La password si chiede in `MainWindow._ask_password()`**, con
+  `QInputDialog.getText(..., QLineEdit.EchoMode.Password)`: `open_path()` e
+  `merge_path()` la chiamano in un ciclo, e al secondo tentativo il testo dice
+  che la password era errata. Il dialogo va tenuto **qui** e non nel modello,
+  che nei test è usato senza GUI. Annullare non deve costare niente: se le
+  pagine non si riescono a leggere, `open_path()` restituisce `False` senza
+  aver toccato né le pagine, né il titolo, né lo stato «da salvare» — e
+  `merge_path()` non deve lasciare un passo di undo vuoto. Il
+  `RenderWorker.authenticate()` bloccante e la pausa delle viste stanno
+  attorno a questo (§6).
 
 `model/commands.py`: `RotatePage`, `DeletePage` (`pop` al redo, `insert`
-all'undo — lo stack è LIFO, quindi gli indici restano coerenti), `MovePage`.
-La rotazione di più pagine selezionate va raggruppata con
+all'undo — lo stack è LIFO, quindi gli indici restano coerenti), `MovePage`,
+`AppendDocument`. La rotazione di più pagine selezionate va raggruppata con
 `stack.beginMacro()`, così è **un solo** passo di undo.
+
+**`AppendDocument` riceve le pagine già lette**, e le legge il chiamante
+(`MainWindow._push_merge`, che è anche quello che chiede la password): un file
+che non porta pagine non deve lasciare un comando vuoto nello stack, e un
+`redo()` che rileggesse il file lo farebbe scrivere pagine diverse da quelle
+che l'utente ha visto. `redo()` accoda la sorgente e allunga `pages`; `undo()`
+taglia `pages[-n:]` e toglie la sorgente: è tutto quello che serve, perché le
+pagine appese puntano a una sorgente che nessun'altra pagina usa. Il nome è
+`QCoreApplication.translate("AppendDocument", "Unisci «{0}»")` con il nome del
+file, così Ctrl+Z dice cosa sta per togliere.
 
 `model/save.py`:
 
@@ -426,6 +486,11 @@ La rotazione di più pagine selezionate va raggruppata con
   sorgente**, così un documento solo riordinato si copia con pochi
   `insert_pdf` invece di uno per pagina (il raggruppamento si interrompe
   quando cambia `source_id`);
+- `_write_pdf` riapre ogni sorgente con `open_for_reading(path,
+  model.passwords.get(path))`: qui la password non si può chiedere — il
+  salvataggio ricopia file che l'utente ha già sbloccato, e il worker li
+  riapre da solo per renderizzarli — quindi sta nel modello, che l'ha imparata
+  all'apertura;
 - `save_as(model, out_path)` / `extract_pages(model, out_path, indices)` /
   `save_compressed(...)` condividono `_write_atomically`, che scrive **sempre**
   su un file temporaneo nella **stessa directory** e poi fa `os.replace()`: non
@@ -743,6 +808,19 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
 
 ### PyMuPDF
 
+- **Su un handle bloccato la prima lettura è definitiva.** Se una pagina viene
+  toccata *prima* di autenticare (`doc[0]`, `get_text()`), l'handle resta
+  incapace di decifrare: un `authenticate()` successivo riporta
+  `is_encrypted == False` e `permissions == -4`, ma `get_text()` torna `''` e
+  MuPDF stampa su stderr `syntax error in content stream` e
+  `format error: aes padding out of range: 233`. Per questo c'è **un solo**
+  punto di apertura in lettura, `open_for_reading()`, che autentica prima di
+  qualunque lettura. Verificato insieme a questo: dopo un `authenticate()`
+  riuscito `needs_pass` **resta `1`** (dice «il file è cifrato», non «è ancora
+  chiuso» — fidarsi di quel numero per capire se si è entrati è sbagliato), un
+  file con password utente vuota si apre senza chiedere niente
+  (`needs_pass == 0`), una password proprietario vale come utente, e RC4-128 e
+  AES-256 si comportano allo stesso modo;
 - Salvare **sopra il file aperto** richiede il salvataggio incrementale:
   `ValueError: save to original must be incremental`. Il progetto evita del
   tutto il problema scrivendo su un temporaneo e facendo `os.replace()` — e da
@@ -922,26 +1000,27 @@ sostituita con la sorgente `git` del tag di rilascio.
   `self.tr()` su tutto il testo visibile, `QSettings` per geometria/dock/zoom);
   manca solo l'infrastruttura di traduzione vera (`.ts` + `lrelease`).
 
-**Punti aperti**, dal più importante. Quando se ne chiude uno, va tolto da qui
-e la decisione va scritta nella sezione giusta:
+**Punti aperti: nessuno.** Le ultime due, che non erano difetti ma
+**capacità** mai esistite, sono chiuse:
 
-- **PDF cifrati**: aprirli dà un errore generico. Serve `doc.needs_pass` +
-  `doc.authenticate()` in `DocumentModel._items_for` **e** nel worker, che
-  apre i file per conto suo (la password va quindi portata fin lì);
-- **l'unione non si annulla**: è l'unica modifica fuori dall'undo stack, ed è
-  il motivo per cui esiste `MainWindow._merged_since_save`. Un comando
-  `AppendDocument` toglierebbe il flag.
+- **PDF cifrati** — si aprono chiedendo la password (§5, §6): `PasswordRequired`
+  e `open_for_reading()` nel modello, lo slot `RenderWorker.authenticate()` con
+  la vista in pausa, `MainWindow._ask_password()`. Misurato: un handle toccato
+  prima di autenticare non si recupera più (§10);
+- **l'unione si annulla** — è il comando `AppendDocument` (§8), quindi Ctrl+Z
+  la toglie come ogni altra modifica, e `MainWindow._merged_since_save` non
+  esiste più.
 
-Delle dieci voci della review dell'ottobre 2026 restano solo le due qui sopra,
-che non sono difetti ma **capacità** mai esistite (aprire un file cifrato,
-annullare un'unione). Tutto il resto è chiuso, e le decisioni sono scritte dove
-servono: in §8 (salvataggio sempre atomico e con i permessi conservati, campi
-omonimi scritti sulla sorgente prima della copia, cache delle pagine che
-restituisce i byte sostituiti, annotazioni che toccano una redazione eliminate
-insieme al contenuto, nomi dei comandi via `QCoreApplication.translate()`), in
-§9 (`fitz` → `pymupdf`) e in §10 (le insidie corrispondenti). Il codice —
-docstring, commenti, nomi di variabile e nomi dei test compresi — è tutto in
-inglese.
+Delle dieci voci della review dell'ottobre 2026 non resta niente, e le
+decisioni sono scritte dove servono: in §5 e §6 (le API e il giro della
+password fino al worker), in §8 (salvataggio sempre atomico e con i permessi
+conservati, campi omonimi scritti sulla sorgente prima della copia, cache delle
+pagine che restituisce i byte sostituiti, annotazioni che toccano una redazione
+eliminate insieme al contenuto, nomi dei comandi via
+`QCoreApplication.translate()`, password chieste solo dalla finestra), in §9
+(`fitz` → `pymupdf`) e in §10 (le insidie corrispondenti, l'handle bloccato
+compreso). Il codice — docstring, commenti, nomi di variabile e nomi dei test
+compresi — è tutto in inglese.
 
 ---
 

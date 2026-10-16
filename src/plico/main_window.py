@@ -3,7 +3,7 @@
 import os
 from collections.abc import Callable
 
-from PySide6.QtCore import QMetaObject, QSettings, Qt, QThread, QThreadPool
+from PySide6.QtCore import Q_ARG, QMetaObject, QSettings, Qt, QThread, QThreadPool
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QUndoStack, QWindow
 from PySide6.QtWidgets import (
     QApplication,
@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QInputDialog,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
     QProgressDialog,
@@ -23,11 +24,14 @@ from PySide6.QtWidgets import (
 
 from .model import (
     AddRedaction,
+    AppendDocument,
     CompressionLevel,
     CompressionResult,
     DeletePage,
     DocumentModel,
     MovePage,
+    PageItem,
+    PasswordRequired,
     RedactionRect,
     RemoveRedaction,
     RotatePage,
@@ -69,11 +73,6 @@ class MainWindow(QMainWindow):
         # The file a plain Ctrl+S writes: the document opened, or the last
         # "Salva con nome" target. None when nothing is open.
         self._save_target: str | None = None
-        # A merge is not an undo command, so the stack stays clean through
-        # it; without this flag closing right after a merge would lose the
-        # merged pages without a word.
-        self._merged_since_save = False
-
         # --- render worker thread ---
         # The QThread is deliberately NOT parented to this window (or any
         # widget): Qt aborts the process if a QThread is destroyed while
@@ -357,31 +356,90 @@ class MainWindow(QMainWindow):
         Shared by the "Apri" action and by the command line, so a document
         handed over by the desktop entry fails exactly like one chosen from
         the dialog. Returns whether the document is now open.
-        """
-        try:
-            self.open_document(path)
-        # A damaged/encrypted/unsupported PDF can raise a wide range of
-        # exceptions from PyMuPDF; at this GUI boundary the correct
-        # behaviour is to report it, never to crash the editor.
-        except Exception as e:  # noqa: BLE001
-            QMessageBox.critical(
-                self, self.tr("Errore"), self.tr("Impossibile aprire:\n{0}").format(e)
-            )
-            return False
-        return True
 
-    def open_document(self, path: str) -> None:
+        An encrypted file is not a failure: the password is asked for and the
+        attempt is repeated, for as long as the user wants to try. Giving up
+        leaves whatever was on screen untouched -- the model refuses before
+        it changes anything.
+        """
+        password: str | None = None
+        while True:
+            try:
+                self.open_document(path, password)
+            except PasswordRequired as needed:
+                password = self._ask_password(needed.path, retry=needed.wrong)
+                if password is None:
+                    return False
+                continue
+            # A damaged or unsupported PDF can raise a wide range of
+            # exceptions from PyMuPDF; at this GUI boundary the correct
+            # behaviour is to report it, never to crash the editor.
+            except Exception as e:  # noqa: BLE001
+                QMessageBox.critical(
+                    self,
+                    self.tr("Errore"),
+                    self.tr("Impossibile aprire:\n{0}").format(e),
+                )
+                return False
+            return True
+
+    def _ask_password(self, path: str, retry: bool = False) -> str | None:
+        """Ask for the password of *path*; None means the user gave up."""
+        name = os.path.basename(path)
+        if retry:
+            label = self.tr("Password errata per «{0}».").format(name)
+        else:
+            label = self.tr("«{0}» è protetto da una password.").format(name)
+        password, accepted = QInputDialog.getText(
+            self,
+            self.tr("Documento protetto"),
+            label,
+            QLineEdit.EchoMode.Password,
+        )
+        return password if accepted else None
+
+    def _unlock_worker(self, path: str, password: str) -> None:
+        """Tell the render thread the password of *path*, waiting for it.
+
+        Blocking, with the same reasoning as ``shutdown_worker``: the handle
+        must be open -- and decrypted -- inside the worker thread before any
+        render request for those pages is served. Queueing the password
+        behind the requests it enables would be worse than useless.
+        """
+        QMetaObject.invokeMethod(
+            self._worker,
+            "authenticate",
+            Qt.ConnectionType.BlockingQueuedConnection,
+            Q_ARG(str, path),
+            Q_ARG(str, password),
+        )
+
+    def open_document(self, path: str, password: str | None = None) -> None:
         """Open *path*, resetting every view and cache first.
 
         The caches matter: render keys are built from ``source_index``, so
         without flushing them a second document would be served the first
         document's pixmaps.
+
+        Raises :class:`PasswordRequired` when the file is encrypted and
+        *password* is missing or wrong. The file is read before anything is
+        reset, and the view is only emptied once those pages exist, so a
+        document that refuses to open cannot leave the window showing an
+        empty page 1.
         """
+        # Read first: the resets below are destructive, and a wrong password
+        # must cost the user nothing.
+        items = self._doc_model.read_source(0, path, password)
+
         self._undo_stack.clear()
         self._page_view.reset()
         self._thumbnail_cache.clear()
-
-        self._doc_model.open(path)
+        # Renders are held back from here to a few lines below: the model is
+        # about to announce the new pages while the worker has not been told
+        # the password yet. A request in that window would come back as
+        # "failed" and nothing would ask for it again.
+        self._page_view.set_paused(True)
+        self._doc_model.set_pages(items, path)
         # The model emits ``changed`` and the views rebuild from it. Page
         # sizes come from the model too, so the render thread needs no
         # round-trip before the layout is correct.
@@ -396,16 +454,24 @@ class MainWindow(QMainWindow):
         self._on_redaction_toggled(False)
         self._refresh_form_panel(0)
         self._save_target = path
-        self._merged_since_save = False
         self._update_title()
         self._status.setText(self.tr("Aperto: {0}").format(path))
+
+        # The worker opens the sources on its own, so it needs the password
+        # too; the thumbnails are asked again because theirs failed while the
+        # file was still locked.
+        if password is not None:
+            self._unlock_worker(path, password)
+        self._page_view.set_paused(False)
+        self._thumb_bar.refresh()
 
     def _merge_file(self) -> None:
         """Unire: append every page of another PDF to the document.
 
         Nothing is copied or rewritten -- the model just grows a second
         source and the new pages point into it, exactly like the original
-        ones. Undo is not involved: this is an additive file operation.
+        ones. The merge is a command like any other, so Ctrl+Z takes the
+        appended pages away again.
         """
         if not self._doc_model.sources:
             QMessageBox.warning(
@@ -428,20 +494,35 @@ class MainWindow(QMainWindow):
         """Append every page of *path*, reporting failures instead of raising.
 
         Also reachable from the command line, where several arguments mean
-        "open the first and append the rest".
+        "open the first and append the rest". Encrypted files are asked for a
+        password here as well, and the render thread is told it before the
+        first page of the merge can be asked for.
         """
-        try:
-            added = self._doc_model.append_document(path)
-        # Same reasoning as open_path: a damaged PDF is reported, never fatal.
-        except Exception as e:  # noqa: BLE001
-            QMessageBox.critical(
-                self,
-                self.tr("Errore"),
-                self.tr("Impossibile unire:\n{0}").format(e),
-            )
-            return
+        password: str | None = None
+        while True:
+            try:
+                # Read first, command later: a file that brings no page, or
+                # that will not open, must not leave an undo step behind.
+                items = self._doc_model.read_source(
+                    len(self._doc_model.sources), path, password
+                )
+            except PasswordRequired as needed:
+                password = self._ask_password(needed.path, retry=needed.wrong)
+                if password is None:
+                    return
+                continue
+            # Same reasoning as open_path: a damaged PDF is reported, never
+            # fatal.
+            except Exception as e:  # noqa: BLE001
+                QMessageBox.critical(
+                    self,
+                    self.tr("Errore"),
+                    self.tr("Impossibile unire:\n{0}").format(e),
+                )
+                return
+            break
 
-        if added == 0:
+        if not items:
             QMessageBox.warning(
                 self,
                 self.tr("Attenzione"),
@@ -449,15 +530,31 @@ class MainWindow(QMainWindow):
             )
             return
 
-        # Jump to the first merged page: the whole point of the gesture is to
-        # check what was just appended, and lazily-rendered pages only appear
-        # once they are on screen.
-        self._merged_since_save = True
+        if password is not None:
+            # Before the model announces the new pages: the first render
+            # requests for them would otherwise be answered by a locked
+            # handle and leave the pages blank.
+            self._unlock_worker(path, password)
+        self._push_merge(path, items)
+
+    def _push_merge(self, path: str, items: list[PageItem]) -> None:
+        """Make *items* an undo step, then show what was appended.
+
+        Pushing the command is what makes the merge undoable; the window used
+        to track it with a flag of its own because it was the one
+        modification outside the undo stack. The last merged page is brought
+        on screen because lazily-rendered pages only appear once they are.
+        """
+        first_new = self._doc_model.page_count
+        self._undo_stack.push(
+            AppendDocument(self._doc_model, len(self._doc_model.sources), path, items)
+        )
         self._update_title()
-        first_new = self._doc_model.page_count - added
         self._page_view.ensure_page_visible(first_new)
         self._thumb_bar.set_current_row(first_new)
-        self._status.setText(self.tr("Unite {0} pagine da: {1}").format(added, path))
+        self._status.setText(
+            self.tr("Unite {0} pagine da: {1}").format(len(items), path)
+        )
 
     def _save_file(self) -> bool:
         """Salva: write the document to the file it came from (Ctrl+S).
@@ -516,15 +613,18 @@ class MainWindow(QMainWindow):
         history survives; only the meaning of "unsaved" moves to this point.
         """
         self._save_target = path
-        self._merged_since_save = False
         self._undo_stack.setClean()
         self._update_title()
 
     def is_modified(self) -> bool:
-        """Whether closing the document now would lose something."""
+        """Whether closing the document now would lose something.
+
+        The undo stack is the whole truth now that the merge is a command:
+        there is no modification left that would leave the stack clean.
+        """
         if not self._doc_model.sources:
             return False
-        return self._merged_since_save or not self._undo_stack.isClean()
+        return not self._undo_stack.isClean()
 
     def _update_title(self) -> None:
         """File name in the title, with the [*] that marks unsaved changes.
@@ -587,7 +687,6 @@ class MainWindow(QMainWindow):
             self._undo_stack.clear()
             self._doc_model.close()
             self._save_target = None
-            self._merged_since_save = False
             self._refresh_form_panel()
             self._update_title()
             return

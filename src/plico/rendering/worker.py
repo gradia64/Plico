@@ -24,6 +24,8 @@ import pymupdf
 from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtGui import QImage
 
+from ..model.document import open_for_reading
+
 # Enough for the handful of documents a merged job realistically interleaves,
 # while keeping the number of open files bounded.
 MAX_OPEN_DOCUMENTS = 16
@@ -73,6 +75,9 @@ class RenderWorker(QObject):
         # Keyed by path: the same file merged twice shares one handle, and a
         # reused source_id can never be confused with a different document.
         self._docs: OrderedDict[str, pymupdf.Document] = OrderedDict()
+        # path -> password. The worker never asks: it gets the password from
+        # the GUI thread, which is the only thread allowed to open a dialog.
+        self._passwords: dict[str, str] = {}
         self.render_requested.connect(self._render)
         self.evict_requested.connect(self._evict)
 
@@ -83,9 +88,9 @@ class RenderWorker(QObject):
             self._docs.move_to_end(path)
             return doc
         try:
-            doc = pymupdf.open(path)
-        # A file that vanished or is unreadable must not kill the thread;
-        # the caller simply gets no image for this request.
+            doc = open_for_reading(path, self._passwords.get(path))
+        # A file that vanished, is unreadable, or is still locked must not
+        # kill the thread; the caller simply gets no image for this request.
         except Exception:  # noqa: BLE001
             return None
         self._docs[path] = doc
@@ -127,9 +132,27 @@ class RenderWorker(QObject):
         if doc is not None:
             doc.close()
 
+    @Slot(str, str)
+    def authenticate(self, path: str, password: str) -> None:
+        """Remember *password* for *path* and re-open it unlocked.
+
+        The GUI thread invokes this with a blocking connection while it holds
+        the render requests back (see ``PageView.set_paused``), so by the time
+        it returns the handle is open and decrypted: the requests that follow
+        cannot be served by a handle that failed to unlock. Re-opening here is
+        what makes the wait worth anything -- dropping a locked handle and
+        leaving the reopen to the next render would be just as ordered, but
+        only this way does a wrong password show up as an empty page instead
+        of as a thread that keeps failing.
+        """
+        self._passwords[path] = password
+        self._evict(path)
+        self._doc_for(path)
+
     @Slot()
     def shutdown(self) -> None:
         """Close every document; called IN the worker thread via invokeMethod."""
         for doc in self._docs.values():
             doc.close()
         self._docs.clear()
+        self._passwords.clear()

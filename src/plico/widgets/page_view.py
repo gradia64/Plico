@@ -300,6 +300,9 @@ class PageView(QScrollArea):
         self._selected_field: tuple[int, str] | None = None
         self._cache: OrderedDict[tuple, QPixmap] = OrderedDict()
         self._cache_bytes = 0
+        # Requests are held back while the GUI thread opens a modal dialog
+        # whose answer the worker cannot produce on its own.
+        self._paused = False
 
         # --- layout container ---
         self._container = QWidget()
@@ -549,6 +552,21 @@ class PageView(QScrollArea):
     #  Render on demand
     # ------------------------------------------------------------------ #
 
+    def set_paused(self, paused: bool) -> None:
+        """Hold render requests back, and let them go again when resumed.
+
+        The window pauses the view while it opens a modal dialog whose answer
+        the worker cannot produce by itself -- the password of an encrypted
+        file. A request emitted in that window would be answered "failed", and
+        nothing would ask for those pages again: the page would stay blank
+        until the user scrolled it out of view and back. Releasing the pause
+        re-requests everything visible, which is also what refreshes the pages
+        that had already failed while the file was still locked.
+        """
+        self._paused = paused
+        if not paused:
+            self._request_visible()
+
     def _visible_range(self) -> tuple[int, int]:
         """Half-open [first, last) index range of pages worth rendering.
 
@@ -577,7 +595,7 @@ class PageView(QScrollArea):
         return first, last
 
     def _request_visible(self) -> None:
-        if not self._canvases:
+        if self._paused or not self._canvases:
             return
         first, last = self._visible_range()
         dpr = self.devicePixelRatioF() or 1.0

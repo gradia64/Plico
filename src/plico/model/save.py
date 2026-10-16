@@ -8,7 +8,7 @@ from typing import TypeVar
 
 import pymupdf
 
-from .document import DocumentModel, PageItem
+from .document import DocumentModel, PageItem, open_for_reading
 from .forms import write_fields
 from .optimize import CompressionLevel, CompressionResult, Progress, optimize_in_place
 
@@ -128,7 +128,11 @@ def _write_pdf(
                 source_id = run[0].source_id
                 src = sources.get(source_id)
                 if src is None:
-                    src = pymupdf.open(model.sources[source_id])
+                    path = model.sources[source_id]
+                    # An encrypted source is unlocked again here: the model
+                    # kept the password precisely because this function has
+                    # nobody to ask (and neither has the worker).
+                    src = open_for_reading(path, model.passwords.get(path))
                     sources[source_id] = src
                     # Fields are written before the pages are copied, and
                     # before any redaction: see _fill_source_fields.
