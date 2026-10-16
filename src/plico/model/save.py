@@ -11,6 +11,7 @@ import pymupdf
 from .document import DocumentModel, PageItem, open_for_reading
 from .forms import write_fields
 from .optimize import CompressionLevel, CompressionResult, Progress, optimize_in_place
+from .textedit import apply_edit
 
 _T = TypeVar("_T")
 
@@ -61,6 +62,18 @@ def _redact(page: pymupdf.Page, item: PageItem) -> None:
     for annot in list(page.annots() or []):
         if any(annot.rect.intersects(pymupdf.Rect(*r.as_tuple())) for r in item.redactions):
             page.delete_annot(annot)
+
+
+def _edit_text(page: pymupdf.Page, item: PageItem) -> None:
+    """Write *item*'s text replacements into *page*.
+
+    Runs BEFORE the redactions of the same page: a redaction drawn over an
+    edited span must take the new words with it, exactly as it would take
+    the old ones. Each span was captured from the source and the page here
+    is that source's copy, so the span's rectangle and baseline still hold.
+    """
+    for edit in item.text_edits:
+        apply_edit(page, edit.span, edit.new_text)
 
 
 def _fill_source_fields(doc: pymupdf.Document, values: dict[str, str]) -> None:
@@ -153,13 +166,22 @@ def _write_pdf(
                 # A PDF with zero pages is not a useful artefact; fail loudly
                 # rather than writing a file the user cannot open.
                 raise ValueError("Il documento non contiene pagine da salvare.")
-            # The redactions run on the built pages: out[] and items are
-            # parallel, so a redaction lands on the page built for the item
-            # it belongs to.
+            # Text edits and redactions run on the built pages: out[] and items
+            # are parallel, so each lands on the page built for its item. The
+            # edits go first, so a redaction over an edited span removes the
+            # new words too.
             for index, item in enumerate(items):
-                if item.redactions:
+                if item.text_edits or item.redactions:
                     page = out[index]
-                    _redact(page, item)
+                    if item.text_edits:
+                        _edit_text(page, item)
+                    if item.redactions:
+                        _redact(page, item)
+            if any(item.text_edits for item in items):
+                # A replacement embeds its font whole: one edit in a system
+                # font took a 36 KB file to 241 KB. Subsetting brings it back
+                # to 44 KB (measured), and only runs when something was written.
+                out.subset_fonts()
             out.save(out_path, garbage=4, deflate=True)
     finally:
         for src in sources.values():

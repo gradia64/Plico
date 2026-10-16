@@ -2,6 +2,7 @@ from .commands import (
     AddRedaction,
     AppendDocument,
     DeletePage,
+    EditText,
     MovePage,
     RemoveRedaction,
     RotatePage,
@@ -18,7 +19,7 @@ from .optimize import (
 )
 from .redact import RedactionRect
 from .save import extract_pages, parse_page_ranges, save_as, save_compressed
-from .textedit import FontChoice, TextSpan, apply_edit, check_edit, span_at
+from .textedit import FontChoice, TextEdit, TextSpan, apply_edit, check_edit, span_at
 
 __all__ = [
     "LEVELS",
@@ -29,6 +30,7 @@ __all__ = [
     "CompressionResult",
     "DeletePage",
     "DocumentModel",
+    "EditText",
     "Field",
     "FontChoice",
     "MovePage",
@@ -38,6 +40,7 @@ __all__ = [
     "RemoveRedaction",
     "RotatePage",
     "SetFieldValue",
+    "TextEdit",
     "TextSpan",
     "apply_edit",
     "check_edit",

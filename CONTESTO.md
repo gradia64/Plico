@@ -45,7 +45,7 @@ plico/
 │   ├── main_window.py        # finestra, menu, toolbar, dock, QSettings, dialogs
 │   ├── model/
 │   │   ├── document.py       # DocumentModel, PageItem  ← il cuore
-│   │   ├── commands.py       # RotatePage, DeletePage, MovePage, AddRedaction, SetFieldValue…
+│   │   ├── commands.py       # RotatePage, DeletePage, MovePage, AddRedaction, SetFieldValue, EditText…
 │   │   ├── redact.py         # rettangoli di redazione e matrici di rotazione
 │   │   ├── forms.py          # campi AcroForm: lettura, scrittura, svuotamento
 │   │   ├── save.py           # save_as, save_compressed, extract_pages, parse_page_ranges
@@ -65,10 +65,11 @@ plico/
     ├── test_redact.py        # rotazione e rimozione *vera* del testo
     ├── test_forms.py         # campi AcroForm: letti, scritti, riletti dal file
     ├── test_textedit.py      # uno span sostituito: testo, sfondo, font, spazio
+    ├── test_edit_text.py     # EditText e salvataggio: undo, redazioni, estrai, comprimi
     └── test_integration.py   # MainWindow vera, offscreen: 94 test end-to-end
 ```
 
-Gate di qualità attuale: **247 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **268 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
 (18 file sorgente).
 
 ---
@@ -642,10 +643,10 @@ La vista disegna i campi sulla pagina (`_paint_fields`, con il valore preso dal
 corrispondente nel pannello: `PageView` emette `field_clicked` e `MainWindow`
 decide, esattamente come per la redazione.
 
-### Modifica minima del testo (`model/textedit.py`) — solo il modello
+### Modifica minima del testo (`model/textedit.py`)
 
-**Stato:** il modulo e i suoi test ci sono; **non** è ancora collegato a
-`PageItem`, ai comandi, a `save.py` né alla vista. Nasce da un prototipo
+**Stato:** modello, comando e salvataggio ci sono; **manca l'interfaccia**
+(anteprima nella vista ed editor sulla pagina). Nasce da un prototipo
 provato su PDF veri (LibreOffice con tabella e cella colorata, un PDF
 commerciale con testo bianco su sfondo, un PDF con font Type3).
 
@@ -698,15 +699,42 @@ commerciale con testo bianco su sfondo, un PDF con font Type3).
 dell'host (`/run/host/fonts`). Se manca, si scende al sosia Base-14: brutto ma
 corretto.
 
-**Prossimi passi**, in ordine: campo `text_edits` in `PageItem` (lista di
-modifiche frozen, **una per span**: modificare due volte lo stesso span
-sostituisce, conservando il testo originale come `SetFieldValue`); comando
-`EditText`; in `save.py` l'ordine campi → modifiche al testo → redazioni (una
-redazione sopra un testo modificato deve portarsi via anche il nuovo), più
-`subset_fonts()`; l'anteprima nella vista, che dipinge sopra il render come
-`_paint_redactions`; per ultimo l'editor sulla pagina, in una modalità
-esplicita come la Redazione, figlio della `_PageLabel` e disattivato sulle
-pagine ruotate di 90°/270°.
+**Nel documento:**
+
+- `PageItem.text_edits` è una lista di `TextEdit(span, new_text)` frozen,
+  **al massimo una per span** (`edit_for(span)`, `text_of(span)`): due testi
+  sullo stesso span verrebbero scritti uno sopra l'altro.
+- `DocumentModel.text_span_at(index, x, y)` apre la **sorgente** con
+  `open_for_reading` (quindi anche un PDF cifrato, con la password tenuta dal
+  modello) e restituisce lo span originale, mai quello già modificato: così
+  un secondo intervento sullo stesso span lo riconosce e sostituisce il primo.
+- `EditText(model, index, span, new_text)` ricorda cosa diceva lo span
+  *prima* (niente, o una modifica precedente) e l'undo torna esattamente lì.
+  Si fonde con il comando precedente sullo stesso span (`mergeWith`, id
+  `0x5445`), e quando il risultato è lo stato di partenza — testo originale
+  riscritto, o nessun cambiamento — si segna **obsoleto** e Qt lo toglie
+  dallo stack: niente passi di undo che non cambiano nulla, e niente
+  modifiche «uguali all'originale» che a ogni salvataggio riscriverebbero lo
+  span e reincorporerebbero un font.
+- In `save.py` l'ordine per pagina è: campi (già scritti sulla sorgente) →
+  **modifiche al testo** (`_edit_text`) → **redazioni**. Una redazione sopra
+  uno span modificato si porta via anche il testo nuovo (c'è il test). Se
+  almeno una pagina ha modifiche, `out.subset_fonts()` prima di `save()`;
+  verificato che un modulo AcroForm sulla stessa pagina sopravvive.
+- Vale per `save_as`, `extract_pages` e `save_compressed`, e per il
+  salvataggio sopra il file aperto.
+
+**Limiti noti:** `find_text()` (Redigi testo) cerca nelle sorgenti, quindi
+trova le parole *vecchie* di uno span modificato e non quelle nuove. Una
+modifica che al salvataggio non si può più scrivere (per esempio il font di
+sistema è stato disinstallato) fa fallire il salvataggio con il messaggio di
+`check_edit`.
+
+**Prossimi passi**: l'anteprima nella vista, che dipinge sopra il render come
+`_paint_redactions` (riquadro col colore di sfondo e testo nuovo); poi
+l'editor sulla pagina, in una modalità esplicita come la Redazione, figlio
+della `_PageLabel`, disattivato sulle pagine ruotate di 90°/270°, che chiama
+`text_span_at()` al doppio clic e `check_edit()` alla conferma.
 
 ---
 
@@ -928,6 +956,13 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
 
 - `QT_QPA_PLATFORM=offscreen` è obbligatorio: senza display i test non
   partono.
+- **L'applicazione Qt è una sola per tutta la sessione di pytest**, e la crea
+  il primo modulo che ne chiede una. Un fixture che crea una
+  `QCoreApplication` in un file che gira *prima* di `test_integration.py`
+  (l'ordine è alfabetico) fa abortire l'intera suite con un core dump:
+  `QMainWindow` trova un'applicazione senza widget («Must construct a
+  QApplication before a QWidget»). È successo con `test_edit_text.py`. Nei
+  file nuovi usare `QApplication.instance() or QApplication([])`.
 - Il fixture `windows` di `tests/test_integration.py` chiude **sempre** ogni
   `MainWindow` (`shutdown_worker()` + `deleteLater()` + `processEvents()`),
   così un'asserzione fallita non può lasciare un thread in corsa e far
@@ -1042,8 +1077,9 @@ sostituita con la sorgente `git` del tag di rilascio.
    leptonica e tesseract dai sorgenti nel manifest **senza poterli provare in
    locale**: si fa quando c'è una ragione per farlo, non prima;
 4. **modifica minima del testo** — la parte difficile, ma è il vero
-   differenziale rispetto a PDF Arranger e simili. **Il modello c'è**
-   (`model/textedit.py`, vedi §8); mancano comando, salvataggio e interfaccia.
+   differenziale rispetto a PDF Arranger e simili. **Modello, comando e
+   salvataggio ci sono** (`model/textedit.py`, `EditText`, vedi §8); manca
+   l'interfaccia.
 
 **Debito tecnico noto:**
 

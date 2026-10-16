@@ -14,6 +14,7 @@ from PySide6.QtGui import QUndoCommand
 
 from .document import DocumentModel, PageItem
 from .redact import RedactionRect
+from .textedit import TextEdit, TextSpan
 
 
 class RotatePage(QUndoCommand):
@@ -231,3 +232,79 @@ class SetFieldValue(QUndoCommand):
             # that "untouched" does not become "set to the file's own value".
             values.pop(self._name, None)
         self._model.page_changed.emit(self._index)
+
+class EditText(QUndoCommand):
+    """Replace the text of *span* on the page at *index* with *new_text*.
+
+    Like a redaction, this only records the intent: ``save.py`` removes the
+    old words and writes the new ones when the document is materialised.
+
+    The command remembers what the span read *before* it -- nothing, or an
+    earlier replacement -- and undo goes back to exactly that, so editing
+    the same words twice and undoing once returns to the first edit, not to
+    the original. Typing the original text back removes the edit altogether:
+    "unchanged" must not linger as a replacement that rewrites the span with
+    itself (and re-embeds a font) on every save.
+    """
+
+    _ID = 0x5445
+
+    def __init__(
+        self, model: DocumentModel, index: int, span: TextSpan, new_text: str
+    ) -> None:
+        label = QCoreApplication.translate("EditText", "Modifica testo su pagina {0}")
+        super().__init__(label.format(index + 1))
+        self._model = model
+        self._index = index
+        self._span = span
+        item = model.pages[index]
+        self._before = item.edit_for(span)
+        # Where the edit sits (or will sit) in the list: a replacement keeps
+        # its place, so undo/redo never reorders the edits of a page.
+        self._position = (
+            item.text_edits.index(self._before)
+            if self._before is not None
+            else len(item.text_edits)
+        )
+        self._after = self._state(new_text)
+
+    def _state(self, new_text: str) -> TextEdit | None:
+        return None if new_text == self._span.text else TextEdit(self._span, new_text)
+
+    def _install(self, state: TextEdit | None) -> None:
+        edits = self._model.pages[self._index].text_edits
+        current = next(
+            (i for i, edit in enumerate(edits) if edit.span == self._span), None
+        )
+        if current is not None:
+            del edits[current]
+        if state is not None:
+            edits.insert(min(self._position, len(edits)), state)
+        self._model.page_changed.emit(self._index)
+
+    def id(self) -> int:
+        return self._ID
+
+    def mergeWith(self, other: QUndoCommand) -> bool:
+        """Fold a later edit of the SAME span into this one.
+
+        Confirming the same words twice in a row is one correction, not two
+        steps. When the merged result is what the span read before this
+        command, the command is marked obsolete and Qt drops it from the
+        stack: an undo step that changes nothing is noise.
+        """
+        if not isinstance(other, EditText):
+            return False
+        if other._index != self._index or other._span != self._span:
+            return False
+        self._after = other._after
+        self.setObsolete(self._after == self._before)
+        return True
+
+    def redo(self) -> None:
+        self._install(self._after)
+        # Pushing a "change" to what the span already reads is not a step.
+        self.setObsolete(self._after == self._before)
+
+    def undo(self) -> None:
+        self._install(self._before)

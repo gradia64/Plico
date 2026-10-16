@@ -80,6 +80,20 @@ class TextSpan:
 
 
 @dataclass(frozen=True)
+class TextEdit:
+    """A replacement planned for one span of a virtual page.
+
+    State of the page, like a redaction: nothing is written until the
+    document is materialised. The span is the identity -- there is at most
+    one edit per span, so editing the same words twice replaces the first
+    edit instead of stacking two texts on top of each other.
+    """
+
+    span: TextSpan
+    new_text: str
+
+
+@dataclass(frozen=True)
 class FontChoice:
     """How a replacement will be written."""
 

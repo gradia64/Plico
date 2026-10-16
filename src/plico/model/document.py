@@ -26,6 +26,7 @@ from .redact import (
     rotation_matrix,
     unrotated_size,
 )
+from .textedit import TextEdit, TextSpan, span_at
 
 
 class PasswordRequired(Exception):
@@ -101,6 +102,19 @@ class PageItem:
     # the file already had", which is NOT the same as an empty value -- clearing
     # a field on purpose is a change, and it has to survive the save.
     form_values: dict[str, str] = field(default_factory=dict)
+    # Text replacements, at most one per span of the SOURCE page. The spans
+    # are captured from the source when the user picks them, so they stay
+    # valid whatever else happens to the virtual page.
+    text_edits: list[TextEdit] = field(default_factory=list)
+
+    def edit_for(self, span: TextSpan) -> TextEdit | None:
+        """The planned replacement of *span*, if there is one."""
+        return next((edit for edit in self.text_edits if edit.span == span), None)
+
+    def text_of(self, span: TextSpan) -> str:
+        """What *span* reads now: the replacement, or the source's own text."""
+        edit = self.edit_for(span)
+        return span.text if edit is None else edit.new_text
 
     @property
     def total_rotation(self) -> int:
@@ -322,6 +336,22 @@ class DocumentModel(QObject):
             for doc in handles.values():
                 doc.close()
         return found
+
+    def text_span_at(self, index: int, x: float, y: float) -> TextSpan | None:
+        """The span of the SOURCE page under the page-space point (*x*, *y*).
+
+        Always the source, never what the user has already typed: a span
+        edited before is found again as itself, so ``PageItem.edit_for()``
+        recognises it and the second edit replaces the first. Opened and
+        closed on the spot, like :meth:`find_text`: the model owns no handle.
+        """
+        item = self.pages[index]
+        source = self.sources[item.source_id]
+        with open_for_reading(source, self.passwords.get(source)) as doc:
+            # Bound to a local: get_text() on a temporary page is fine, but the
+            # habit costs nothing and keeps one rule for every page access.
+            page = doc[item.source_index]
+            return span_at(page, x, y)
 
     @property
     def page_count(self) -> int:
