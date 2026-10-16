@@ -49,6 +49,7 @@ plico/
 │   │   ├── redact.py         # rettangoli di redazione e matrici di rotazione
 │   │   ├── forms.py          # campi AcroForm: lettura, scrittura, svuotamento
 │   │   ├── save.py           # save_as, save_compressed, extract_pages, parse_page_ranges
+│   │   ├── textedit.py       # modifica minima del testo: uno span, il suo aspetto
 │   │   └── optimize.py       # livelli di compressione, optimize_in_place  ← pikepdf
 │   ├── rendering/
 │   │   └── worker.py         # RenderWorker: unico proprietario degli handle PyMuPDF
@@ -63,11 +64,12 @@ plico/
     ├── test_optimize.py      # i livelli di compressione e optimize_in_place
     ├── test_redact.py        # rotazione e rimozione *vera* del testo
     ├── test_forms.py         # campi AcroForm: letti, scritti, riletti dal file
+    ├── test_textedit.py      # uno span sostituito: testo, sfondo, font, spazio
     └── test_integration.py   # MainWindow vera, offscreen: 94 test end-to-end
 ```
 
-Gate di qualità attuale: **226 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
-(17 file sorgente).
+Gate di qualità attuale: **247 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+(18 file sorgente).
 
 ---
 
@@ -640,6 +642,72 @@ La vista disegna i campi sulla pagina (`_paint_fields`, con il valore preso dal
 corrispondente nel pannello: `PageView` emette `field_clicked` e `MainWindow`
 decide, esattamente come per la redazione.
 
+### Modifica minima del testo (`model/textedit.py`) — solo il modello
+
+**Stato:** il modulo e i suoi test ci sono; **non** è ancora collegato a
+`PageItem`, ai comandi, a `save.py` né alla vista. Nasce da un prototipo
+provato su PDF veri (LibreOffice con tabella e cella colorata, un PDF
+commerciale con testo bianco su sfondo, un PDF con font Type3).
+
+- **L'unità è lo span** di `get_text("dict")`: una corsa di testo su una riga
+  con un solo font, corpo e colore. Un *blocco* è un paragrafo su più righe
+  (riscriverlo in `(x0, y1)` lo schiaccia su una riga), una *parola* non ha
+  stile proprio. Lo span porta già baseline (`origin`), font, corpo, colore
+  e flag. `span_at(page, x, y)` lo cattura in un `TextSpan` frozen e
+  autosufficiente: il salvataggio non deve ritrovarlo.
+- **Tutto in spazio pagina.** `get_text("dict")`, `add_redact_annot()` e
+  `TextWriter` usano lo spazio non ruotato anche con `/Rotate 90`
+  (verificato: stesso rettangolo a 0 e a 90), quindi è lo stesso spazio delle
+  redazioni (§4) e non serve alcuna conversione.
+- **Il testo vecchio si toglie davvero**, con una redazione che tocca **solo**
+  il testo: `fill=None` (misurato: lo sfondo di una cella colorata resta),
+  `images=PDF_REDACT_IMAGE_NONE`, `graphics=PDF_REDACT_LINE_ART_NONE`. Con i
+  default di `apply_redactions()` sparirebbero i bordi della tabella.
+- **Il font: tre fonti, in quest'ordine.**
+  1. Quello incorporato, se ha una mappa dei caratteri. **Quasi mai:**
+     LibreOffice incorpora sottoinsiemi indicizzati per glifo (14-33 glifi,
+     `has_glyph()` dice no a tutto). Funziona invece su PDF con font completi.
+  2. Lo stesso font **installato sul sistema**, cercato per nome PostScript con
+     `fc-match` e verificato (fc-match risponde *sempre*, anche con un altro
+     font). È la fonte che salva i PDF da ufficio: Liberation, DejaVu, Noto…
+  3. Un sosia Base-14 scelto dai flag (serif/mono, grassetto/corsivo).
+
+  I nomi vanno confrontati con `_font_key()`: `get_fonts()` dice
+  «Nimbus Roman Regular», `get_text()` dice «NimbusRoman-Regular».
+- **`TextWriter`, non `insert_text()`**: con un font Base-14 `insert_text()`
+  scrive «Łódź» come «·ód·»; `TextWriter` incorpora il font come Type0 e
+  scrive tutto l'Unicode che il font contiene.
+- **Lo spazio a destra (`room`) non è quello della riga.** Una cella di
+  tabella è un blocco a sé: la cella accanto e il bordo in mezzo sono
+  invisibili alla riga, e il prototipo scriveva «Licenze software» dentro la
+  cella dell'importo. `_room()` guarda il testo di **tutti** i blocchi alla
+  stessa altezza e le **linee verticali** (anche i rettangoli sottili, che
+  molti produttori usano come filetti). Oltre lo spazio il testo si
+  rimpicciolisce fino a `MIN_SCALE = 0.8`, sotto si rifiuta.
+- **Rifiutati, con un messaggio:** testo non orizzontale e font **Type3** (i
+  glifi sono disegni: il colore sta nel glifo, quindi lo span dice «nero», e
+  la redazione lascia residui visibili).
+- **`check_edit()`** fa la stessa scelta di `apply_edit()` senza toccare la
+  pagina: va chiamato quando l'utente conferma, perché una modifica
+  impossibile si rifiuta lì, non al salvataggio.
+- **Peso del file:** un font di sistema viene incorporato intero (36 KB →
+  241 KB per una modifica). `doc.subset_fonts()` prima del salvataggio
+  riporta a 44 KB: `save.py` dovrà chiamarlo quando ci sono modifiche.
+
+**Da verificare nel Flatpak:** che `fc-match` esista nel runtime e veda i font
+dell'host (`/run/host/fonts`). Se manca, si scende al sosia Base-14: brutto ma
+corretto.
+
+**Prossimi passi**, in ordine: campo `text_edits` in `PageItem` (lista di
+modifiche frozen, **una per span**: modificare due volte lo stesso span
+sostituisce, conservando il testo originale come `SetFieldValue`); comando
+`EditText`; in `save.py` l'ordine campi → modifiche al testo → redazioni (una
+redazione sopra un testo modificato deve portarsi via anche il nuovo), più
+`subset_fonts()`; l'anteprima nella vista, che dipinge sopra il render come
+`_paint_redactions`; per ultimo l'editor sulla pagina, in una modalità
+esplicita come la Redazione, figlio della `_PageLabel` e disattivato sulle
+pagine ruotate di 90°/270°.
+
 ---
 
 ## 9. Ambiente di sviluppo
@@ -974,7 +1042,8 @@ sostituita con la sorgente `git` del tag di rilascio.
    leptonica e tesseract dai sorgenti nel manifest **senza poterli provare in
    locale**: si fa quando c'è una ragione per farlo, non prima;
 4. **modifica minima del testo** — la parte difficile, ma è il vero
-   differenziale rispetto a PDF Arranger e simili.
+   differenziale rispetto a PDF Arranger e simili. **Il modello c'è**
+   (`model/textedit.py`, vedi §8); mancano comando, salvataggio e interfaccia.
 
 **Debito tecnico noto:**
 

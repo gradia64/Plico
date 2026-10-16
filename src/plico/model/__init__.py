@@ -18,6 +18,7 @@ from .optimize import (
 )
 from .redact import RedactionRect
 from .save import extract_pages, parse_page_ranges, save_as, save_compressed
+from .textedit import FontChoice, TextSpan, apply_edit, check_edit, span_at
 
 __all__ = [
     "LEVELS",
@@ -29,6 +30,7 @@ __all__ = [
     "DeletePage",
     "DocumentModel",
     "Field",
+    "FontChoice",
     "MovePage",
     "PageItem",
     "PasswordRequired",
@@ -36,6 +38,9 @@ __all__ = [
     "RemoveRedaction",
     "RotatePage",
     "SetFieldValue",
+    "TextSpan",
+    "apply_edit",
+    "check_edit",
     "extract_pages",
     "open_for_reading",
     "optimize_in_place",
@@ -43,5 +48,6 @@ __all__ = [
     "read_fields",
     "save_as",
     "save_compressed",
+    "span_at",
     "write_fields",
 ]
