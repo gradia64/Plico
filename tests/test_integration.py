@@ -1025,7 +1025,8 @@ def test_saving_over_the_open_file_makes_the_worker_forget_it(windows, tmp_path)
 
     mw = windows()
     _open(mw, pdf)
-    assert pdf in mw._worker._docs, "il worker non ha aperto la sorgente"
+    vecchio = mw._worker._docs.get(pdf)
+    assert vecchio is not None, "il worker non ha aperto la sorgente"
 
     mw._delete_page()
     with mock.patch.object(
@@ -1034,9 +1035,91 @@ def test_saving_over_the_open_file_makes_the_worker_forget_it(windows, tmp_path)
         mw._save_file()
     _pump()
 
-    assert mw._worker._docs == {}, "il worker tiene ancora il documento sovrascritto"
+    # The file is re-opened, so the worker may well hold a handle again --
+    # just never the one it had before the save.
+    assert vecchio.is_closed, "il worker tiene ancora il documento sovrascritto"
+    assert mw._worker._docs.get(pdf) is not vecchio
     with fitz.open(pdf) as doc:
         assert doc.page_count == 4 - 1
+
+
+def _tre_pagine(path: str, base: int = 0) -> None:
+    """Tre pagine A4 con il testo «PAGINA n» e una /Rotate di partenza *base*."""
+    doc = fitz.open()
+    for i in range(3):
+        pagina = doc.new_page(width=595, height=842)
+        pagina.insert_text((72, 72), f"PAGINA {i + 1}", fontsize=24)
+        pagina.set_rotation(base)
+    doc.save(path)
+    doc.close()
+
+
+def _contenuto(path: str) -> list[tuple[str, int]]:
+    with fitz.open(path) as doc:
+        return [(pagina.get_text().strip(), pagina.rotation) for pagina in doc]
+
+
+@pytest.mark.parametrize("base", [0, 90])
+def test_saving_over_the_open_file_then_saving_again_keeps_every_page(
+    windows, tmp_path, base
+):
+    """Salvare sopra il file aperto e poi continuare non deve perdere pagine.
+
+    Era il bug: dopo os.replace() i PageItem descrivevano ancora il file
+    VECCHIO (numeri di pagina, /Rotate, dimensioni), mentre sul disco c'era
+    il documento materializzato. Il secondo salvataggio perdeva una pagina e
+    la sua rotazione, e la vista rendeva le pagine sbagliate ruotandole due
+    volte. Con base=90 si controlla anche la /Rotate di partenza (§4).
+    """
+    pdf = str(tmp_path / "doc.pdf")
+    out = str(tmp_path / "di-nuovo.pdf")
+    _tre_pagine(pdf, base)
+
+    mw = windows()
+    # Shown, so that scrolling a page into view really renders it.
+    mw.resize(1000, 700)
+    mw.show()
+    _open(mw, pdf)
+    mw._thumb_bar.set_current_row(0)
+    mw._delete_page()
+    mw._thumb_bar.set_current_row(0)
+    mw._rotate_cw_clicked()
+    _pump()
+
+    with mock.patch.object(
+        QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (pdf, ""))
+    ):
+        mw._save_file()
+    _pump()
+
+    ruotata = (base + 90) % 360
+    assert _contenuto(pdf) == [("PAGINA 2", ruotata), ("PAGINA 3", base)]
+
+    # The model now describes the file on disk, not the one it replaced.
+    modello = mw._doc_model
+    assert modello.sources == [pdf]
+    assert [(p.source_index, p.base_rotation, p.rotation) for p in modello.pages] == [
+        (0, ruotata, 0),
+        (1, base, 0),
+    ]
+    # What is on disk cannot be undone: an undo stack that still offered the
+    # old commands would mutate items that no longer exist.
+    assert mw._undo_stack.count() == 0
+
+    # The view shows the right pages, each rotated exactly once.
+    tele = mw._page_view._canvases
+    assert len(tele) == 2
+    for indice, (tela, gradi) in enumerate(zip(tele, (ruotata, base), strict=True)):
+        # Only what is on screen gets rendered: bring each page into view.
+        mw._page_view.ensure_page_visible(indice)
+        _pump()
+        pix = tela.label.pixmap()
+        assert not pix.isNull(), "la pagina non è stata resa dopo il salvataggio"
+        orizzontale = gradi % 180 == 90
+        assert (pix.width() > pix.height()) == orizzontale
+
+    save_as(modello, out)
+    assert _contenuto(out) == [("PAGINA 2", ruotata), ("PAGINA 3", base)]
 
 
 # --------------------------------------------------------------------- #
@@ -1208,7 +1291,8 @@ def test_compressing_over_the_open_file_evicts_the_stale_handle(
 
     mw = windows()
     _open(mw, pdf)
-    assert pdf in mw._worker._docs, "il worker non ha aperto la sorgente"
+    vecchio = mw._worker._docs.get(pdf)
+    assert vecchio is not None, "il worker non ha aperto la sorgente"
 
     monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (pdf, "")))
     monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
@@ -1217,9 +1301,63 @@ def test_compressing_over_the_open_file_evicts_the_stale_handle(
     mw._compress_file()
     _attendi_compressione()
 
-    assert mw._worker._docs == {}, "il worker tiene ancora il documento sovrascritto"
+    assert vecchio.is_closed, "il worker tiene ancora il documento sovrascritto"
+    assert mw._worker._docs.get(pdf) is not vecchio
     with fitz.open(pdf) as doc:
         assert doc.page_count == 6
+
+
+def test_compressing_over_the_open_file_reopens_the_document(
+    qapp, tmp_path, monkeypatch, windows
+):
+    """Lo stesso bug del salvataggio, dalla voce «Salva compresso»."""
+    pdf = str(tmp_path / "doc.pdf")
+    out = str(tmp_path / "di-nuovo.pdf")
+    _tre_pagine(pdf)
+
+    mw = windows()
+    _open(mw, pdf)
+    mw._thumb_bar.set_current_row(0)
+    mw._delete_page()
+    mw._thumb_bar.set_current_row(0)
+    mw._rotate_cw_clicked()
+
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (pdf, "")))
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    _livello_scelto(monkeypatch, "light")
+
+    mw._compress_file()
+    _attendi_compressione()
+
+    assert [(p.source_index, p.base_rotation, p.rotation) for p in mw._doc_model.pages] == [
+        (0, 90, 0),
+        (1, 0, 0),
+    ]
+    assert mw._undo_stack.count() == 0
+    save_as(mw._doc_model, out)
+    assert _contenuto(out) == [("PAGINA 2", 90), ("PAGINA 3", 0)]
+
+
+def test_extract_over_the_open_file_is_refused(qapp, tmp_path, monkeypatch, windows):
+    """Estrarre sopra il documento aperto viene rifiutato, il file resta com'era."""
+    pdf = str(tmp_path / "doc.pdf")
+    _tre_pagine(pdf)
+
+    mw = windows()
+    _open(mw, pdf)
+
+    messaggi: list[str] = []
+    monkeypatch.setattr(QInputDialog, "getText", staticmethod(lambda *a, **k: ("1", True)))
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (pdf, "")))
+    monkeypatch.setattr(
+        QMessageBox, "critical", staticmethod(lambda *a, **k: messaggi.append(a[2]))
+    )
+
+    mw._extract_pages()
+
+    assert messaggi, "il rifiuto deve arrivare all'utente"
+    assert len(_contenuto(pdf)) == 3
+    assert mw._doc_model.page_count == 3
 
 
 def test_a_failed_compression_arrives_as_a_message(qapp, tmp_path, monkeypatch, windows):

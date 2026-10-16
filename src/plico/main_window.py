@@ -446,39 +446,58 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
-        overwritten = self._sources_overwritten_by(path)
+        # Computed BEFORE writing: os.replace() gives the target a new inode,
+        # and afterwards it would no longer match the source it replaced.
+        overwritten = self._doc_model.sources_at(path)
         try:
             save_as(self._doc_model, path)
-            # save_as() replaces the file with os.replace(), which swaps the
-            # inode: the worker still holds the OLD document under that path.
-            # Without this, re-opening the file would render the pre-save
-            # content from the stale handle.
-            for source in overwritten:
-                self._worker.evict_requested.emit(source)
-            self._status.setText(self.tr("Salvato: {0}").format(path))
         # Same reasoning as _open_file: a failed write (permissions, full
         # disk, malformed source) must surface as a dialog, not a traceback.
         except Exception as e:  # noqa: BLE001
             QMessageBox.critical(
                 self, self.tr("Errore"), self.tr("Impossibile salvare:\n{0}").format(e)
             )
+            return
+        if overwritten:
+            self._adopt_saved_file(path, overwritten)
+        else:
+            self._status.setText(self.tr("Salvato: {0}").format(path))
 
-    def _sources_overwritten_by(self, target: str) -> list[str]:
-        """Sources a save to *target* would replace (compared by inode).
+    def _adopt_saved_file(self, path: str, overwritten: list[str]) -> None:
+        """Bring the model back in line after a save that replaced a source.
 
-        Mirrors the overwrite test inside save.py, so the two can never
-        disagree about what counts as "saving over a file we are reading".
+        The virtual pages still describe the file as it was BEFORE the save:
+        its page numbers, its /Rotate, its sizes. The file on disk is now the
+        materialised document -- deletions gone, pages renumbered, the user's
+        rotation baked into /Rotate, redactions burned in -- so carrying on
+        with the old items renders the wrong pages, rotates them twice, and
+        the next save silently drops pages. The saved file IS the document,
+        so it is re-opened in place of the old sources: the undo history goes
+        with them, because no command can take back what is now on disk.
         """
-        if not os.path.exists(target):
-            return []
-        sources = []
-        for source in self._doc_model.sources:
-            try:
-                if os.path.exists(source) and os.path.samefile(target, source):
-                    sources.append(source)
-            except OSError:
-                continue
-        return sources
+        # os.replace() swapped the inode: the worker would keep reading the
+        # OLD document under that path from the handle it holds. The evict is
+        # queued before the renders the re-open asks for, so it lands first.
+        for source in overwritten:
+            self._worker.evict_requested.emit(source)
+
+        row = self._thumb_bar.current_row()
+        if not self.open_path(path):
+            # The old items point into a file that no longer matches them:
+            # keeping them on screen would be the very bug this avoids.
+            self._undo_stack.clear()
+            self._doc_model.close()
+            self._refresh_form_panel()
+            return
+        row = min(max(row, 0), self._doc_model.page_count - 1)
+        self._thumb_bar.set_current_row(row)
+        self._page_view.ensure_page_visible(row)
+        self._status.setText(
+            self.tr(
+                "Salvato e riaperto: {0}. Le modifiche ora sono nel file e non si "
+                "possono più annullare."
+            ).format(path)
+        )
 
     # ------------------------------------------------------------------ #
     #  Compressione
@@ -521,7 +540,7 @@ class MainWindow(QMainWindow):
         # Va calcolato PRIMA di scrivere: comprimendo sopra un sorgente il
         # file cambia inode, e dopo il confronto non riconoscerebbe piu`
         # l'originale.
-        self._compression_overwritten = self._sources_overwritten_by(path)
+        self._compression_overwritten = self._doc_model.sources_at(path)
         self._compression_path = path
 
         progresso = QProgressDialog(self)
@@ -550,11 +569,12 @@ class MainWindow(QMainWindow):
         self._close_progress()
         path = self._compression_path
 
-        # Come in _save_file: os.replace() cambia l'inode, quindi il worker
-        # terrebbe aperto il documento vecchio sotto quel percorso.
-        for source in self._compression_overwritten:
-            self._worker.evict_requested.emit(source)
-        self._status.setText(self.tr("Compresso: {0}").format(path))
+        # Same as _save_file: a compressed copy written over a source has
+        # replaced it, and the model must follow the file it now describes.
+        if self._compression_overwritten:
+            self._adopt_saved_file(path, self._compression_overwritten)
+        else:
+            self._status.setText(self.tr("Compresso: {0}").format(path))
 
         if result.shrank:
             QMessageBox.information(

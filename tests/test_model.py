@@ -208,3 +208,66 @@ def test_extract_preserves_user_order(mixed_model, tmp_path):
         assert doc.page_count == 2
         assert round(doc[0].rect.width) == 420
         assert round(doc[1].rect.width) == 595
+
+
+# --- scrivere sopra un sorgente aperto -----------------------------------
+
+def test_sources_at_matches_by_inode_not_by_spelling(mixed_model, mixed_pdf, tmp_path):
+    """Un altro modo di scrivere lo stesso percorso è lo stesso file."""
+    import os
+
+    stesso = os.path.join(os.path.dirname(mixed_pdf), ".", os.path.basename(mixed_pdf))
+    collegamento = str(tmp_path / "hardlink.pdf")
+    os.link(mixed_pdf, collegamento)
+
+    assert mixed_model.sources_at(stesso) == [mixed_pdf]
+    assert mixed_model.sources_at(collegamento) == [mixed_pdf]
+    assert mixed_model.sources_at(str(tmp_path / "altro.pdf")) == []
+
+
+def test_extract_over_an_open_source_is_refused(mixed_model, mixed_pdf):
+    """Un sottoinsieme scritto sopra il sorgente orfanerebbe le altre pagine.
+
+    Le pagine non estratte punterebbero a pagine che nel file non esistono
+    più, e il salvataggio successivo le perderebbe senza dire niente.
+    """
+    with pytest.raises(ValueError):
+        extract_pages(mixed_model, mixed_pdf, [0])
+    with fitz.open(mixed_pdf) as doc:
+        assert doc.page_count == 3, "il sorgente non deve essere toccato"
+
+
+def test_saved_file_reopened_is_the_document(qapp, tmp_path):
+    """Il file salvato sopra il sorgente È il documento: riaperto, rifà lo stesso file.
+
+    È il contratto su cui si appoggia MainWindow dopo una sovrascrittura:
+    eliminazioni, rotazioni e /Rotate di partenza sono già nel file, quindi
+    i PageItem nuovi non hanno niente da aggiungere.
+    """
+    sorgente = str(tmp_path / "doc.pdf")
+    doc = fitz.open()
+    for i in range(3):
+        pagina = doc.new_page(width=595, height=842)
+        pagina.insert_text((72, 72), f"PAGINA {i + 1}")
+    doc[2].set_rotation(90)
+    doc.save(sorgente)
+    doc.close()
+
+    model = DocumentModel()
+    model.open(sorgente)
+    DeletePage(model, 0).redo()
+    RotatePage(model, 0, 90).redo()
+    save_as(model, sorgente)
+
+    model.open(sorgente)
+    assert [(p.source_index, p.base_rotation, p.rotation) for p in model.pages] == [
+        (0, 90, 0),
+        (1, 90, 0),
+    ]
+    out = str(tmp_path / "di-nuovo.pdf")
+    save_as(model, out)
+    with fitz.open(out) as d:
+        assert [(p.get_text().strip(), p.rotation) for p in d] == [
+            ("PAGINA 2", 90),
+            ("PAGINA 3", 90),
+        ]

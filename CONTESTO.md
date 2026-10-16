@@ -65,7 +65,7 @@ plico/
     └── test_integration.py   # MainWindow vera, offscreen: ~67 test end-to-end
 ```
 
-Gate di qualità attuale: **164 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **188 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
 (17 file sorgente).
 
 ---
@@ -254,6 +254,12 @@ sovrascrive una sorgente, `save_as()` ha fatto `os.replace()` e l'inode è
 cambiato, ma il worker terrebbe aperto il documento **vecchio**. Senza
 l'evict, riaprire lo stesso file renderebbe il contenuto di prima del salvataggio.
 
+L'evict da solo **non basta**, e non è il punto: dopo una sovrascrittura è
+il *modello* a essere sbagliato (vedi §10, «Salvare sopra il file aperto»).
+`MainWindow._adopt_saved_file()` emette l'evict e poi **riapre il file
+salvato**; l'evict viaggia in coda prima dei render chiesti dalla riapertura,
+quindi arriva per primo.
+
 Punti che sembrano dettagli e non lo sono:
 
 - **Si emette `QImage`, mai `QPixmap`.** `QPixmap` esiste solo nel thread GUI;
@@ -393,6 +399,13 @@ La rotazione di più pagine selezionate va raggruppata con
   condividono `_write_atomically`, che scrive su un file temporaneo nella
   **stessa directory** e poi fa `os.replace()`. Salvare sopra il file aperto
   è sicuro: un errore a metà scrittura non può distruggere l'originale;
+- `DocumentModel.sources_at(path)` dice quali sorgenti sono lo stesso file di
+  *path*, confrontando l'**inode** (un'altra grafia del percorso o un hard link
+  contano). È l'unico test di «sto scrivendo sopra un file aperto»: lo usano
+  `_write_atomically` e `MainWindow`, che prima ne avevano due copie;
+- `extract_pages` **rifiuta** di scrivere sopra una sorgente aperta
+  (`ValueError`): un sottoinsieme lì lascerebbe le pagine non estratte a
+  puntare a pagine che non esistono più;
 - `parse_page_ranges(spec, page_count)` converte `"1-3,5,8"` in indici
   **0-based preservando l'ordine digitato** (quindi `"5,1-3"` riordina oltre
   che estrarre) e solleva `ValueError` per input malformati, fuori intervallo
@@ -641,6 +654,22 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
   **property derivata**. Così l'allineamento è una proprietà della struttura
   invece che una disciplina da mantenere. Vale per qualsiasi dato per-pagina
   che si voglia aggiungere in futuro.
+- **Salvare sopra il file aperto invalida il modello.** Dopo `os.replace()` il
+  file è il documento *materializzato*: pagine eliminate sparite, indici
+  rinumerati, rotazione utente scritta nella `/Rotate`, redazioni bruciate. I
+  `PageItem` però descrivevano ancora il file vecchio, quindi continuare a
+  lavorare rendeva le pagine sbagliate, ruotava due volte e **il salvataggio
+  successivo perdeva pagine in silenzio** (3 pagine, elimina la prima, ruota,
+  salva sopra, salva altrove: usciva solo «PAGINA 3», senza rotazione).
+  La correzione: dopo `save_as` o `save_compressed` sopra una sorgente,
+  `MainWindow._adopt_saved_file()` **riapre il file salvato** (che *è* il
+  documento), svuota cache e undo stack (niente può annullare ciò che è su
+  disco) e lo dice nella barra di stato. Le funzioni di `save.py` non lo
+  fanno da sole: `save_compressed` gira sul thread pool e non può toccare il
+  modello. Chi usa l'API direttamente deve riaprire da sé. Test:
+  `test_saving_over_the_open_file_then_saving_again_keeps_every_page`
+  (anche con `/Rotate` di partenza) e
+  `test_compressing_over_the_open_file_reopens_the_document`.
 - Un `QUndoCommand` che al `redo` non ricalcola lo stato è un comando rotto:
   `DeletePage.redo` faceva `insert` + `pop` sullo stesso indice (un no-op), per
   cui *redo dopo undo non cancellava nulla*. Il `redo` deve funzionare anche

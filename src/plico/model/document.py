@@ -7,6 +7,7 @@ redact. Every other feature (undo/redo, rendering, saving, splitting) is
 derived from that list.
 """
 
+import os
 from dataclasses import dataclass, field
 
 import fitz
@@ -184,6 +185,26 @@ class DocumentModel(QObject):
     def source_for(self, item: PageItem) -> str:
         """Path of the document that *item* points into."""
         return self.sources[item.source_id]
+
+    def sources_at(self, path: str) -> list[str]:
+        """The sources that *path* is the same file as, compared by inode.
+
+        Writing to one of them invalidates every page that points into it:
+        the file is replaced by the materialised document, so its page
+        numbers and its /Rotate values are no longer those the items were
+        read with. Comparing by inode and not by string catches another
+        spelling of the same path and hard links alike.
+        """
+        if not os.path.exists(path):
+            return []
+        found: list[str] = []
+        for source in self.sources:
+            try:
+                if os.path.exists(source) and os.path.samefile(path, source):
+                    found.append(source)
+            except OSError:
+                continue
+        return found
 
     def find_text(self, text: str) -> dict[int, list[RedactionRect]]:
         """Every occurrence of *text*, as redaction rectangles by page index.

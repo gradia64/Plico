@@ -139,10 +139,7 @@ def _write_atomically(
     """
     # Merging means several sources; overwriting ANY of them would have
     # PyMuPDF writing to a file it is still reading.
-    overwriting = os.path.exists(target) and any(
-        os.path.exists(src) and os.path.samefile(target, src)
-        for src in model.sources
-    )
+    overwriting = bool(model.sources_at(target))
 
     if not overwriting and optimize is None:
         _write_pdf(model, target, pages)
@@ -210,11 +207,23 @@ def extract_pages(model: DocumentModel, out_path: str, indices: list[int]) -> No
 
     This never mutates the open document -- the selection is materialised
     into a separate file, exactly like :func:`save_as`.
+
+    Extracting onto one of the open sources is refused. A full save over a
+    source can be followed by re-opening the file, because the file then IS
+    the document; a subset written there would leave the pages that were
+    not extracted pointing at pages that no longer exist, and the next save
+    would quietly drop them.
     """
     assert model.sources, "No document open"
     if not indices:
         raise ValueError("Nessuna pagina da estrarre.")
-    _write_atomically(model, os.path.abspath(out_path), indices)
+    target = os.path.abspath(out_path)
+    if model.sources_at(target):
+        raise ValueError(
+            "Non si possono estrarre pagine sopra un documento aperto: "
+            "scegli un altro file."
+        )
+    _write_atomically(model, target, indices)
 
 
 def parse_page_ranges(spec: str, page_count: int) -> list[int]:
