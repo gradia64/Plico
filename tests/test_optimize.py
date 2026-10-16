@@ -16,7 +16,7 @@ quietly worse file for the user.
 import os
 import random
 
-import fitz
+import pymupdf
 import pytest
 from PySide6.QtGui import QGuiApplication, QImage
 
@@ -28,30 +28,30 @@ from plico.model import (
     save_compressed,
 )
 
-# Il livello leggero deve dimezzare almeno un PDF di testo frammentato.
+# The light level must at least halve a fragmented text PDF.
 SOGLIA_TESTO = 0.5
-# Il livello medio deve togliere almeno un quarto a una scansione.
+# The medium level must take at least a quarter off a scan.
 SOGLIA_SCANSIONE = 0.75
 
 
 @pytest.fixture(scope="module")
 def qapp():
-    """Serve solo a QImage, per fabbricare il JPEG di una finta scansione."""
+    """Only needed for QImage, to build the JPEG of a fake scan."""
     yield QGuiApplication.instance() or QGuiApplication([])
 
 
-def _testo_frammentato(path: str, pagine: int = 20) -> None:
-    """Un PDF nella forma in cui i PDF veri arrivano: tante pagine, tanti stream.
+def _fragmented_text(path: str, pages: int = 20) -> None:
+    """A PDF in the shape real PDFs arrive in: many pages, many streams.
 
-    ``insert_text`` crea un oggetto per ogni chiamata, quindi il documento si
-    porta dietro centinaia di content stream minuscoli. E' esattamente la
-    forma in cui ``clean=True`` fa la differenza.
+    ``insert_text`` creates one object per call, so the document carries
+    hundreds of tiny content streams. That is exactly the shape in which
+    ``clean=True`` makes the difference.
     """
-    with fitz.open() as doc:
-        for i in range(pagine):
-            pagina = doc.new_page(width=595, height=842)
+    with pymupdf.open() as doc:
+        for i in range(pages):
+            page = doc.new_page(width=595, height=842)
             for k in range(40):
-                pagina.insert_text(
+                page.insert_text(
                     (60, 60 + k * 18),
                     f"Paragrafo {k} della pagina {i + 1}: contenuto ripetuto per occupare spazio.",
                     fontsize=10,
@@ -59,58 +59,59 @@ def _testo_frammentato(path: str, pagine: int = 20) -> None:
         doc.save(path, deflate=True)
 
 
-def _scansione(path: str, pagine: int = 3, lato: int = 1000) -> None:
-    """Un finto PDF scansionato: una grossa immagine JPEG per pagina.
+def _scan(path: str, pages: int = 3, side: int = 1000) -> None:
+    """A fake scanned PDF: one large JPEG image per page.
 
-    I pixel sono rumore, quindi incomprimibili: il ridimensionamento si
-    misura davvero invece di sparire dentro una compressione gia' ottima.
+    The pixels are noise, therefore incompressible: the downscaling is
+    really measured instead of vanishing inside an already excellent
+    compression.
 
-    L'immagine passa da QImage e non da ``fitz.Pixmap(cs, w, h, bytes)``:
-    quella firma non esiste in PyMuPDF 1.28 e la sua eccezione incorpora
-    l'intero buffer nei messaggi di errore.
+    The image goes through QImage and not ``pymupdf.Pixmap(cs, w, h, bytes)``:
+    that signature does not exist in PyMuPDF 1.28 and its exception embeds
+    the whole buffer in the error messages.
     """
     jpg = f"{path}.jpg"
-    campioni = random.Random(1).randbytes(lato * lato * 3)
-    QImage(campioni, lato, lato, lato * 3, QImage.Format.Format_RGB888).save(jpg, "JPEG", 95)
+    campioni = random.Random(1).randbytes(side * side * 3)
+    QImage(campioni, side, side, side * 3, QImage.Format.Format_RGB888).save(jpg, "JPEG", 95)
     try:
-        with fitz.open() as doc:
-            for _ in range(pagine):
-                pagina = doc.new_page(width=595, height=842)
-                pagina.insert_image(fitz.Rect(0, 0, 595, 842), filename=jpg)
+        with pymupdf.open() as doc:
+            for _ in range(pages):
+                page = doc.new_page(width=595, height=842)
+                page.insert_image(pymupdf.Rect(0, 0, 595, 842), filename=jpg)
             doc.save(path, deflate=True)
     finally:
         os.unlink(jpg)
 
 
 # --------------------------------------------------------------------- #
-#  I livelli
+#  The levels
 # --------------------------------------------------------------------- #
 
 def test_only_the_lossy_levels_touch_the_images():
-    """Un livello che ricampiona deve anche dire *dove* portare le immagini.
+    """A level that resamples must also say *where* to take the images.
 
-    Un ``image_target`` a zero con ``rewrites_images`` vero non farebbe nulla
-    e nessuno se ne accorgerebbe: meglio un test che lo dice.
+    An ``image_target`` of zero with ``rewrites_images`` true would do nothing
+    and nobody would notice: better a test that says so.
     """
-    for livello in LEVELS:
-        if livello.rewrites_images:
-            assert 0 < livello.image_target < livello.image_threshold, livello.key
-            assert 0 < livello.image_quality < 100, livello.key
+    for level in LEVELS:
+        if level.rewrites_images:
+            assert 0 < level.image_target < level.image_threshold, level.key
+            assert 0 < level.image_quality < 100, level.key
         else:
-            assert livello.image_target == 0, livello.key
-            assert livello.image_quality == 0, livello.key
+            assert level.image_target == 0, level.key
+            assert level.image_quality == 0, level.key
 
 
 def test_level_keys_are_unique_and_discoverable():
-    assert len({livello.key for livello in LEVELS}) == len(LEVELS)
-    assert all(LEVELS_BY_KEY[livello.key] is livello for livello in LEVELS)
+    assert len({level.key for level in LEVELS}) == len(LEVELS)
+    assert all(LEVELS_BY_KEY[level.key] is level for level in LEVELS)
 
 
 def test_the_levels_get_progressively_stronger():
-    """Piu` si scende di livello, piu` bassi bersaglio e qualita`."""
-    ridimensionano = [livello for livello in LEVELS if livello.rewrites_images]
-    bersagli = [livello.image_target for livello in ridimensionano]
-    qualita = [livello.image_quality for livello in ridimensionano]
+    """The further down the level, the lower the target and quality."""
+    ridimensionano = [level for level in LEVELS if level.rewrites_images]
+    bersagli = [level.image_target for level in ridimensionano]
+    qualita = [level.image_quality for level in ridimensionano]
     assert bersagli == sorted(bersagli, reverse=True)
     assert qualita == sorted(qualita, reverse=True)
 
@@ -121,78 +122,78 @@ def test_the_levels_get_progressively_stronger():
 
 def test_optimize_shrinks_a_fragmented_text_pdf(qapp, tmp_path):
     path = str(tmp_path / "frammentato.pdf")
-    _testo_frammentato(path)
-    prima = os.path.getsize(path)
+    _fragmented_text(path)
+    before = os.path.getsize(path)
 
     risultato = optimize_in_place(path, LEVELS_BY_KEY["light"])
 
-    dopo = os.path.getsize(path)
-    assert dopo < prima * SOGLIA_TESTO, f"{prima} -> {dopo} byte"
-    assert risultato.source_size == prima
-    assert risultato.output_size == dopo
+    after = os.path.getsize(path)
+    assert after < before * SOGLIA_TESTO, f"{before} -> {after} byte"
+    assert risultato.source_size == before
+    assert risultato.output_size == after
     assert risultato.shrank
-    assert risultato.saved_bytes == prima - dopo
+    assert risultato.saved_bytes == before - after
     assert risultato.percent_saved > 50
-    with fitz.open(path) as doc:
+    with pymupdf.open(path) as doc:
         assert doc.page_count == 20
 
 
 def test_optimize_keeps_the_text_readable(qapp, tmp_path):
-    """Comprimere non deve voler dire perdere il testo estraibile."""
+    """Compressing must not mean losing the extractable text."""
     path = str(tmp_path / "testo.pdf")
-    _testo_frammentato(path, pagine=3)
+    _fragmented_text(path, pages=3)
 
     optimize_in_place(path, LEVELS_BY_KEY["light"])
 
-    with fitz.open(path) as doc:
+    with pymupdf.open(path) as doc:
         assert "della pagina 2" in doc[1].get_text()
 
 
 def test_optimize_never_grows_an_already_optimized_file(qapp, tmp_path):
-    """Passare due volte sullo stesso file non deve peggiorarlo."""
+    """Going twice over the same file must not make it worse."""
     path = str(tmp_path / "gia.pdf")
-    _testo_frammentato(path)
+    _fragmented_text(path)
     optimize_in_place(path, LEVELS_BY_KEY["light"])
-    prima = os.path.getsize(path)
+    before = os.path.getsize(path)
 
     risultato = optimize_in_place(path, LEVELS_BY_KEY["light"])
 
-    assert os.path.getsize(path) <= prima
+    assert os.path.getsize(path) <= before
     if not risultato.shrank:
-        assert os.path.getsize(path) == prima
+        assert os.path.getsize(path) == before
 
 
 def test_optimize_keeps_page_rotation(qapp, tmp_path):
-    """La rotazione e` per pagina, e deve sopravvivere alla riscrittura."""
+    """Rotation is per page, and must survive the rewrite."""
     path = str(tmp_path / "ruotato.pdf")
-    _testo_frammentato(path, pagine=2)
-    with fitz.open(path) as doc:
+    _fragmented_text(path, pages=2)
+    with pymupdf.open(path) as doc:
         doc[1].set_rotation(90)
         doc.saveIncr()
 
     optimize_in_place(path, LEVELS_BY_KEY["light"])
 
-    with fitz.open(path) as doc:
+    with pymupdf.open(path) as doc:
         assert doc[0].rotation == 0
         assert doc[1].rotation == 90
 
 
 def test_optimize_reports_progress(qapp, tmp_path):
     path = str(tmp_path / "progresso.pdf")
-    _testo_frammentato(path, pagine=5)
+    _fragmented_text(path, pages=5)
     visti: list[int] = []
 
     optimize_in_place(path, LEVELS_BY_KEY["light"], progress=visti.append)
 
     assert visti, "pikepdf deve riportare l'avanzamento"
     assert visti[-1] == 100
-    assert all(0 <= valore <= 100 for valore in visti)
+    assert all(0 <= value <= 100 for value in visti)
 
 
 def test_optimize_without_progress_does_not_complain(qapp, tmp_path):
-    """Il callback e` opzionale: senza, non deve succedere niente."""
+    """The callback is optional: without it, nothing must happen."""
     path = str(tmp_path / "muto.pdf")
-    _testo_frammentato(path, pagine=3)
+    _fragmented_text(path, pages=3)
 
     optimize_in_place(path, LEVELS_BY_KEY["light"])
 
@@ -200,45 +201,45 @@ def test_optimize_without_progress_does_not_complain(qapp, tmp_path):
 
 
 # --------------------------------------------------------------------- #
-#  Le immagini: e` qui che si perde qualcosa, ed e` voluto
+#  The images: this is where something is lost, and on purpose
 # --------------------------------------------------------------------- #
 
 def test_medium_level_shrinks_a_scan(qapp, tmp_path):
     path = str(tmp_path / "scansione.pdf")
-    _scansione(path)
-    prima = os.path.getsize(path)
+    _scan(path)
+    before = os.path.getsize(path)
 
     risultato = optimize_in_place(path, LEVELS_BY_KEY["medium"])
 
-    dopo = os.path.getsize(path)
-    assert dopo < prima * SOGLIA_SCANSIONE, f"{prima} -> {dopo} byte"
+    after = os.path.getsize(path)
+    assert after < before * SOGLIA_SCANSIONE, f"{before} -> {after} byte"
     assert risultato.shrank
-    with fitz.open(path) as doc:
+    with pymupdf.open(path) as doc:
         assert doc.page_count == 3
         assert doc[0].get_images(), "l'immagine non deve sparire"
 
 
 def test_light_level_leaves_a_scan_alone(qapp, tmp_path):
-    """Il livello leggero non tocca le immagini: su una scansione non guadagna.
+    """The light level does not touch the images: on a scan it gains nothing.
 
-    Non e` un'ottimizzazione mancata, e` la promessa del livello: su un
-    documento gia' solo-immagini non c'e` niente da togliere senza perdere
-    qualcosa, e allora non si toglie niente.
+    It is not a missed optimization, it is the promise of the level: on a
+    document that is already image-only there is nothing to take away without
+    losing something, so nothing is taken away.
     """
     path = str(tmp_path / "scansione.pdf")
-    _scansione(path)
-    prima = os.path.getsize(path)
+    _scan(path)
+    before = os.path.getsize(path)
 
     optimize_in_place(path, LEVELS_BY_KEY["light"])
 
-    assert os.path.getsize(path) > prima * 0.95
+    assert os.path.getsize(path) > before * 0.95
 
 
 def test_strong_level_goes_further_than_medium(qapp, tmp_path):
     medio = str(tmp_path / "medio.pdf")
     forte = str(tmp_path / "forte.pdf")
-    _scansione(medio)
-    _scansione(forte)
+    _scan(medio)
+    _scan(forte)
 
     optimize_in_place(medio, LEVELS_BY_KEY["medium"])
     optimize_in_place(forte, LEVELS_BY_KEY["strong"])
@@ -251,69 +252,69 @@ def test_strong_level_goes_further_than_medium(qapp, tmp_path):
 # --------------------------------------------------------------------- #
 
 def test_save_compressed_writes_the_virtual_document(qapp, tmp_path):
-    """Il file compresso contiene il documento *virtuale*, non la sorgente."""
-    sorgente = str(tmp_path / "sorgente.pdf")
-    _testo_frammentato(sorgente, pagine=10)
-    destinazione = str(tmp_path / "compresso.pdf")
+    """The compressed file contains the *virtual* document, not the source."""
+    source = str(tmp_path / "sorgente.pdf")
+    _fragmented_text(source, pages=10)
+    destination = str(tmp_path / "compresso.pdf")
 
     model = DocumentModel()
-    model.open(sorgente)
+    model.open(source)
     model.pages.pop(0)
     model.pages.pop(0)
     model.pages[0].rotation = 90
 
-    risultato = save_compressed(model, destinazione, LEVELS_BY_KEY["light"])
+    risultato = save_compressed(model, destination, LEVELS_BY_KEY["light"])
 
     assert risultato.shrank
-    with fitz.open(destinazione) as doc:
+    with pymupdf.open(destination) as doc:
         assert doc.page_count == 8
         assert doc[0].rotation == 90
         assert "della pagina 3" in doc[0].get_text()
-    with fitz.open(sorgente) as doc:
+    with pymupdf.open(source) as doc:
         assert doc.page_count == 10, "la sorgente non si tocca"
 
 
 def test_save_compressed_can_overwrite_the_open_source(qapp, tmp_path):
-    """Comprimere sopra il file aperto: contenuto giusto, inode nuovo."""
-    sorgente = str(tmp_path / "doc.pdf")
-    _testo_frammentato(sorgente, pagine=6)
-    prima = os.path.getsize(sorgente)
+    """Compressing over the open file: right content, new inode."""
+    source = str(tmp_path / "doc.pdf")
+    _fragmented_text(source, pages=6)
+    before = os.path.getsize(source)
 
     model = DocumentModel()
-    model.open(sorgente)
+    model.open(source)
     model.pages.pop(0)
 
-    save_compressed(model, sorgente, LEVELS_BY_KEY["light"])
+    save_compressed(model, source, LEVELS_BY_KEY["light"])
 
-    assert os.path.getsize(sorgente) < prima
-    with fitz.open(sorgente) as doc:
+    assert os.path.getsize(source) < before
+    with pymupdf.open(source) as doc:
         assert doc.page_count == 5
 
 
 def test_save_compressed_leaves_no_temporary_behind(qapp, tmp_path):
-    """I temporanei nascono accanto al file: non devono restare li`."""
-    sorgente = str(tmp_path / "doc.pdf")
-    _testo_frammentato(sorgente, pagine=5)
-    destinazione = str(tmp_path / "compresso.pdf")
+    """Temporaries are born next to the file: they must not stay there."""
+    source = str(tmp_path / "doc.pdf")
+    _fragmented_text(source, pages=5)
+    destination = str(tmp_path / "compresso.pdf")
 
     model = DocumentModel()
-    model.open(sorgente)
-    save_compressed(model, destinazione, LEVELS_BY_KEY["light"])
+    model.open(source)
+    save_compressed(model, destination, LEVELS_BY_KEY["light"])
 
-    residui = [nome for nome in os.listdir(tmp_path) if nome.endswith(".tmp")]
+    residui = [name for name in os.listdir(tmp_path) if name.endswith(".tmp")]
     assert residui == []
 
 
 def test_save_compressed_without_pages_is_refused(qapp, tmp_path):
-    """Un documento svuotato non deve produrre un PDF senza pagine."""
-    sorgente = str(tmp_path / "doc.pdf")
-    _testo_frammentato(sorgente, pagine=2)
-    destinazione = str(tmp_path / "compresso.pdf")
+    """An emptied document must not produce a PDF with no pages."""
+    source = str(tmp_path / "doc.pdf")
+    _fragmented_text(source, pages=2)
+    destination = str(tmp_path / "compresso.pdf")
 
     model = DocumentModel()
-    model.open(sorgente)
+    model.open(source)
     model.pages.clear()
 
     with pytest.raises(ValueError):
-        save_compressed(model, destinazione, LEVELS_BY_KEY["light"])
-    assert not os.path.exists(destinazione)
+        save_compressed(model, destination, LEVELS_BY_KEY["light"])
+    assert not os.path.exists(destination)

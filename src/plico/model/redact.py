@@ -14,7 +14,7 @@ next to the secret instead of on top of it:
   it) plus the user's rotation offset on top.
 
 The four matrices below were read off PyMuPDF's ``Page.rotation_matrix`` and
-are pinned against fitz itself by ``tests/test_redact.py``: if a PyMuPDF
+are pinned against PyMuPDF itself by ``tests/test_redact.py``: if a PyMuPDF
 upgrade ever changes them, the suite fails instead of quietly misplacing a
 redaction.
 """
@@ -61,7 +61,7 @@ class RedactionRect:
         return self.y1 - self.y0
 
     def as_tuple(self) -> tuple[float, float, float, float]:
-        """The four numbers, in the order ``fitz.Rect`` takes them."""
+        """The four numbers, in the order ``pymupdf.Rect`` takes them."""
         return (self.x0, self.y0, self.x1, self.y1)
 
     def clamped_to(self, width: float, height: float) -> "RedactionRect":

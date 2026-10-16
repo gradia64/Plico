@@ -1,16 +1,16 @@
-"""Redazione: la geometria, i comandi e la rimozione vera del testo.
+"""Redaction: the geometry, the commands and the real removal of the text.
 
-Le quattro matrici di ``model/redact.py`` sono state lette da
-``Page.rotation_matrix`` di PyMuPDF, e qui vengono confrontate di nuovo con
-fitz: se un aggiornamento di PyMuPDF le cambiasse, la suite fallisce invece di
-spostare in silenzio un rettangolo.
+The four matrices of ``model/redact.py`` were read from
+PyMuPDF's ``Page.rotation_matrix``, and here they are compared again against
+PyMuPDF: if a PyMuPDF update changed them, the suite fails instead of
+silently moving a rectangle.
 
-L'ultima parte e` quella che conta davvero: dopo il salvataggio il testo
-marcato non deve piu` *esistere* nel file, non solo essere coperto da un
-rettangolo nero.
+The last part is the one that really counts: after saving, the marked text
+must no longer *exist* in the file, not merely be covered by a
+black rectangle.
 """
 
-import fitz
+import pymupdf
 import pytest
 
 from plico.model import LEVELS_BY_KEY, DocumentModel, RedactionRect, save_as, save_compressed
@@ -27,10 +27,10 @@ SEGRETO = "SEGRETO"
 PUBBLICO = "PUBBLICO"
 
 
-def _pdf_con_testo(path: str, rotation: int = 0, pagine: int = 1) -> None:
-    """Due parole ben distanti su una A4: una da redigere, una da conservare."""
-    with fitz.open() as doc:
-        for _ in range(pagine):
+def _pdf_with_text(path: str, rotation: int = 0, pages: int = 1) -> None:
+    """Two well-separated words on an A4: one to redact, one to keep."""
+    with pymupdf.open() as doc:
+        for _ in range(pages):
             page = doc.new_page(width=595, height=842)
             page.insert_text((100, 100), SEGRETO, fontsize=20)
             page.insert_text((100, 700), PUBBLICO, fontsize=20)
@@ -39,50 +39,50 @@ def _pdf_con_testo(path: str, rotation: int = 0, pagine: int = 1) -> None:
         doc.save(path)
 
 
-def _rettangolo_del_segreto(path: str) -> RedactionRect:
-    """Il rettangolo da redigere, letto dalla pagina sorgente.
+def _secret_rect(path: str) -> RedactionRect:
+    """The rectangle to redact, read from the source page.
 
-    ``search_for`` restituisce coordinate nello spazio NON ruotato: e` lo
-    stesso spazio in cui il modello conserva le redazioni, quindi qui non
-    serve nessuna conversione.
+    ``search_for`` returns coordinates in the NON-rotated space: it is the
+    same space in which the model stores the redactions, so no
+    conversion is needed here.
     """
-    with fitz.open(path) as doc:
-        area = doc[0].search_for(SEGRETO)[0]
-    return RedactionRect.from_corners(area.x0, area.y0, area.x1, area.y1)
+    with pymupdf.open(path) as doc:
+        box = doc[0].search_for(SEGRETO)[0]
+    return RedactionRect.from_corners(box.x0, box.y0, box.x1, box.y1)
 
 
 # --------------------------------------------------------------------- #
-#  Geometria
+#  Geometry
 # --------------------------------------------------------------------- #
 
-@pytest.mark.parametrize("gradi", [0, 90, 180, 270])
-def test_le_matrici_sono_quelle_di_pymupdf(tmp_path, gradi: int) -> None:
-    """Non «simili»: identiche a quelle che usa MuPDF per la stessa pagina."""
+@pytest.mark.parametrize("degrees", [0, 90, 180, 270])
+def test_the_matrices_are_the_pymupdf_ones(tmp_path, degrees: int) -> None:
+    """Not «similar»: identical to the ones MuPDF uses for the same page."""
     src = str(tmp_path / "g.pdf")
-    with fitz.open() as doc:
-        doc.new_page(width=595, height=842).set_rotation(gradi)
+    with pymupdf.open() as doc:
+        doc.new_page(width=595, height=842).set_rotation(degrees)
         doc.save(src)
 
-    with fitz.open(src) as doc:
+    with pymupdf.open(src) as doc:
         page = doc[0]
         avanti = page.rotation_matrix
         indietro = page.derotation_matrix
 
-    nostra = rotation_matrix(595, 842, gradi)
+    nostra = rotation_matrix(595, 842, degrees)
     assert (avanti.a, avanti.b, avanti.c, avanti.d, avanti.e, avanti.f) == pytest.approx(nostra)
-    nostra_inversa = derotation_matrix(595, 842, gradi)
+    nostra_inversa = derotation_matrix(595, 842, degrees)
     assert (indietro.a, indietro.b, indietro.c, indietro.d, indietro.e, indietro.f) == pytest.approx(
         nostra_inversa
     )
 
 
-@pytest.mark.parametrize("gradi", [0, 90, 180, 270])
-def test_andata_e_ritorno_nello_spazio_vista(gradi: int) -> None:
-    """Quello che l'utente disegna deve tornare dov'era, senza derive."""
+@pytest.mark.parametrize("degrees", [0, 90, 180, 270])
+def test_round_trip_through_view_space(degrees: int) -> None:
+    """What the user draws must come back where it was, without drift."""
     rect = RedactionRect.from_corners(100.0, 78.5, 197.8, 106.0)
 
-    in_vista = map_rect(rect, rotation_matrix(595, 842, gradi))
-    indietro = map_rect(in_vista, derotation_matrix(595, 842, gradi))
+    in_view = map_rect(rect, rotation_matrix(595, 842, degrees))
+    indietro = map_rect(in_view, derotation_matrix(595, 842, degrees))
 
     assert indietro.x0 == pytest.approx(rect.x0, abs=1e-9)
     assert indietro.y0 == pytest.approx(rect.y0, abs=1e-9)
@@ -91,71 +91,71 @@ def test_andata_e_ritorno_nello_spazio_vista(gradi: int) -> None:
 
 
 @pytest.mark.parametrize(
-    "gradi,larghezza,altezza",
+    "degrees,width,height",
     [(0, 595, 842), (90, 842, 595), (180, 595, 842), (270, 842, 595)],
 )
-def test_in_vista_il_rettangolo_resta_dentro_la_pagina(
-    gradi: int, larghezza: int, altezza: int
+def test_in_view_space_the_rect_stays_inside_the_page(
+    degrees: int, width: int, height: int
 ) -> None:
     rect = RedactionRect.from_corners(100.0, 100.0, 200.0, 130.0)
-    in_vista = map_rect(rect, rotation_matrix(595, 842, gradi))
+    in_view = map_rect(rect, rotation_matrix(595, 842, degrees))
 
-    assert in_vista.x0 >= -1e-9
-    assert in_vista.y0 >= -1e-9
-    assert in_vista.x1 <= larghezza + 1e-9
-    assert in_vista.y1 <= altezza + 1e-9
+    assert in_view.x0 >= -1e-9
+    assert in_view.y0 >= -1e-9
+    assert in_view.x1 <= width + 1e-9
+    assert in_view.y1 <= height + 1e-9
 
 
-def test_un_punto_segue_la_matrice() -> None:
-    """Il caso piu` semplice, per fissare la convenzione (a·x + c·y + e, …)."""
+def test_a_point_follows_the_matrix() -> None:
+    """The simplest case, to fix the convention (a·x + c·y + e, …)."""
     x, y = map_point(10.0, 20.0, (2.0, 0.0, 0.0, 3.0, 5.0, 7.0))
     assert (x, y) == pytest.approx((25.0, 67.0))
 
 
-def test_la_dimensione_non_ruotata_raddrizza_i_quarti_dispari() -> None:
-    """``width_pt`` viene da ``page.rect``, che ha gia` applicato il /Rotate."""
+def test_the_unrotated_size_straightens_odd_quarters() -> None:
+    """``width_pt`` comes from ``page.rect``, which has already applied /Rotate."""
     assert unrotated_size(595, 842, 0) == (595, 842)
     assert unrotated_size(595, 842, 180) == (595, 842)
     assert unrotated_size(842, 595, 90) == (595, 842)
     assert unrotated_size(842, 595, 270) == (595, 842)
 
 
-@pytest.mark.parametrize("gradi", [1, 45, 359])
-def test_una_rotazione_non_gestita_e_un_errore(gradi: int) -> None:
-    """Meglio un errore rumoroso che una redazione nel posto sbagliato."""
+@pytest.mark.parametrize("degrees", [1, 45, 359])
+def test_an_unsupported_rotation_is_an_error(degrees: int) -> None:
+    """Better a loud error than a redaction in the wrong place."""
     with pytest.raises(ValueError):
-        rotation_matrix(595, 842, gradi)
+        rotation_matrix(595, 842, degrees)
     with pytest.raises(ValueError):
-        derotation_matrix(595, 842, gradi)
+        derotation_matrix(595, 842, degrees)
 
 
-def test_un_rettangolo_si_costruisce_da_angoli_qualsiasi() -> None:
-    """Un trascinamento puo` partire da qualunque angolo."""
+def test_a_rect_is_built_from_any_corners() -> None:
+    """A drag can start from any corner."""
     rect = RedactionRect.from_corners(200.0, 300.0, 100.0, 150.0)
     assert rect.as_tuple() == (100.0, 150.0, 200.0, 300.0)
     assert rect.width == 100.0
     assert rect.height == 150.0
 
 
-def test_il_rettangolo_viene_ritagliato_sulla_pagina() -> None:
+def test_the_rect_is_clamped_to_the_page() -> None:
     rect = RedactionRect.from_corners(-10.0, -20.0, 700.0, 900.0).clamped_to(595, 842)
     assert rect.as_tuple() == (0.0, 0.0, 595.0, 842.0)
 
 
 # --------------------------------------------------------------------- #
-#  Comandi
+#  Commands
 # --------------------------------------------------------------------- #
 
-def test_aggiungere_una_redazione_e_annullabile(tmp_path) -> None:
+def test_adding_a_redaction_is_undoable(tmp_path) -> None:
     src = str(tmp_path / "doc.pdf")
-    _pdf_con_testo(src)
+    _pdf_with_text(src)
 
     model = DocumentModel()
     model.open(src)
     visti: list[int] = []
     model.page_changed.connect(visti.append)
 
-    rect = _rettangolo_del_segreto(src)
+    rect = _secret_rect(src)
     comando = AddRedaction(model, 0, rect)
 
     comando.redo()
@@ -170,13 +170,13 @@ def test_aggiungere_una_redazione_e_annullabile(tmp_path) -> None:
     assert model.pages[0].redactions == [rect], "un redo dopo l'undo deve rimetterla"
 
 
-def test_togliere_una_redazione_e_annullabile(tmp_path) -> None:
+def test_removing_a_redaction_is_undoable(tmp_path) -> None:
     src = str(tmp_path / "doc.pdf")
-    _pdf_con_testo(src)
+    _pdf_with_text(src)
 
     model = DocumentModel()
     model.open(src)
-    rect = _rettangolo_del_segreto(src)
+    rect = _secret_rect(src)
     model.pages[0].redactions.append(rect)
 
     comando = RemoveRedaction(model, 0, rect)
@@ -191,138 +191,186 @@ def test_togliere_una_redazione_e_annullabile(tmp_path) -> None:
 
 
 # --------------------------------------------------------------------- #
-#  Il salvataggio: qui si vede se la redazione e` vera
+#  Saving: here you see whether the redaction is real
 # --------------------------------------------------------------------- #
 
-def test_il_testo_marcato_non_e_piu_nel_file(tmp_path) -> None:
-    """La prova che conta: rimosso, non coperto."""
+def test_the_marked_text_is_no_longer_in_the_file(tmp_path) -> None:
+    """The test that counts: removed, not covered."""
     src = str(tmp_path / "doc.pdf")
     out = str(tmp_path / "out.pdf")
-    _pdf_con_testo(src)
+    _pdf_with_text(src)
 
     model = DocumentModel()
     model.open(src)
-    model.pages[0].redactions.append(_rettangolo_del_segreto(src))
+    model.pages[0].redactions.append(_secret_rect(src))
     save_as(model, out)
 
-    with fitz.open(out) as doc:
-        testo = doc[0].get_text()
-    assert SEGRETO not in testo, "il testo marcato e` ancora nel documento"
-    assert PUBBLICO in testo, "la redazione ha portato via anche il resto"
+    with pymupdf.open(out) as doc:
+        text = doc[0].get_text()
+    assert SEGRETO not in text, "il testo marcato e` ancora nel documento"
+    assert PUBBLICO in text, "la redazione ha portato via anche il resto"
 
 
-def test_la_sorgente_non_viene_toccata(tmp_path) -> None:
-    """L'invariante del progetto: finche` non salvi, il PDF non si tocca."""
+def test_the_source_is_not_touched(tmp_path) -> None:
+    """The project invariant: as long as you do not save, the PDF is not touched."""
     src = str(tmp_path / "doc.pdf")
     out = str(tmp_path / "out.pdf")
-    _pdf_con_testo(src)
+    _pdf_with_text(src)
 
     model = DocumentModel()
     model.open(src)
-    model.pages[0].redactions.append(_rettangolo_del_segreto(src))
+    model.pages[0].redactions.append(_secret_rect(src))
     save_as(model, out)
 
-    with fitz.open(src) as doc:
+    with pymupdf.open(src) as doc:
         assert SEGRETO in doc[0].get_text(), "la redazione e` finita sulla sorgente"
 
 
-@pytest.mark.parametrize("rotazione", [90, 180, 270])
-def test_la_redazione_regge_anche_ruotando_la_pagina(tmp_path, rotazione: int) -> None:
-    """La pagina ruota, il rettangolo resta sulle stesse parole."""
+def _pdf_with_notes(path: str) -> None:
+    """One word to redact and two sticky notes: one on it, one far away."""
+    with pymupdf.open() as doc:
+        page = doc.new_page(width=595, height=842)
+        page.insert_text((100, 100), SEGRETO, fontsize=20)
+        page.insert_text((100, 700), PUBBLICO, fontsize=20)
+        page.add_text_annot(pymupdf.Point(108, 98), SEGRETO)
+        page.add_text_annot(pymupdf.Point(108, 698), PUBBLICO)
+        doc.save(path)
+
+
+def _notes_of(path: str) -> list[str]:
+    with pymupdf.open(path) as doc:
+        return [annot.info["content"] for annot in doc[0].annots() or []]
+
+
+def test_an_annotation_on_a_redaction_goes_with_the_text(tmp_path) -> None:
+    """``apply_redactions`` removes the content but leaves the annotations.
+
+    Measured: a sticky note repeating the redacted word survived the save, so
+    the redaction leaked exactly what it was meant to hide. It has to go.
+    """
     src = str(tmp_path / "doc.pdf")
     out = str(tmp_path / "out.pdf")
-    _pdf_con_testo(src)
+    _pdf_with_notes(src)
 
     model = DocumentModel()
     model.open(src)
-    model.pages[0].rotation = rotazione
-    assert model.pages[0].total_rotation == rotazione
-    model.pages[0].redactions.append(_rettangolo_del_segreto(src))
+    model.pages[0].redactions.append(_secret_rect(src))
     save_as(model, out)
 
-    with fitz.open(out) as doc:
-        page = doc[0]
-        assert page.rotation == rotazione, "il salvataggio ha perso la rotazione"
-        testo = page.get_text()
-    assert SEGRETO not in testo, "ruotando, il rettangolo e` finito altrove"
-    assert PUBBLICO in testo
+    assert SEGRETO not in _notes_of(out), "la nota sopra la redazione e` rimasta"
 
 
-def test_una_pagina_ruotata_nella_sorgente(tmp_path) -> None:
-    """Se il /Rotate e` nel file di partenza, il modello lo porta con se`."""
+def test_an_annotation_away_from_the_redaction_stays(tmp_path) -> None:
+    """The rule is «touches», not «is on the same page»: everything else stays."""
     src = str(tmp_path / "doc.pdf")
     out = str(tmp_path / "out.pdf")
-    _pdf_con_testo(src, rotation=90)
+    _pdf_with_notes(src)
+
+    model = DocumentModel()
+    model.open(src)
+    model.pages[0].redactions.append(_secret_rect(src))
+    save_as(model, out)
+
+    assert PUBBLICO in _notes_of(out), "la nota lontana e` stata tolta"
+
+
+@pytest.mark.parametrize("rotation", [90, 180, 270])
+def test_the_redaction_also_holds_with_a_rotated_page(tmp_path, rotation: int) -> None:
+    """The page rotates, the rectangle stays on the same words."""
+    src = str(tmp_path / "doc.pdf")
+    out = str(tmp_path / "out.pdf")
+    _pdf_with_text(src)
+
+    model = DocumentModel()
+    model.open(src)
+    model.pages[0].rotation = rotation
+    assert model.pages[0].total_rotation == rotation
+    model.pages[0].redactions.append(_secret_rect(src))
+    save_as(model, out)
+
+    with pymupdf.open(out) as doc:
+        page = doc[0]
+        assert page.rotation == rotation, "il salvataggio ha perso la rotazione"
+        text = page.get_text()
+    assert SEGRETO not in text, "ruotando, il rettangolo e` finito altrove"
+    assert PUBBLICO in text
+
+
+def test_a_page_rotated_in_the_source(tmp_path) -> None:
+    """If the /Rotate is in the starting file, the model carries it along."""
+    src = str(tmp_path / "doc.pdf")
+    out = str(tmp_path / "out.pdf")
+    _pdf_with_text(src, rotation=90)
 
     model = DocumentModel()
     model.open(src)
     assert model.pages[0].base_rotation == 90
     assert model.pages[0].unrotated_size == (595, 842)
-    model.pages[0].redactions.append(_rettangolo_del_segreto(src))
+    model.pages[0].redactions.append(_secret_rect(src))
     save_as(model, out)
 
-    with fitz.open(out) as doc:
+    with pymupdf.open(out) as doc:
         assert doc[0].rotation == 90
         assert SEGRETO not in doc[0].get_text()
         assert PUBBLICO in doc[0].get_text()
 
 
-def test_una_redazione_finisce_sulla_sua_pagina(tmp_path) -> None:
+def test_a_redaction_lands_on_its_own_page(tmp_path) -> None:
     src = str(tmp_path / "doc.pdf")
     out = str(tmp_path / "out.pdf")
-    _pdf_con_testo(src, pagine=3)
+    _pdf_with_text(src, pages=3)
 
     model = DocumentModel()
     model.open(src)
-    model.pages[1].redactions.append(_rettangolo_del_segreto(src))
+    model.pages[1].redactions.append(_secret_rect(src))
     save_as(model, out)
 
-    with fitz.open(out) as doc:
+    with pymupdf.open(out) as doc:
         assert SEGRETO in doc[0].get_text(), "la prima pagina non era marcata"
         assert SEGRETO not in doc[1].get_text(), "la seconda pagina non e` stata redatta"
         assert SEGRETO in doc[2].get_text(), "la terza pagina non era marcata"
 
 
-def test_anche_salvando_compresso_il_testo_sparisce(tmp_path) -> None:
-    """I due percorsi di salvataggio devono applicare le stesse redazioni."""
+def test_the_text_disappears_when_saving_compressed_too(tmp_path) -> None:
+    """The two save paths must apply the same redactions."""
     src = str(tmp_path / "doc.pdf")
     out = str(tmp_path / "out.pdf")
-    _pdf_con_testo(src)
+    _pdf_with_text(src)
 
     model = DocumentModel()
     model.open(src)
-    model.pages[0].redactions.append(_rettangolo_del_segreto(src))
+    model.pages[0].redactions.append(_secret_rect(src))
     save_compressed(model, out, LEVELS_BY_KEY["light"])
 
-    with fitz.open(out) as doc:
+    with pymupdf.open(out) as doc:
         assert SEGRETO not in doc[0].get_text()
         assert PUBBLICO in doc[0].get_text()
 
 
-def test_senza_redazioni_il_testo_resta(tmp_path) -> None:
-    """Controprova: il percorso di redazione non si attiva per sbaglio."""
+def test_without_redactions_the_text_stays(tmp_path) -> None:
+    """Counter-check: the redaction path does not activate by mistake."""
     src = str(tmp_path / "doc.pdf")
     out = str(tmp_path / "out.pdf")
-    _pdf_con_testo(src)
+    _pdf_with_text(src)
 
     model = DocumentModel()
     model.open(src)
     save_as(model, out)
 
-    with fitz.open(out) as doc:
+    with pymupdf.open(out) as doc:
         assert SEGRETO in doc[0].get_text()
         assert PUBBLICO in doc[0].get_text()
 
 
 # --------------------------------------------------------------------- #
-#  Cercare una parola e marcarla ovunque
+#  Searching for a word and marking it everywhere
 # --------------------------------------------------------------------- #
 
 
-def test_find_text_trova_le_occorrenze_su_tutte_le_pagine(tmp_path) -> None:
-    """La ricerca guarda ogni pagina, non solo quella che si vede."""
+def test_find_text_finds_occurrences_on_every_page(tmp_path) -> None:
+    """The search looks at every page, not only the one on screen."""
     src = str(tmp_path / "doc.pdf")
-    _pdf_con_testo(src, pagine=3)
+    _pdf_with_text(src, pages=3)
 
     model = DocumentModel()
     model.open(src)
@@ -332,9 +380,9 @@ def test_find_text_trova_le_occorrenze_su_tutte_le_pagine(tmp_path) -> None:
     assert all(len(rects) == 1 for rects in trovati.values())
 
 
-def test_find_text_trova_piu_occorrenze_sulla_stessa_pagina(tmp_path) -> None:
+def test_find_text_finds_several_occurrences_on_one_page(tmp_path) -> None:
     src = str(tmp_path / "doc.pdf")
-    with fitz.open() as doc:
+    with pymupdf.open() as doc:
         page = doc.new_page(width=595, height=842)
         page.insert_text((100, 100), SEGRETO, fontsize=20)
         page.insert_text((100, 300), SEGRETO, fontsize=20)
@@ -347,9 +395,9 @@ def test_find_text_trova_piu_occorrenze_sulla_stessa_pagina(tmp_path) -> None:
     assert len(model.find_text(SEGRETO)[0]) == 2
 
 
-def test_find_text_non_trova_cio_che_non_ce(tmp_path) -> None:
+def test_find_text_finds_nothing_where_there_is_nothing(tmp_path) -> None:
     src = str(tmp_path / "doc.pdf")
-    _pdf_con_testo(src)
+    _pdf_with_text(src)
 
     model = DocumentModel()
     model.open(src)
@@ -358,10 +406,10 @@ def test_find_text_non_trova_cio_che_non_ce(tmp_path) -> None:
     assert model.find_text("") == {}
 
 
-def test_find_text_non_tocca_niente(tmp_path) -> None:
-    """Cercare e` una lettura: nessuna redazione nasce da sola."""
+def test_find_text_changes_nothing(tmp_path) -> None:
+    """Searching is a read: no redaction is born by itself."""
     src = str(tmp_path / "doc.pdf")
-    _pdf_con_testo(src, pagine=2)
+    _pdf_with_text(src, pages=2)
 
     model = DocumentModel()
     model.open(src)
@@ -370,61 +418,61 @@ def test_find_text_non_tocca_niente(tmp_path) -> None:
     assert all(not item.redactions for item in model.pages)
 
 
-def test_find_text_non_si_ripete_sopra_una_redazione_gia_messa(tmp_path) -> None:
-    """Cercare due volte la stessa parola non accatasta rettangoli uguali."""
+def test_find_text_does_not_repeat_over_an_existing_mark(tmp_path) -> None:
+    """Searching twice for the same word does not stack identical rectangles."""
     src = str(tmp_path / "doc.pdf")
-    _pdf_con_testo(src)
+    _pdf_with_text(src)
 
     model = DocumentModel()
     model.open(src)
 
-    primo = model.find_text(SEGRETO)
-    assert len(primo[0]) == 1
-    model.pages[0].redactions.extend(primo[0])
+    first = model.find_text(SEGRETO)
+    assert len(first[0]) == 1
+    model.pages[0].redactions.extend(first[0])
 
     assert model.find_text(SEGRETO) == {}
 
 
-def test_find_text_segue_la_lista_virtuale_dopo_un_unione(tmp_path) -> None:
-    """Le occorrenze sono indicizzate sulle pagine del modello, non del file."""
-    primo = str(tmp_path / "a.pdf")
-    secondo = str(tmp_path / "b.pdf")
-    _pdf_con_testo(primo)
-    _pdf_con_testo(secondo)
+def test_find_text_follows_the_virtual_list_after_a_merge(tmp_path) -> None:
+    """The occurrences are indexed on the pages of the model, not of the file."""
+    first = str(tmp_path / "a.pdf")
+    second = str(tmp_path / "b.pdf")
+    _pdf_with_text(first)
+    _pdf_with_text(second)
 
     model = DocumentModel()
-    model.open(primo)
-    model.append_document(secondo)
+    model.open(first)
+    model.append_document(second)
     model.pages.pop(0)
 
     assert list(model.find_text(SEGRETO)) == [0]
 
 
-def test_find_text_e_la_redazione_che_ne_deriva_cancellano_davvero(tmp_path) -> None:
-    """Il giro completo: cerca, marca, salva, verifica."""
+def test_find_text_and_the_redaction_it_produces_really_delete(tmp_path) -> None:
+    """The full round: search, mark, save, verify."""
     src = str(tmp_path / "doc.pdf")
     out = str(tmp_path / "out.pdf")
-    _pdf_con_testo(src, pagine=3)
+    _pdf_with_text(src, pages=3)
 
     model = DocumentModel()
     model.open(src)
-    for indice, rects in model.find_text(SEGRETO).items():
-        model.pages[indice].redactions.extend(rects)
+    for index, rects in model.find_text(SEGRETO).items():
+        model.pages[index].redactions.extend(rects)
     save_as(model, out)
 
-    with fitz.open(out) as doc:
+    with pymupdf.open(out) as doc:
         assert doc.page_count == 3
         for page in doc:
             assert SEGRETO not in page.get_text()
             assert PUBBLICO in page.get_text()
 
 
-@pytest.mark.parametrize("rotazione", [90, 180, 270])
-def test_find_text_regge_anche_ruotando_la_pagina(tmp_path, rotazione: int) -> None:
-    """La ricerca risponde nello spazio che la redazione si aspetta."""
+@pytest.mark.parametrize("rotation", [90, 180, 270])
+def test_find_text_also_holds_with_a_rotated_page(tmp_path, rotation: int) -> None:
+    """The search answers in the space the redaction expects."""
     src = str(tmp_path / "doc.pdf")
     out = str(tmp_path / "out.pdf")
-    _pdf_con_testo(src, rotation=rotazione)
+    _pdf_with_text(src, rotation=rotation)
 
     model = DocumentModel()
     model.open(src)
@@ -433,7 +481,7 @@ def test_find_text_regge_anche_ruotando_la_pagina(tmp_path, rotazione: int) -> N
     model.pages[0].redactions.extend(trovati[0])
     save_as(model, out)
 
-    with fitz.open(out) as doc:
-        assert doc[0].rotation == rotazione
+    with pymupdf.open(out) as doc:
+        assert doc[0].rotation == rotation
         assert SEGRETO not in doc[0].get_text()
         assert PUBBLICO in doc[0].get_text()

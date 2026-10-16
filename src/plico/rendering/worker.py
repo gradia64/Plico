@@ -1,4 +1,4 @@
-"""RenderWorker — lives in its own QThread and owns every fitz handle.
+"""RenderWorker — lives in its own QThread and owns every PyMuPDF handle.
 
 Key design decisions:
   - The worker is the ONLY thing that renders. It opens each source document
@@ -20,7 +20,7 @@ Key design decisions:
 
 from collections import OrderedDict
 
-import fitz
+import pymupdf
 from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtGui import QImage
 
@@ -54,7 +54,7 @@ class RenderRequest:
 
 
 class RenderWorker(QObject):
-    """Owns the fitz document handles; communicates entirely via signals."""
+    """Owns the PyMuPDF document handles; communicates entirely via signals."""
 
     render_requested = Signal(object)
     rendered = Signal(object, QImage)   # emit QImage, NOT QPixmap
@@ -72,18 +72,18 @@ class RenderWorker(QObject):
         super().__init__()
         # Keyed by path: the same file merged twice shares one handle, and a
         # reused source_id can never be confused with a different document.
-        self._docs: OrderedDict[str, fitz.Document] = OrderedDict()
+        self._docs: OrderedDict[str, pymupdf.Document] = OrderedDict()
         self.render_requested.connect(self._render)
         self.evict_requested.connect(self._evict)
 
-    def _doc_for(self, path: str) -> fitz.Document | None:
+    def _doc_for(self, path: str) -> pymupdf.Document | None:
         """Return the open handle for *path*, opening it on first use."""
         doc = self._docs.get(path)
         if doc is not None:
             self._docs.move_to_end(path)
             return doc
         try:
-            doc = fitz.open(path)
+            doc = pymupdf.open(path)
         # A file that vanished or is unreadable must not kill the thread;
         # the caller simply gets no image for this request.
         except Exception:  # noqa: BLE001
@@ -101,7 +101,7 @@ class RenderWorker(QObject):
             return
         try:
             page = doc[req.source_index]
-            mat = fitz.Matrix(req.zoom, req.zoom).prerotate(req.rotation)
+            mat = pymupdf.Matrix(req.zoom, req.zoom).prerotate(req.rotation)
             pix = page.get_pixmap(matrix=mat, alpha=False)
             # QImage wraps the samples buffer; copy so the buffer can be freed
             img = QImage(

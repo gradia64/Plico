@@ -1,5 +1,13 @@
-"""QUndoCommand subclasses for page-level operations."""
+"""QUndoCommand subclasses for page-level operations.
 
+The name a command shows in the Edit menu (and in QUndoView) is built with
+``QCoreApplication.translate`` rather than ``self.tr``: the name has to exist
+before ``super().__init__`` runs, and until then the QObject half of the
+command is not there yet. The context is the class name, which is what
+lupdate expects for a string that belongs to one class.
+"""
+
+from PySide6.QtCore import QCoreApplication
 from PySide6.QtGui import QUndoCommand
 
 from .document import DocumentModel, PageItem
@@ -10,7 +18,8 @@ class RotatePage(QUndoCommand):
     """Rotate a single page by *delta* degrees (90-steps)."""
 
     def __init__(self, model: DocumentModel, index: int, delta: int) -> None:
-        super().__init__(f"Ruota pagina {index + 1}")
+        name = QCoreApplication.translate("RotatePage", "Ruota pagina {0}")
+        super().__init__(name.format(index + 1))
         self._model = model
         self._index = index
         old = model.pages[index].rotation
@@ -30,7 +39,8 @@ class DeletePage(QUndoCommand):
     """Delete the page at *index*; restore it on undo."""
 
     def __init__(self, model: DocumentModel, index: int) -> None:
-        super().__init__(f"Elimina pagina {index + 1}")
+        name = QCoreApplication.translate("DeletePage", "Elimina pagina {0}")
+        super().__init__(name.format(index + 1))
         self._model = model
         self._index = index
         self._item: PageItem | None = None
@@ -58,9 +68,8 @@ class MovePage(QUndoCommand):
     def __init__(
         self, model: DocumentModel, from_index: int, to_index: int
     ) -> None:
-        super().__init__(
-            f"Sposta pagina {from_index + 1}"
-        )
+        name = QCoreApplication.translate("MovePage", "Sposta pagina {0}")
+        super().__init__(name.format(from_index + 1))
         self._model = model
         self._from = from_index
         self._to = to_index
@@ -87,7 +96,8 @@ class AddRedaction(QUndoCommand):
     """
 
     def __init__(self, model: DocumentModel, index: int, rect: RedactionRect) -> None:
-        super().__init__(f"Redazione su pagina {index + 1}")
+        name = QCoreApplication.translate("AddRedaction", "Redazione su pagina {0}")
+        super().__init__(name.format(index + 1))
         self._model = model
         self._index = index
         self._rect = rect
@@ -108,7 +118,8 @@ class RemoveRedaction(QUndoCommand):
     """Take back the redaction *rect* from the page at *index*."""
 
     def __init__(self, model: DocumentModel, index: int, rect: RedactionRect) -> None:
-        super().__init__(f"Annulla redazione su pagina {index + 1}")
+        name = QCoreApplication.translate("RemoveRedaction", "Annulla redazione su pagina {0}")
+        super().__init__(name.format(index + 1))
         self._model = model
         self._index = index
         self._rect = rect
@@ -141,7 +152,8 @@ class SetFieldValue(QUndoCommand):
     def __init__(
         self, model: DocumentModel, index: int, name: str, value: str
     ) -> None:
-        super().__init__(f"Campo «{name}» su pagina {index + 1}")
+        label = QCoreApplication.translate("SetFieldValue", "Campo «{0}» su pagina {1}")
+        super().__init__(label.format(name, index + 1))
         self._model = model
         self._index = index
         self._name = name
@@ -172,11 +184,11 @@ class SetFieldValue(QUndoCommand):
         self._model.page_changed.emit(self._index)
 
     def undo(self) -> None:
-        valori = self._model.pages[self._index].form_values
+        values = self._model.pages[self._index].form_values
         if self._was_set:
-            valori[self._name] = self._old
+            values[self._name] = self._old
         else:
             # The field had no entry before this command: drop it again, so
             # that "untouched" does not become "set to the file's own value".
-            valori.pop(self._name, None)
+            values.pop(self._name, None)
         self._model.page_changed.emit(self._index)

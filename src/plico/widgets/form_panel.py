@@ -21,17 +21,14 @@ from PySide6.QtWidgets import (
 
 from ..model.forms import CHECKBOX, CHECKED, CHOICE, UNCHECKED, Field
 
-SENZA_NOME = "(senza nome)"
-NESSUN_CAMPO = "Questa pagina non ha campi compilabili."
 
-
-def _svuota(layout: QFormLayout) -> None:
+def _clear(layout: QFormLayout) -> None:
     """Remove every row of *layout*, widgets included."""
     while layout.count():
-        voce = layout.takeAt(0)
-        if voce is None:
+        item = layout.takeAt(0)
+        if item is None:
             break
-        widget = voce.widget()
+        widget = item.widget()
         if widget is not None:
             widget.deleteLater()
 
@@ -51,12 +48,12 @@ class FormPanel(QWidget):
         # reports a change instead of quietly keeping the old one.
         self._seen: dict[str, str] = {}
 
-        self._avviso = QLabel(NESSUN_CAMPO)
-        self._avviso.setWordWrap(True)
-        self._avviso.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self._notice = QLabel(self.tr("Questa pagina non ha campi compilabili."))
+        self._notice.setWordWrap(True)
+        self._notice.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        self._contenuto = QWidget()
-        self._form = QFormLayout(self._contenuto)
+        self._content = QWidget()
+        self._form = QFormLayout(self._content)
         self._form.setContentsMargins(8, 8, 8, 8)
         self._form.setFieldGrowthPolicy(
             QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
@@ -64,12 +61,12 @@ class FormPanel(QWidget):
 
         self._area = QScrollArea()
         self._area.setWidgetResizable(True)
-        self._area.setWidget(self._contenuto)
+        self._area.setWidget(self._content)
 
-        disposizione = QVBoxLayout(self)
-        disposizione.setContentsMargins(0, 0, 0, 0)
-        disposizione.addWidget(self._avviso)
-        disposizione.addWidget(self._area)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._notice)
+        layout.addWidget(self._area)
 
         self.set_page(0, [], {})
 
@@ -91,22 +88,22 @@ class FormPanel(QWidget):
         self._row = row
         self._editors = {}
         self._seen = {}
-        _svuota(self._form)
+        _clear(self._form)
 
-        compilabili = [campo for campo in fields if campo.editable]
-        if not compilabili:
+        editable = [field for field in fields if field.editable]
+        if not editable:
             self._area.hide()
-            self._avviso.show()
+            self._notice.show()
             return
 
-        self._avviso.hide()
+        self._notice.hide()
         self._area.show()
-        for campo in compilabili:
-            valore = values.get(campo.name, campo.value)
-            self._seen[campo.name] = valore
-            editor = self._make_editor(campo, valore)
-            self._editors[campo.name] = editor
-            self._form.addRow(campo.name or SENZA_NOME, editor)
+        for field in editable:
+            value = values.get(field.name, field.value)
+            self._seen[field.name] = value
+            editor = self._make_editor(field, value)
+            self._editors[field.name] = editor
+            self._form.addRow(field.name or self.tr("(senza nome)"), editor)
 
     def select_field(self, name: str) -> None:
         """Put the cursor in the editor of *name*, if it is on this page."""
@@ -119,54 +116,54 @@ class FormPanel(QWidget):
     #  Editors
     # ------------------------------------------------------------------ #
 
-    def _make_editor(self, campo: Field, valore: str) -> QWidget:
-        """Build the editor for *campo* and start listening to it.
+    def _make_editor(self, field: Field, value: str) -> QWidget:
+        """Build the editor for *field* and start listening to it.
 
         The value is set BEFORE the signal is connected: filling an editor
         programmatically must not look like the user typing, or every page
         change would push an undo command.
         """
-        if campo.kind == CHECKBOX:
-            casella = QCheckBox()
-            casella.setChecked(valore not in ("", UNCHECKED))
-            casella.toggled.connect(
-                lambda acceso, nome=campo.name: self._changed(
-                    nome, CHECKED if acceso else UNCHECKED
+        if field.kind == CHECKBOX:
+            box = QCheckBox()
+            box.setChecked(value not in ("", UNCHECKED))
+            box.toggled.connect(
+                lambda checked, name=field.name: self._changed(
+                    name, CHECKED if checked else UNCHECKED
                 )
             )
-            return casella
+            return box
 
-        if campo.kind == CHOICE:
-            tendina = QComboBox()
-            scelte = list(campo.options)
-            if valore and valore not in scelte:
+        if field.kind == CHOICE:
+            combo = QComboBox()
+            options = list(field.options)
+            if value and value not in options:
                 # A choice whose stored value is not among the options: keep it
                 # visible rather than silently dropping what the file says.
-                scelte.insert(0, valore)
-            tendina.addItems(scelte)
-            tendina.setCurrentText(valore)
-            tendina.currentTextChanged.connect(
-                lambda testo, nome=campo.name: self._changed(nome, testo)
+                options.insert(0, value)
+            combo.addItems(options)
+            combo.setCurrentText(value)
+            combo.currentTextChanged.connect(
+                lambda text, name=field.name: self._changed(name, text)
             )
-            return tendina
+            return combo
 
-        if campo.multiline:
-            area = QPlainTextEdit()
-            area.setPlainText(valore)
-            area.setMinimumHeight(72)
-            area.textChanged.connect(
-                lambda nome=campo.name, editor=area: self._changed(
-                    nome, editor.toPlainText()
+        if field.multiline:
+            multiline = QPlainTextEdit()
+            multiline.setPlainText(value)
+            multiline.setMinimumHeight(72)
+            multiline.textChanged.connect(
+                lambda name=field.name, editor=multiline: self._changed(
+                    name, editor.toPlainText()
                 )
             )
-            return area
+            return multiline
 
-        riga = QLineEdit(valore)
+        line = QLineEdit(value)
         # textEdited, not textChanged: only the user's keystrokes.
-        riga.textEdited.connect(
-            lambda testo, nome=campo.name: self._changed(nome, testo)
+        line.textEdited.connect(
+            lambda text, name=field.name: self._changed(name, text)
         )
-        return riga
+        return line
 
     def _changed(self, name: str, value: str) -> None:
         """Report a real change; remember it so a round trip still counts."""

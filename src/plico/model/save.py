@@ -6,7 +6,7 @@ import tempfile
 from collections.abc import Callable, Iterator
 from typing import TypeVar
 
-import fitz
+import pymupdf
 
 from .document import DocumentModel, PageItem
 from .forms import write_fields
@@ -37,7 +37,7 @@ def _contiguous_runs(items: list[PageItem]) -> Iterator[list[PageItem]]:
         yield run
 
 
-def _redact(page: fitz.Page, item: PageItem) -> None:
+def _redact(page: pymupdf.Page, item: PageItem) -> None:
     """Burn *item*'s redaction rectangles into *page*.
 
     ``add_redact_annot`` expects coordinates in the page's UNROTATED space,
@@ -51,23 +51,48 @@ def _redact(page: fitz.Page, item: PageItem) -> None:
     stream, not merely covered up.
     """
     for rect in item.redactions:
-        page.add_redact_annot(fitz.Rect(*rect.as_tuple()))
+        page.add_redact_annot(pymupdf.Rect(*rect.as_tuple()))
     page.apply_redactions()
+    # The content under the rectangles is gone, but the annotations are not:
+    # a sticky note repeating a redacted word survives apply_redactions() and
+    # would leak exactly what the redaction was meant to hide (measured). So
+    # anything that touches a rectangle goes with it -- the same rule the eye
+    # applies to a redaction.
+    for annot in list(page.annots() or []):
+        if any(annot.rect.intersects(pymupdf.Rect(*r.as_tuple())) for r in item.redactions):
+            page.delete_annot(annot)
 
 
-def _fill_fields(page: fitz.Page, item: PageItem) -> None:
-    """Write the user's values into the form fields of *page*.
+def _fill_source_fields(doc: pymupdf.Document, values: dict[str, str]) -> None:
+    """Write *values* into the form fields of *doc*, in memory only.
 
-    Order matters twice over. Fields are written **before** the redactions, so
-    a value the user typed can never be lost to a page that also carries a
-    redaction, and so a redaction drawn over a field takes that field with it --
-    which is what a redaction is for. And *page* must be the live object from
-    ``out[...]``: a widget keeps a weak reference to its page, so a temporary
-    would be collected before the first ``update()``.
+    The values are written where the field *lives* -- into the source
+    document, before its pages are copied -- and not into the output
+    afterwards, for two reasons.
+
+    A field name belongs to the document, not to a page. Two widgets called
+    ``nome`` are one field with one /V, and a field whose kids sit on several
+    pages keeps its /V in the parent. ``update()`` regenerates the appearance
+    of the widget it is called on, so writing only on the page the user
+    happened to edit would leave every other page painting the old value -- and
+    on a merged document the result would depend on the merge order. Walking
+    every page of the source reaches all of them, whichever way the field is
+    spelled.
+
+    And MuPDF *renames* a field as it copies it, to keep the names unique:
+    the second ``nome`` becomes ``nome [12]``. After the copy the name the user
+    typed does not identify the field any more, so the write would silently do
+    nothing at all -- which is what used to happen as soon as a page was
+    reordered.
+
+    Nothing is written to disk here: the handle is modified in memory and
+    never saved, and the file on disk is only read.
     """
-    if not item.form_values:
-        return
-    write_fields(page, item.form_values)
+    for index in range(len(doc)):
+        # Bound to a local on purpose: a widget keeps a weak reference to its
+        # page, so a temporary would be collected before the first update().
+        page = doc[index]
+        write_fields(page, values)
 
 
 def _write_pdf(
@@ -85,18 +110,31 @@ def _write_pdf(
     """
     assert model.sources, "No document open"
     items = model.pages if pages is None else [model.pages[i] for i in pages]
+    # One value per field name per source: the user may have typed on the page
+    # that shows the field first and on the one that shows it again, and PDF
+    # has a single slot for both. The last page in document order wins, which
+    # is the value the file already reports, being the last update() written.
+    values_by_source: dict[int, dict[str, str]] = {}
+    for item in items:
+        if item.form_values:
+            values_by_source.setdefault(item.source_id, {}).update(item.form_values)
     # One handle per source document, opened on demand: a merged document
     # can interleave pages from several files, so the run list must be
     # served from whichever source each run belongs to.
-    sources: dict[int, fitz.Document] = {}
+    sources: dict[int, pymupdf.Document] = {}
     try:
-        with fitz.open() as out:
+        with pymupdf.open() as out:
             for run in _contiguous_runs(items):
                 source_id = run[0].source_id
                 src = sources.get(source_id)
                 if src is None:
-                    src = fitz.open(model.sources[source_id])
+                    src = pymupdf.open(model.sources[source_id])
                     sources[source_id] = src
+                    # Fields are written before the pages are copied, and
+                    # before any redaction: see _fill_source_fields.
+                    values = values_by_source.get(source_id)
+                    if values:
+                        _fill_source_fields(src, values)
                 out.insert_pdf(
                     src,
                     from_page=run[0].source_index,
@@ -107,13 +145,17 @@ def _write_pdf(
                 for offset, item in enumerate(run):
                     page = out[base + offset]
                     page.set_rotation(item.total_rotation)
-                    _fill_fields(page, item)
-                    if item.redactions:
-                        _redact(page, item)
             if len(out) == 0:
                 # A PDF with zero pages is not a useful artefact; fail loudly
                 # rather than writing a file the user cannot open.
                 raise ValueError("Il documento non contiene pagine da salvare.")
+            # The redactions run on the built pages: out[] and items are
+            # parallel, so a redaction lands on the page built for the item
+            # it belongs to.
+            for index, item in enumerate(items):
+                if item.redactions:
+                    page = out[index]
+                    _redact(page, item)
             out.save(out_path, garbage=4, deflate=True)
     finally:
         for src in sources.values():
@@ -129,22 +171,23 @@ def _write_atomically(
     """Write *target*, never destroying the file currently being read.
 
     PyMuPDF cannot write to a document it is reading, so when the target is
-    the open source the output goes to a temporary file in the same
-    directory and replaces the original only once written successfully.
+    the open source the output has to go to a temporary file in the same
+    directory and replace the original only once written successfully. Every
+    write goes that way, not just that one: "save as" over an existing file
+    the user never opened would otherwise be written straight over, and a
+    failure halfway through (a full disk, a page MuPDF refuses) would leave
+    that file truncated. The direct route saved nothing but one rename, and
+    costed the property that matters most here.
+
+    The price is that the *directory* must be writable, because the temporary
+    is created there. Writing straight to the file would have worked on a
+    read-only directory with a writable file; that is the trade being made,
+    and it is the usual one for an atomic save.
 
     *optimize*, when given, is handed the freshly written file -- still a
     temporary, so a failure leaves *target* untouched -- and its return value
-    is passed back to the caller. A post-processing step forces the
-    temporary-file route even when the target is not one of the sources.
+    is passed back to the caller.
     """
-    # Merging means several sources; overwriting ANY of them would have
-    # PyMuPDF writing to a file it is still reading.
-    overwriting = bool(model.sources_at(target))
-
-    if not overwriting and optimize is None:
-        _write_pdf(model, target, pages)
-        return None
-
     directory = os.path.dirname(target)
     fd, tmp_path = tempfile.mkstemp(dir=directory, suffix=".pdf.tmp")
     os.close(fd)
@@ -182,13 +225,13 @@ def save_compressed(
     level: CompressionLevel,
     progress: Progress | None = None,
 ) -> CompressionResult:
-    """Come :func:`save_as`, ma comprime il risultato prima di scriverlo.
+    """Like :func:`save_as`, but compress the result before writing it.
 
-    La compressione lavora sul documento **materializzato** (eliminazioni,
-    riordini e rotazioni compresi), quindi il file che esce e` esattamente
-    quello che avrebbe scritto :func:`save_as`, solo piu` piccolo. I PDF
-    sorgente non vengono toccati nemmeno quando *out_path* e` uno di loro:
-    il passaggio passa comunque da un temporaneo.
+    The compression works on the **materialised** document (deletions,
+    reorderings and rotations included), so the file that comes out is exactly
+    the one :func:`save_as` would have written, only smaller. The source PDFs
+    are not touched even when *out_path* is one of them: the pass always goes
+    through a temporary file.
     """
     assert model.sources, "No document open"
     result = _write_atomically(

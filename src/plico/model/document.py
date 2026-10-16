@@ -10,7 +10,7 @@ derived from that list.
 import os
 from dataclasses import dataclass, field
 
-import fitz
+import pymupdf
 from PySide6.QtCore import QObject, Signal
 
 from .forms import Field, read_fields
@@ -97,7 +97,7 @@ def _not_already_marked(
     time, and the second mark would hide the first.
     """
 
-    def coperto(rect: RedactionRect) -> bool:
+    def marked(rect: RedactionRect) -> bool:
         return any(
             mark.x0 <= rect.x0
             and mark.y0 <= rect.y0
@@ -106,7 +106,7 @@ def _not_already_marked(
             for mark in item.redactions
         )
 
-    return [rect for rect in rects if not coperto(rect)]
+    return [rect for rect in rects if not marked(rect)]
 
 
 class DocumentModel(QObject):
@@ -137,25 +137,25 @@ class DocumentModel(QObject):
     def _items_for(self, source_id: int, path: str) -> list[PageItem]:
         """Read *path* read-only and describe it as virtual pages."""
         items: list[PageItem] = []
-        with fitz.open(path) as doc:
+        with pymupdf.open(path) as doc:
             # A document with no form at all does not earn a per-page widget
             # scan, and this is a document-level property.
-            modulo = bool(doc.is_form_pdf)
+            has_form = bool(doc.is_form_pdf)
             for i in range(doc.page_count):
                 # The page must stay alive in a local: a widget keeps a weak
                 # reference to the page it came from, so ``read_fields(doc[i])``
                 # would hand back fields that can never be written.
-                pagina = doc[i]
+                page = doc[i]
                 items.append(
                     PageItem(
                         source_index=i,
-                        base_rotation=pagina.rotation,
+                        base_rotation=page.rotation,
                         source_id=source_id,
                         # page.rect already includes the base /Rotate, so these
                         # are the oriented dimensions the view must lay out with.
-                        width_pt=pagina.rect.width,
-                        height_pt=pagina.rect.height,
-                        form_fields=read_fields(pagina) if modulo else [],
+                        width_pt=page.rect.width,
+                        height_pt=page.rect.height,
+                        form_fields=read_fields(page) if has_form else [],
                     )
                 )
         return items
@@ -217,30 +217,30 @@ class DocumentModel(QObject):
         """
         if not text:
             return {}
-        handles: dict[int, fitz.Document] = {}
-        trovati: dict[int, list[RedactionRect]] = {}
+        handles: dict[int, pymupdf.Document] = {}
+        found: dict[int, list[RedactionRect]] = {}
         try:
-            for indice, item in enumerate(self.pages):
+            for index, item in enumerate(self.pages):
                 doc = handles.get(item.source_id)
                 if doc is None:
-                    doc = fitz.open(self.sources[item.source_id])
+                    doc = pymupdf.open(self.sources[item.source_id])
                     handles[item.source_id] = doc
                 # Bound to a local on purpose: a widget-like object read from a
                 # temporary page would be collected with it.
-                pagina = doc[item.source_index]
-                larghezza, altezza = item.unrotated_size
+                page = doc[item.source_index]
+                width, height = item.unrotated_size
                 rects = [
                     RedactionRect.from_corners(r.x0, r.y0, r.x1, r.y1).clamped_to(
-                        larghezza, altezza
+                        width, height
                     )
-                    for r in pagina.search_for(text)
+                    for r in page.search_for(text)
                 ]
-                if nuovi := _not_already_marked(item, rects):
-                    trovati[indice] = nuovi
+                if fresh := _not_already_marked(item, rects):
+                    found[index] = fresh
         finally:
             for doc in handles.values():
                 doc.close()
-        return trovati
+        return found
 
     @property
     def page_count(self) -> int:

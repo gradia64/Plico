@@ -9,10 +9,10 @@ rule is broken.
 
 from dataclasses import dataclass
 
-import fitz
+import pymupdf
 
 # The kinds we know how to edit. PyMuPDF's numeric field types are mapped here
-# once, so the rest of the project never has to import fitz just to ask what a
+# once, so the rest of the project never has to import pymupdf just to ask what a
 # field is.
 TEXT = "text"
 CHECKBOX = "checkbox"
@@ -21,13 +21,17 @@ RADIO = "radio"
 SIGNATURE = "signature"
 UNKNOWN = "unknown"
 
+# PyMuPDF's own ``py.typed`` marker is a promise its generated module cannot
+# keep: the widget-type numbers reach the package namespace through a loop over
+# the extension module, so a type checker never sees them. The ignores below
+# are the whole price of reading MuPDF's constants instead of hard-coding them.
 _KINDS = {
-    fitz.PDF_WIDGET_TYPE_TEXT: TEXT,
-    fitz.PDF_WIDGET_TYPE_CHECKBOX: CHECKBOX,
-    fitz.PDF_WIDGET_TYPE_COMBOBOX: CHOICE,
-    fitz.PDF_WIDGET_TYPE_LISTBOX: CHOICE,
-    fitz.PDF_WIDGET_TYPE_RADIOBUTTON: RADIO,
-    fitz.PDF_WIDGET_TYPE_SIGNATURE: SIGNATURE,
+    pymupdf.PDF_WIDGET_TYPE_TEXT: TEXT,  # type: ignore[attr-defined]
+    pymupdf.PDF_WIDGET_TYPE_CHECKBOX: CHECKBOX,  # type: ignore[attr-defined]
+    pymupdf.PDF_WIDGET_TYPE_COMBOBOX: CHOICE,  # type: ignore[attr-defined]
+    pymupdf.PDF_WIDGET_TYPE_LISTBOX: CHOICE,  # type: ignore[attr-defined]
+    pymupdf.PDF_WIDGET_TYPE_RADIOBUTTON: RADIO,  # type: ignore[attr-defined]
+    pymupdf.PDF_WIDGET_TYPE_SIGNATURE: SIGNATURE,  # type: ignore[attr-defined]
 }
 
 # /Ff bit positions, as PDF defines them.
@@ -71,7 +75,7 @@ class Field:
         return self.value not in ("", UNCHECKED)
 
 
-def read_fields(page: fitz.Page) -> list[Field]:
+def read_fields(page: pymupdf.Page) -> list[Field]:
     """Describe the form fields of *page*, ignoring the unusable ones.
 
     *page* must be a **live** object, never ``doc[0]``: a widget keeps a weak
@@ -81,15 +85,15 @@ def read_fields(page: fitz.Page) -> list[Field]:
     bound to a page``. Keeping the page in a local variable is the difference
     between a form that saves and a form that raises.
     """
-    campi: list[Field] = []
+    fields: list[Field] = []
     for widget in page.widgets() or ():
-        campo = _describe_safely(widget)
-        if campo is not None:
-            campi.append(campo)
-    return campi
+        field = _describe_safely(widget)
+        if field is not None:
+            fields.append(field)
+    return fields
 
 
-def _describe_safely(widget: fitz.Widget) -> Field | None:
+def _describe_safely(widget: pymupdf.Widget) -> Field | None:
     """Like :func:`_describe`, but a broken field yields ``None`` instead.
 
     PyMuPDF does not refuse a malformed field: it hands back radio buttons with
@@ -102,10 +106,10 @@ def _describe_safely(widget: fitz.Widget) -> Field | None:
         return None
 
 
-def _describe(widget: fitz.Widget) -> Field | None:
+def _describe(widget: pymupdf.Widget) -> Field | None:
     """Turn one widget into a :class:`Field`, or ``None`` if it is unusable."""
-    nome = widget.field_name or ""
-    if not nome:
+    name = widget.field_name or ""
+    if not name:
         return None
 
     area = widget.rect
@@ -114,21 +118,21 @@ def _describe(widget: fitz.Widget) -> Field | None:
     if area.width <= 0 or area.height <= 0:
         return None
 
-    tipo = _KINDS.get(widget.field_type, UNKNOWN)
+    kind = _KINDS.get(widget.field_type, UNKNOWN)
     return Field(
-        name=nome,
-        kind=tipo,
+        name=name,
+        kind=kind,
         value=widget.field_value or "",
         rect=(area.x0, area.y0, area.x1, area.y1),
         options=tuple(widget.choice_values or ()),
         multiline=bool(widget.field_flags & _FLAG_MULTILINE),
         read_only=(
-            bool(widget.field_flags & _FLAG_READ_ONLY) or tipo not in _EDITABLE
+            bool(widget.field_flags & _FLAG_READ_ONLY) or kind not in _EDITABLE
         ),
     )
 
 
-def write_fields(page: fitz.Page, values: dict[str, str]) -> int:
+def write_fields(page: pymupdf.Page, values: dict[str, str]) -> int:
     """Write *values* (field name → value) into the widgets of *page*.
 
     Returns how many fields were written. *page* must stay alive for the whole
@@ -143,21 +147,21 @@ def write_fields(page: fitz.Page, values: dict[str, str]) -> int:
     below, which are not a stylistic choice.
     """
     doc = page.parent
-    scritti = 0
+    written = 0
     for widget in page.widgets() or ():
-        nome = widget.field_name or ""
-        if nome not in values:
+        name = widget.field_name or ""
+        if name not in values:
             continue
-        valore = values[nome]
-        widget.field_value = valore
-        if valore == "":
+        value = values[name]
+        widget.field_value = value
+        if value == "":
             _clear_value(doc, widget)
         widget.update()
-        scritti += 1
-    return scritti
+        written += 1
+    return written
 
 
-def _clear_value(doc: fitz.Document, widget: fitz.Widget) -> None:
+def _clear_value(doc: pymupdf.Document, widget: pymupdf.Widget) -> None:
     """Force a field's /V to an empty string, so ``update()`` repaints it blank.
 
     A text field and its widget are usually the same object, but PDF also
@@ -165,8 +169,8 @@ def _clear_value(doc: fitz.Document, widget: fitz.Widget) -> None:
     belongs to the parent — writing it on the annotation would add a second,
     ignored /V.
     """
-    tipo, riferimento = doc.xref_get_key(widget.xref, "Parent")
-    destinazione = widget.xref
-    if tipo == "xref" and riferimento:
-        destinazione = int(riferimento.split()[0])
-    doc.xref_set_key(destinazione, "V", "()")
+    kind, reference = doc.xref_get_key(widget.xref, "Parent")
+    target = widget.xref
+    if kind == "xref" and reference:
+        target = int(reference.split()[0])
+    doc.xref_set_key(target, "V", "()")

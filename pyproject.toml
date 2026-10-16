@@ -7,7 +7,9 @@ license = "GPL-3.0-or-later"
 requires-python = ">=3.11"
 dependencies = [
     "PySide6>=6.7",
-    "pymupdf>=1.23",
+    # 1.24.3 is the release that renamed the module to `pymupdf`; the code
+    # imports that name, and `fitz` survives only as a deprecated alias.
+    "pymupdf>=1.24.3",
     # Compressione mirata: qpdf via i suoi binding. `recompress_flate` e
     # `ObjectStreamMode.generate` (le due opzioni che fanno il lavoro)
     # esistono da pikepdf 9.
@@ -48,7 +50,7 @@ python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 # PySide6 ships partial stubs and PyMuPDF ships none at all (the module is
-# imported as `fitz`), so missing stubs must not fail the run.
+# imported as `pymupdf`), so missing stubs must not fail the run.
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -10,10 +10,10 @@ import pathlib
 import time
 from unittest import mock
 
-import fitz
+import pymupdf
 import pytest
 from PySide6.QtCore import QEvent, QPointF, QSettings, Qt, QThreadPool
-from PySide6.QtGui import QAction, QCloseEvent, QIcon, QImage, QMouseEvent
+from PySide6.QtGui import QAction, QCloseEvent, QIcon, QImage, QMouseEvent, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -70,7 +70,7 @@ def _make_pdf(
     size: tuple[float, float] | None = None,
 ) -> None:
     """Write a small PDF; *size* allows a mixed-orientation document."""
-    doc = fitz.open()
+    doc = pymupdf.open()
     width, height = size if size else (595.0, 842.0)
     for i in range(pages):
         page = doc.new_page(width=width, height=height)
@@ -157,7 +157,7 @@ def test_rotate_changes_geometry_and_saved_rotation(windows, tmp_path):
     from plico.model import save_as
 
     save_as(mw._doc_model, out)
-    with fitz.open(out) as d:
+    with pymupdf.open(out) as d:
         assert d.page_count == 3
         assert d[0].rotation == 90  # rotated page
         assert d[1].rotation == 0  # untouched page
@@ -175,7 +175,7 @@ def test_page_with_base_rotation_is_not_rotated_twice(windows, tmp_path):
     """
     pdf = str(tmp_path / "base90.pdf")
     out = str(tmp_path / "base90-out.pdf")
-    doc = fitz.open()
+    doc = pymupdf.open()
     page = doc.new_page(width=595, height=842)  # stored portrait...
     page.insert_text((72, 72), "BASE90", fontsize=24)
     page.set_rotation(90)  # ...but flagged as rotated 90
@@ -203,7 +203,7 @@ def test_page_with_base_rotation_is_not_rotated_twice(windows, tmp_path):
     assert (first.width_pt, first.height_pt) == (595.0, 842.0)
 
     save_as(mw._doc_model, out)
-    with fitz.open(out) as d:
+    with pymupdf.open(out) as d:
         assert d[0].rotation == 180  # 90 base + 90 user
 
 
@@ -288,7 +288,7 @@ def test_save_preserves_base_rotation(windows, tmp_path):
     pdf = str(tmp_path / "rotated.pdf")
     out = str(tmp_path / "out.pdf")
 
-    doc = fitz.open()
+    doc = pymupdf.open()
     page = doc.new_page()
     page.insert_text((72, 72), "Base 90", fontsize=12)
     # Set /Rotate before the first save: a document cannot be written back
@@ -309,7 +309,7 @@ def test_save_preserves_base_rotation(windows, tmp_path):
     from plico.model import save_as
 
     save_as(mw._doc_model, out)
-    with fitz.open(out) as d:
+    with pymupdf.open(out) as d:
         assert d[0].rotation == 90
 
 
@@ -328,7 +328,7 @@ def test_save_over_the_original_file(windows, tmp_path):
 
     save_as(mw._doc_model, pdf)  # same path as the source
 
-    with fitz.open(pdf) as d:
+    with pymupdf.open(pdf) as d:
         assert d.page_count == 1
     # No temporary files left behind next to the target.
     leftovers = [p for p in os.listdir(tmp_path) if p.endswith(".tmp")]
@@ -350,7 +350,7 @@ def test_compression_flags_reduce_size(tmp_path):
     finally:
         mw.shutdown_worker()
 
-    with fitz.open(out) as d:
+    with pymupdf.open(out) as d:
         assert d.page_count == 3
         assert d[0].get_text().strip() == "Pagina 1"
 
@@ -467,7 +467,7 @@ def test_actions_carry_theme_icons_no_bundled_assets(windows):
 
 
 def test_package_ships_no_icon_assets():
-    """The 'zero asset da impacchettare' requirement, verified on disk."""
+    """The 'zero assets to package' requirement, verified on disk."""
     pkg = pathlib.Path(plico.main_window.__file__).parent
     icons = [
         f
@@ -573,10 +573,10 @@ def test_extract_action_writes_a_subset_without_touching_the_source(
 
     mw._extract_pages()
 
-    with fitz.open(out) as doc:
+    with pymupdf.open(out) as doc:
         assert doc.page_count == 2
         assert doc[0].rotation == 90  # page 2 of the source
-    with fitz.open(pdf) as doc:
+    with pymupdf.open(pdf) as doc:
         assert doc.page_count == 5, "extracting must not modify the source"
 
 
@@ -690,7 +690,7 @@ def test_merged_document_renders_and_saves_every_source(windows, tmp_path):
 
     out = str(tmp_path / "merged.pdf")
     save_as(mw._doc_model, out)
-    with fitz.open(out) as doc:
+    with pymupdf.open(out) as doc:
         assert doc.page_count == 8
         # Page 5 is the first page of the second document
         assert "B" in doc[5].get_text()
@@ -714,7 +714,7 @@ def test_merge_respects_rotation_of_both_sources(windows, tmp_path):
 
     out = str(tmp_path / "rotated.pdf")
     save_as(mw._doc_model, out)
-    with fitz.open(out) as doc:
+    with pymupdf.open(out) as doc:
         assert doc.page_count == 3
         # Deleting row 0 leaves A2 first, then the two pages of B
         assert "A 2" in doc[0].get_text()
@@ -744,15 +744,15 @@ def test_merge_action_reads_a_second_file_and_saves_both(
     assert "Unite 2" in mw._status.text()
 
     save_as(mw._doc_model, out)
-    with fitz.open(out) as doc:
+    with pymupdf.open(out) as doc:
         assert doc.page_count == 4
         assert "A 1" in doc[0].get_text()
         assert "B 1" in doc[2].get_text()
         assert "B 2" in doc[3].get_text()
     # Merging is additive and never rewrites the documents being read
-    with fitz.open(pdf_a) as doc:
+    with pymupdf.open(pdf_a) as doc:
         assert doc.page_count == 2
-    with fitz.open(pdf_b) as doc:
+    with pymupdf.open(pdf_b) as doc:
         assert doc.page_count == 2
 
 
@@ -855,26 +855,26 @@ def test_open_path_and_merge_path_drive_the_command_line(tmp_path, windows):
 
 
 # --------------------------------------------------------------------------- #
-#  Regressioni del secondo giro di review
+#  Regressions from the second review round
 # --------------------------------------------------------------------------- #
 
 def test_drop_target_row_maps_both_directions():
-    """La destinazione del drop è un indice nella lista SENZA la riga trascinata.
+    """The drop destination is an index in the list WITHOUT the dragged row.
 
-    MovePage fa pop e poi insert, quindi quando il bersaglio sta dopo la riga
-    trascinata la sua posizione scala di uno. Senza la correzione, trascinare
-    una pagina verso il basso sulla metà ALTA di X la lasciava comunque dopo X.
+    MovePage pops and then inserts, so when the target sits after the dragged
+    row its position shifts by one. Without the fix, dragging a page downwards
+    onto the UPPER half of X still left it after X.
     """
-    # Su [A B C D], trascino A (riga 0) su C (riga 2):
-    assert ThumbnailBar.drop_target_row(0, 2, below=False) == 1  # sopra C → [B A C D]
-    assert ThumbnailBar.drop_target_row(0, 2, below=True) == 2   # sotto C → [B C A D]
-    # Trascino D (riga 3) verso l'alto, su B (riga 1):
-    assert ThumbnailBar.drop_target_row(3, 1, below=False) == 1  # sopra B → [A D B C]
-    assert ThumbnailBar.drop_target_row(3, 1, below=True) == 2   # sotto B → [A B D C]
+    # On [A B C D], I drag A (row 0) onto C (row 2):
+    assert ThumbnailBar.drop_target_row(0, 2, below=False) == 1  # above C → [B A C D]
+    assert ThumbnailBar.drop_target_row(0, 2, below=True) == 2   # below C → [B C A D]
+    # I drag D (row 3) upwards, onto B (row 1):
+    assert ThumbnailBar.drop_target_row(3, 1, below=False) == 1  # above B → [A D B C]
+    assert ThumbnailBar.drop_target_row(3, 1, below=True) == 2   # below B → [A B D C]
 
 
 def test_drop_target_row_agrees_with_the_move_command(windows, tmp_path):
-    """La mappatura è corretta solo se MovePage produce davvero quell'ordine."""
+    """The mapping is correct only if MovePage really produces that order."""
     pdf = str(tmp_path / "four.pdf")
     _make_pdf(pdf, pages=4, text="P")
 
@@ -888,10 +888,10 @@ def test_drop_target_row_agrees_with_the_move_command(windows, tmp_path):
 
 
 def test_selection_survives_a_delete(windows, tmp_path):
-    """Dopo un delete la selezione non deve morire.
+    """After a delete the selection must not die.
 
-    beginResetModel/endResetModel azzera currentIndex: senza il ripristino
-    Ctrl+R leggeva -1 e non faceva nulla finché l'utente non ricliccava.
+    beginResetModel/endResetModel resets currentIndex: without the restore
+    Ctrl+R read -1 and did nothing until the user clicked again.
     """
     pdf = str(tmp_path / "in.pdf")
     _make_pdf(pdf, pages=5)
@@ -901,20 +901,20 @@ def test_selection_survives_a_delete(windows, tmp_path):
     mw._thumb_bar.set_current_row(3)
     assert mw._thumb_bar.current_row() == 3
 
-    mw._delete_page()  # cancella la riga 3
+    mw._delete_page()  # deletes row 3
 
     row = mw._thumb_bar.current_row()
     assert row >= 0, "la selezione è andata persa dopo il delete"
 
-    # ...e ora il comando agisce davvero su quella riga.
+    # ...and now the command really acts on that row.
     mw._rotate_selected(90)
     assert mw._doc_model.pages[row].rotation == 90
 
 
 def test_rotation_drops_the_stale_thumbnail_of_that_page(windows, tmp_path):
-    """La chiave embedde la rotazione: la voce precedente è irraggiungibile.
+    """The key embeds the rotation: the previous entry is unreachable.
 
-    Senza lo scarto, ogni rotazione lasciava un'immagine orfana nell'LRU.
+    Without the discard, every rotation left an orphan image in the LRU.
     """
     pdf = str(tmp_path / "in.pdf")
     _make_pdf(pdf, pages=3)
@@ -936,11 +936,11 @@ def test_rotation_drops_the_stale_thumbnail_of_that_page(windows, tmp_path):
 
 
 def test_thumbnail_requests_are_not_duplicated(windows, tmp_path):
-    """Lo scroll non deve riempire la coda del worker di richieste duplicate.
+    """Scrolling must not fill the worker queue with duplicate requests.
 
-    Osservato su `_pending` invece che sul segnale: un callable Python
-    connesso a un segnale di un QObject che vive in un altro thread viene
-    consegnato ACCODATO, quindi uno spy nel thread GUI non lo vedrebbe.
+    Observed on `_pending` rather than on the signal: a Python callable
+    connected to a signal of a QObject living in another thread is
+    delivered QUEUED, so a spy in the GUI thread would not see it.
     """
     pdf = str(tmp_path / "in.pdf")
     _make_pdf(pdf, pages=30)
@@ -948,7 +948,7 @@ def test_thumbnail_requests_are_not_duplicated(windows, tmp_path):
     mw = windows()
     _open(mw, pdf)
 
-    # Rimetti la barra nello stato "niente in cache, niente in volo".
+    # Put the bar back into the "nothing cached, nothing in flight" state.
     mw._thumbnail_cache.clear()
     mw._thumb_bar._pending.clear()
 
@@ -963,10 +963,10 @@ def test_thumbnail_requests_are_not_duplicated(windows, tmp_path):
 
 
 def test_late_render_for_a_key_nobody_asked_is_dropped(windows, tmp_path):
-    """Il risultato di un documento che non mostriamo più non va in cache.
+    """The result of a document we no longer show must not go into the cache.
 
-    Le chiavi ripartono da source_id 0 a ogni apertura: senza il filtro
-    `_pending` la miniatura del vecchio file finirebbe sulla riga del nuovo.
+    Keys restart from source_id 0 on every open: without the `_pending`
+    filter the thumbnail of the old file would land on the new one's row.
     """
     pdf = str(tmp_path / "in.pdf")
     _make_pdf(pdf, pages=3)
@@ -983,7 +983,7 @@ def test_late_render_for_a_key_nobody_asked_is_dropped(windows, tmp_path):
 
 
 def test_failed_thumbnail_render_clears_pending(windows, tmp_path):
-    """Una richiesta fallita deve poter essere ritentata, non restare appesa."""
+    """A failed request must be retryable, not stay hanging."""
     pdf = str(tmp_path / "in.pdf")
     _make_pdf(pdf, pages=3)
 
@@ -1002,32 +1002,54 @@ def test_failed_thumbnail_render_clears_pending(windows, tmp_path):
 
 
 def test_thumbnail_cache_is_lru_not_fifo():
-    """`get` deve rinfrescare la recency, o la cache è FIFO travestita."""
+    """`get` must refresh the recency, or the cache is FIFO in disguise."""
     cache = ThumbnailCache(maxsize=2)
     cache["a"] = 1
     cache["b"] = 2
 
-    assert cache.get("a") == 1  # "a" torna in testa
-    cache["c"] = 3              # deve sfrattare "b", non "a"
+    assert cache.get("a") == 1  # "a" goes back to the front
+    cache["c"] = 3              # must evict "b", not "a"
 
     assert "a" in cache
     assert "b" not in cache
 
 
-def test_saving_over_the_open_file_makes_the_worker_forget_it(windows, tmp_path):
-    """Dopo un salvataggio che sovrascrive la sorgente l'handle è vecchio.
+def test_the_page_cache_frees_the_bytes_it_replaced(windows):
+    """Putting the same key back must not count the same bytes twice.
 
-    save_as() usa os.replace(): l'inode cambia, ma il worker terrebbe aperto
-    il documento vecchio, quindi riaprire lo stesso file renderebbe il
-    contenuto di prima.
+    A page can be put back into the cache with the same key (a render retried
+    after an error, a screen change): the bytes of the replaced pixmap must be
+    returned to the budget, otherwise more than due is evicted.
+    """
+    mw = windows()
+    view = mw._page_view
+    key = ("page", 0, 0, 0, 1.0, 1.0)
+
+    view._cache_put(key, QPixmap(100, 100))
+    assert view._cache_bytes == 100 * 100 * 4
+
+    view._cache_put(key, QPixmap(50, 50))
+    assert view._cache_bytes == 50 * 50 * 4, "i byte della pixmap sostituita"
+    assert len(view._cache) == 1
+
+    # And the same key must not stay twice in the queue.
+    assert list(view._cache) == [key]
+
+
+def test_saving_over_the_open_file_makes_the_worker_forget_it(windows, tmp_path):
+    """After a save that overwrites the source the handle is stale.
+
+    save_as() uses os.replace(): the inode changes, but the worker would keep
+    the old document open, so reopening the same file would render the
+    previous content.
     """
     pdf = str(tmp_path / "doc.pdf")
     _make_pdf(pdf, pages=4, text="Prima")
 
     mw = windows()
     _open(mw, pdf)
-    vecchio = mw._worker._docs.get(pdf)
-    assert vecchio is not None, "il worker non ha aperto la sorgente"
+    previous = mw._worker._docs.get(pdf)
+    assert previous is not None, "il worker non ha aperto la sorgente"
 
     mw._delete_page()
     with mock.patch.object(
@@ -1038,43 +1060,43 @@ def test_saving_over_the_open_file_makes_the_worker_forget_it(windows, tmp_path)
 
     # The file is re-opened, so the worker may well hold a handle again --
     # just never the one it had before the save.
-    assert vecchio.is_closed, "il worker tiene ancora il documento sovrascritto"
-    assert mw._worker._docs.get(pdf) is not vecchio
-    with fitz.open(pdf) as doc:
+    assert previous.is_closed, "il worker tiene ancora il documento sovrascritto"
+    assert mw._worker._docs.get(pdf) is not previous
+    with pymupdf.open(pdf) as doc:
         assert doc.page_count == 4 - 1
 
 
-def _tre_pagine(path: str, base: int = 0) -> None:
-    """Tre pagine A4 con il testo «PAGINA n» e una /Rotate di partenza *base*."""
-    doc = fitz.open()
+def _three_pages(path: str, base: int = 0) -> None:
+    """Three A4 pages with the text «PAGINA n» and a starting /Rotate of *base*."""
+    doc = pymupdf.open()
     for i in range(3):
-        pagina = doc.new_page(width=595, height=842)
-        pagina.insert_text((72, 72), f"PAGINA {i + 1}", fontsize=24)
-        pagina.set_rotation(base)
+        page = doc.new_page(width=595, height=842)
+        page.insert_text((72, 72), f"PAGINA {i + 1}", fontsize=24)
+        page.set_rotation(base)
     doc.save(path)
     doc.close()
 
 
-def _contenuto(path: str) -> list[tuple[str, int]]:
-    with fitz.open(path) as doc:
-        return [(pagina.get_text().strip(), pagina.rotation) for pagina in doc]
+def _content(path: str) -> list[tuple[str, int]]:
+    with pymupdf.open(path) as doc:
+        return [(page.get_text().strip(), page.rotation) for page in doc]
 
 
 @pytest.mark.parametrize("base", [0, 90])
 def test_saving_over_the_open_file_then_saving_again_keeps_every_page(
     windows, tmp_path, base
 ):
-    """Salvare sopra il file aperto e poi continuare non deve perdere pagine.
+    """Saving over the open file and then continuing must not lose pages.
 
-    Era il bug: dopo os.replace() i PageItem descrivevano ancora il file
-    VECCHIO (numeri di pagina, /Rotate, dimensioni), mentre sul disco c'era
-    il documento materializzato. Il secondo salvataggio perdeva una pagina e
-    la sua rotazione, e la vista rendeva le pagine sbagliate ruotandole due
-    volte. Con base=90 si controlla anche la /Rotate di partenza (§4).
+    It was the bug: after os.replace() the PageItem still described the OLD
+    file (page numbers, /Rotate, sizes), while on disk there was the
+    materialized document. The second save lost a page and its rotation,
+    and the view rendered the wrong pages rotating them twice. With base=90
+    the starting /Rotate is checked too (§4).
     """
     pdf = str(tmp_path / "doc.pdf")
     out = str(tmp_path / "di-nuovo.pdf")
-    _tre_pagine(pdf, base)
+    _three_pages(pdf, base)
 
     mw = windows()
     # Shown, so that scrolling a page into view really renders it.
@@ -1093,14 +1115,14 @@ def test_saving_over_the_open_file_then_saving_again_keeps_every_page(
         mw._save_file_as()
     _pump()
 
-    ruotata = (base + 90) % 360
-    assert _contenuto(pdf) == [("PAGINA 2", ruotata), ("PAGINA 3", base)]
+    rotated = (base + 90) % 360
+    assert _content(pdf) == [("PAGINA 2", rotated), ("PAGINA 3", base)]
 
     # The model now describes the file on disk, not the one it replaced.
-    modello = mw._doc_model
-    assert modello.sources == [pdf]
-    assert [(p.source_index, p.base_rotation, p.rotation) for p in modello.pages] == [
-        (0, ruotata, 0),
+    model = mw._doc_model
+    assert model.sources == [pdf]
+    assert [(p.source_index, p.base_rotation, p.rotation) for p in model.pages] == [
+        (0, rotated, 0),
         (1, base, 0),
     ]
     # What is on disk cannot be undone: an undo stack that still offered the
@@ -1108,37 +1130,37 @@ def test_saving_over_the_open_file_then_saving_again_keeps_every_page(
     assert mw._undo_stack.count() == 0
 
     # The view shows the right pages, each rotated exactly once.
-    tele = mw._page_view._canvases
-    assert len(tele) == 2
-    for indice, (tela, gradi) in enumerate(zip(tele, (ruotata, base), strict=True)):
+    canvases = mw._page_view._canvases
+    assert len(canvases) == 2
+    for index, (canvas, degrees) in enumerate(zip(canvases, (rotated, base), strict=True)):
         # Only what is on screen gets rendered: bring each page into view.
-        mw._page_view.ensure_page_visible(indice)
+        mw._page_view.ensure_page_visible(index)
         _pump()
-        pix = tela.label.pixmap()
+        pix = canvas.label.pixmap()
         assert not pix.isNull(), "la pagina non è stata resa dopo il salvataggio"
-        orizzontale = gradi % 180 == 90
-        assert (pix.width() > pix.height()) == orizzontale
+        horizontal = degrees % 180 == 90
+        assert (pix.width() > pix.height()) == horizontal
 
-    save_as(modello, out)
-    assert _contenuto(out) == [("PAGINA 2", ruotata), ("PAGINA 3", base)]
+    save_as(model, out)
+    assert _content(out) == [("PAGINA 2", rotated), ("PAGINA 3", base)]
 
 
 # --------------------------------------------------------------------- #
-#  Salva compresso: la stessa voce di menu, il documento di prima
+#  Salva compresso: the same menu entry, the same document as before
 # --------------------------------------------------------------------- #
 
-def _frammentato(path: str, pagine: int = 20) -> None:
-    """Un PDF nella forma in cui i PDF veri arrivano: tante pagine, tanti stream.
+def _fragmented(path: str, pages: int = 20) -> None:
+    """A PDF in the shape real PDFs arrive in: many pages, many streams.
 
-    ``insert_text`` crea un oggetto per ogni chiamata, quindi il documento si
-    porta dietro centinaia di content stream minuscoli. E' il caso in cui la
-    compressione ha davvero qualcosa da fare.
+    ``insert_text`` creates one object per call, so the document carries
+    hundreds of tiny content streams. That is the case in which the
+    compression really has something to do.
     """
-    with fitz.open() as doc:
-        for i in range(pagine):
-            pagina = doc.new_page(width=595, height=842)
+    with pymupdf.open() as doc:
+        for i in range(pages):
+            page = doc.new_page(width=595, height=842)
             for k in range(40):
-                pagina.insert_text(
+                page.insert_text(
                     (60, 60 + k * 18),
                     f"Paragrafo {k} della pagina {i + 1}: contenuto ripetuto per occupare spazio.",
                     fontsize=10,
@@ -1146,37 +1168,37 @@ def _frammentato(path: str, pagine: int = 20) -> None:
         doc.save(path, deflate=True)
 
 
-def _livello_scelto(monkeypatch, chiave: str = "light", accettato: bool = True) -> None:
-    """Sostituisce il dialogo del livello con una risposta immediata."""
+def _chosen_level(monkeypatch, key: str = "light", accepted: bool = True) -> None:
+    """Replaces the level dialog with an immediate answer."""
 
     class _Dialogo:
         def __init__(self, parent=None) -> None:
-            self.level = LEVELS_BY_KEY[chiave]
+            self.level = LEVELS_BY_KEY[key]
 
         def exec(self) -> object:
-            return QDialog.DialogCode.Accepted if accettato else QDialog.DialogCode.Rejected
+            return QDialog.DialogCode.Accepted if accepted else QDialog.DialogCode.Rejected
 
     monkeypatch.setattr(plico.main_window, "CompressionDialog", _Dialogo)
 
 
-def _attendi_compressione() -> None:
-    """Aspetta il thread pool, poi consegna i segnali accodati alla GUI.
+def _wait_for_compression() -> None:
+    """Waits for the thread pool, then delivers the queued signals to the GUI.
 
-    La compressione gira su un QRunnable: ``finished`` arriva alla finestra
-    come connessione accodata, quindi serve anche un giro di eventi.
+    The compression runs on a QRunnable: ``finished`` reaches the window as a
+    queued connection, so an event loop round is needed too.
     """
     QThreadPool.globalInstance().waitForDone()
     _pump()
 
 
-def test_la_voce_compresso_e_nel_menu_file(windows):
-    """La voce di menu esiste, nella posizione in cui l'utente la cerca."""
+def test_the_compressed_entry_is_in_the_file_menu(windows):
+    """The menu entry exists, in the position where the user looks for it."""
     mw = windows()
-    voci = [azione.text().replace("&", "") for azione in mw.menuBar().actions()[0].menu().actions()]
-    assert "Salva compresso…" in voci
+    entries = [action.text().replace("&", "") for action in mw.menuBar().actions()[0].menu().actions()]
+    assert "Salva compresso…" in entries
 
 
-def test_nome_proposto_accanto_all_originale(windows, tmp_path):
+def test_the_proposed_name_sits_next_to_the_original(windows, tmp_path):
     pdf = str(tmp_path / "relazione.pdf")
     _make_pdf(pdf, pages=2)
 
@@ -1189,11 +1211,11 @@ def test_nome_proposto_accanto_all_originale(windows, tmp_path):
 def test_compress_writes_a_smaller_copy_and_leaves_the_source_alone(
     qapp, tmp_path, monkeypatch, windows
 ):
-    """Percorre la voce di menu per intero, con i dialoghi finti."""
+    """Walks the whole menu entry, with fake dialogs."""
     pdf = str(tmp_path / "doc.pdf")
-    _frammentato(pdf)
+    _fragmented(pdf)
     out = str(tmp_path / "doc-compresso.pdf")
-    prima = os.path.getsize(pdf)
+    before = os.path.getsize(pdf)
 
     mw = windows()
     _open(mw, pdf)
@@ -1205,23 +1227,23 @@ def test_compress_writes_a_smaller_copy_and_leaves_the_source_alone(
         staticmethod(lambda _parent, _title, text, *a, **k: messaggi.append(text)),
     )
     monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
-    _livello_scelto(monkeypatch, "light")
+    _chosen_level(monkeypatch, "light")
 
     mw._compress_file()
-    _attendi_compressione()
+    _wait_for_compression()
 
-    assert os.path.getsize(out) < prima * 0.5, "il file compresso non e` piu` piccolo"
-    with fitz.open(out) as doc:
+    assert os.path.getsize(out) < before * 0.5, "il file compresso non e` piu` piccolo"
+    with pymupdf.open(out) as doc:
         assert doc.page_count == 20
         assert "della pagina 1" in doc[0].get_text()
-    assert os.path.getsize(pdf) == prima, "la sorgente non si tocca"
+    assert os.path.getsize(pdf) == before, "la sorgente non si tocca"
     assert messaggi and "Prima:" in messaggi[0], f"il guadagno va raccontato: {messaggi}"
     assert mw._progress is None, "il dialogo di avanzamento deve sparire"
     assert mw._compression_task is None
 
 
 def test_compress_writes_the_virtual_document(qapp, tmp_path, monkeypatch, windows):
-    """Anche il file compresso rispetta eliminazioni e rotazioni."""
+    """The compressed file honours deletions and rotations too."""
     pdf = str(tmp_path / "doc.pdf")
     _make_pdf(pdf, pages=5)
     out = str(tmp_path / "out.pdf")
@@ -1233,12 +1255,12 @@ def test_compress_writes_the_virtual_document(qapp, tmp_path, monkeypatch, windo
 
     monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
     monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
-    _livello_scelto(monkeypatch, "light")
+    _chosen_level(monkeypatch, "light")
 
     mw._compress_file()
-    _attendi_compressione()
+    _wait_for_compression()
 
-    with fitz.open(out) as doc:
+    with pymupdf.open(out) as doc:
         assert doc.page_count == 4
         assert doc[0].rotation == 90
 
@@ -1251,17 +1273,17 @@ def test_compress_can_be_cancelled_at_the_level_dialog(qapp, tmp_path, monkeypat
     mw = windows()
     _open(mw, pdf)
 
-    chiamate: list[str] = []
+    calls: list[str] = []
     monkeypatch.setattr(
         QFileDialog,
         "getSaveFileName",
-        staticmethod(lambda *a, **k: (chiamate.append("chiesto"), (out, ""))[1]),
+        staticmethod(lambda *a, **k: (calls.append("chiesto"), (out, ""))[1]),
     )
-    _livello_scelto(monkeypatch, "light", accettato=False)
+    _chosen_level(monkeypatch, "light", accepted=False)
 
     mw._compress_file()
 
-    assert chiamate == [], "annullare il livello non deve chiedere un file"
+    assert calls == [], "annullare il livello non deve chiedere un file"
     assert not os.path.exists(out)
 
 
@@ -1274,47 +1296,47 @@ def test_compress_without_a_document_warns(qapp, monkeypatch, windows):
         "warning",
         staticmethod(lambda _parent, _title, text, *a, **k: avvisi.append(text)),
     )
-    aperti: list[str] = []
-    monkeypatch.setattr(plico.main_window, "CompressionDialog", lambda *a, **k: aperti.append("x"))
+    opened_files: list[str] = []
+    monkeypatch.setattr(plico.main_window, "CompressionDialog", lambda *a, **k: opened_files.append("x"))
 
     mw._compress_file()
 
-    assert aperti == [], "senza documento non si sceglie nemmeno il livello"
+    assert opened_files == [], "senza documento non si sceglie nemmeno il livello"
     assert avvisi and "Nessun documento" in avvisi[0]
 
 
 def test_compressing_over_the_open_file_evicts_the_stale_handle(
     qapp, tmp_path, monkeypatch, windows
 ):
-    """Come per save_as: os.replace() cambia l'inode sotto i piedi del worker."""
+    """As with save_as: os.replace() changes the inode under the worker's feet."""
     pdf = str(tmp_path / "doc.pdf")
-    _frammentato(pdf, pagine=6)
+    _fragmented(pdf, pages=6)
 
     mw = windows()
     _open(mw, pdf)
-    vecchio = mw._worker._docs.get(pdf)
-    assert vecchio is not None, "il worker non ha aperto la sorgente"
+    previous = mw._worker._docs.get(pdf)
+    assert previous is not None, "il worker non ha aperto la sorgente"
 
     monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (pdf, "")))
     monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
-    _livello_scelto(monkeypatch, "light")
+    _chosen_level(monkeypatch, "light")
 
     mw._compress_file()
-    _attendi_compressione()
+    _wait_for_compression()
 
-    assert vecchio.is_closed, "il worker tiene ancora il documento sovrascritto"
-    assert mw._worker._docs.get(pdf) is not vecchio
-    with fitz.open(pdf) as doc:
+    assert previous.is_closed, "il worker tiene ancora il documento sovrascritto"
+    assert mw._worker._docs.get(pdf) is not previous
+    with pymupdf.open(pdf) as doc:
         assert doc.page_count == 6
 
 
 def test_compressing_over_the_open_file_reopens_the_document(
     qapp, tmp_path, monkeypatch, windows
 ):
-    """Lo stesso bug del salvataggio, dalla voce «Salva compresso»."""
+    """The same bug as the save, from the «Salva compresso» entry."""
     pdf = str(tmp_path / "doc.pdf")
     out = str(tmp_path / "di-nuovo.pdf")
-    _tre_pagine(pdf)
+    _three_pages(pdf)
 
     mw = windows()
     _open(mw, pdf)
@@ -1325,10 +1347,10 @@ def test_compressing_over_the_open_file_reopens_the_document(
 
     monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (pdf, "")))
     monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
-    _livello_scelto(monkeypatch, "light")
+    _chosen_level(monkeypatch, "light")
 
     mw._compress_file()
-    _attendi_compressione()
+    _wait_for_compression()
 
     assert [(p.source_index, p.base_rotation, p.rotation) for p in mw._doc_model.pages] == [
         (0, 90, 0),
@@ -1336,13 +1358,13 @@ def test_compressing_over_the_open_file_reopens_the_document(
     ]
     assert mw._undo_stack.count() == 0
     save_as(mw._doc_model, out)
-    assert _contenuto(out) == [("PAGINA 2", 90), ("PAGINA 3", 0)]
+    assert _content(out) == [("PAGINA 2", 90), ("PAGINA 3", 0)]
 
 
 def test_extract_over_the_open_file_is_refused(qapp, tmp_path, monkeypatch, windows):
-    """Estrarre sopra il documento aperto viene rifiutato, il file resta com'era."""
+    """Extracting over the open document is refused, the file stays as it was."""
     pdf = str(tmp_path / "doc.pdf")
-    _tre_pagine(pdf)
+    _three_pages(pdf)
 
     mw = windows()
     _open(mw, pdf)
@@ -1357,106 +1379,106 @@ def test_extract_over_the_open_file_is_refused(qapp, tmp_path, monkeypatch, wind
     mw._extract_pages()
 
     assert messaggi, "il rifiuto deve arrivare all'utente"
-    assert len(_contenuto(pdf)) == 3
+    assert len(_content(pdf)) == 3
     assert mw._doc_model.page_count == 3
 
 
 def test_a_failed_compression_arrives_as_a_message(qapp, tmp_path, monkeypatch, windows):
-    """Un errore nel thread di lavoro deve arrivare all'utente, non sparire."""
+    """An error in the worker thread must reach the user, not vanish."""
     pdf = str(tmp_path / "doc.pdf")
     _make_pdf(pdf, pages=3)
-    # Una cartella che non esiste: il temporaneo non si puo` nemmeno creare.
+    # A directory that does not exist: the temporary cannot even be created.
     out = str(tmp_path / "inesistente" / "out.pdf")
 
     mw = windows()
     _open(mw, pdf)
 
-    errori: list[str] = []
+    errors: list[str] = []
     monkeypatch.setattr(
         QMessageBox,
         "critical",
-        staticmethod(lambda _parent, _title, text, *a, **k: errori.append(text)),
+        staticmethod(lambda _parent, _title, text, *a, **k: errors.append(text)),
     )
     monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
-    _livello_scelto(monkeypatch, "light")
+    _chosen_level(monkeypatch, "light")
 
     mw._compress_file()
-    _attendi_compressione()
+    _wait_for_compression()
 
-    assert errori and "Impossibile comprimere" in errori[0], errori
+    assert errors and "Impossibile comprimere" in errors[0], errors
     assert mw._progress is None, "anche fallendo, il dialogo di avanzamento deve sparire"
 
 
 # --------------------------------------------------------------------- #
-#  Redazione: la modalita`, il trascinamento e il giro completo
+#  Redazione: the mode, the drag and the full round
 # --------------------------------------------------------------------- #
 
 def _pdf_da_redigere(path: str) -> None:
-    """Due parole ben distanti: una da togliere, una da ritrovare."""
-    with fitz.open() as doc:
-        pagina = doc.new_page(width=595, height=842)
-        pagina.insert_text((100, 100), "SEGRETO", fontsize=20)
-        pagina.insert_text((100, 700), "PUBBLICO", fontsize=20)
+    """Two well-separated words: one to remove, one to find again."""
+    with pymupdf.open() as doc:
+        page = doc.new_page(width=595, height=842)
+        page.insert_text((100, 100), "SEGRETO", fontsize=20)
+        page.insert_text((100, 700), "PUBBLICO", fontsize=20)
         doc.save(path)
 
 
-def _evento(tipo: QEvent.Type, pos: tuple[int, int]) -> QMouseEvent:
-    # La forma con posizione globale e` l'unica che Qt 6 non segnala come
-    # deprecata; la posizione locale e` quella che l'etichetta legge.
-    punto = QPointF(*pos)
+def _event(kind: QEvent.Type, pos: tuple[int, int]) -> QMouseEvent:
+    # The form with global position is the only one Qt 6 does not flag as
+    # deprecated; the local position is the one the label reads.
+    point = QPointF(*pos)
     return QMouseEvent(
-        tipo,
-        punto,
-        punto,
+        kind,
+        point,
+        point,
         Qt.MouseButton.LeftButton,
         Qt.MouseButton.LeftButton,
         Qt.KeyboardModifier.NoModifier,
     )
 
 
-def _trascina(label, da: tuple[int, int], a: tuple[int, int]) -> None:
-    """Un trascinamento vero: premuta, spostamento, rilascio.
+def _drag(label, start: tuple[int, int], end: tuple[int, int]) -> None:
+    """A real drag: press, move, release.
 
-    QtTest non e` disponibile in questa installazione di PySide6, quindi gli
-    eventi si costruiscono a mano e si consegnano alla stessa etichetta che li
-    riceverebbe dall'utente. Con ``da == a`` diventa un clic secco.
+    QtTest is not available in this PySide6 installation, so the events are
+    built by hand and delivered to the same label that would receive them
+    from the user. With ``da == a`` it becomes a plain click.
     """
-    label.mousePressEvent(_evento(QEvent.Type.MouseButtonPress, da))
-    if a != da:
-        label.mouseMoveEvent(_evento(QEvent.Type.MouseMove, a))
-    label.mouseReleaseEvent(_evento(QEvent.Type.MouseButtonRelease, a))
+    label.mousePressEvent(_event(QEvent.Type.MouseButtonPress, start))
+    if end != start:
+        label.mouseMoveEvent(_event(QEvent.Type.MouseMove, end))
+    label.mouseReleaseEvent(_event(QEvent.Type.MouseButtonRelease, end))
 
 
-def _pixel_di(canvas, pdf: str, parola: str) -> tuple[tuple[int, int], tuple[int, int]]:
-    """Dove sta *parola* sullo schermo, calcolato senza usare la vista.
+def _pixel_for(canvas, pdf: str, word: str) -> tuple[tuple[int, int], tuple[int, int]]:
+    """Where *word* is on the screen, computed without using the view.
 
-    Serve a non chiedere alla PageView dove ha messo la parola e poi
-    verificare che l'abbia messa li`: si parte da ``search_for`` di fitz e si
-    applica la stessa matrice che usa MuPDF (fissata da tests/test_redact.py).
+    Its purpose is not to ask PageView where it put the word and then check
+    that it put it there: it starts from PyMuPDF's ``search_for`` and applies the
+    same matrix MuPDF uses (fixed by tests/test_redact.py).
     """
-    with fitz.open(pdf) as doc:
-        area = doc[0].search_for(parola)[0]
-    rect = RedactionRect.from_corners(area.x0, area.y0, area.x1, area.y1)
-    larghezza, altezza = canvas.item.unrotated_size
-    in_vista = map_rect(rect, rotation_matrix(larghezza, altezza, canvas.item.total_rotation))
+    with pymupdf.open(pdf) as doc:
+        box = doc[0].search_for(word)[0]
+    rect = RedactionRect.from_corners(box.x0, box.y0, box.x1, box.y1)
+    width, height = canvas.item.unrotated_size
+    in_view = map_rect(rect, rotation_matrix(width, height, canvas.item.total_rotation))
     return (
-        (int(in_vista.x0 * canvas.scale), int(in_vista.y0 * canvas.scale)),
-        (int(in_vista.x1 * canvas.scale), int(in_vista.y1 * canvas.scale)),
+        (int(in_view.x0 * canvas.scale), int(in_view.y0 * canvas.scale)),
+        (int(in_view.x1 * canvas.scale), int(in_view.y1 * canvas.scale)),
     )
 
 
-def test_la_redazione_e_una_modalita_nel_menu_modifica(windows):
+def test_redaction_is_a_mode_in_the_edit_menu(windows):
     mw = windows()
-    voci = {
-        azione.text().replace("&", ""): azione
-        for azione in mw.menuBar().actions()[1].menu().actions()
+    entries = {
+        action.text().replace("&", ""): action
+        for action in mw.menuBar().actions()[1].menu().actions()
     }
-    assert "Redazione" in voci, sorted(voci)
-    assert voci["Redazione"].isCheckable(), "e` una modalita`, non un comando secco"
-    assert voci["Redazione"].shortcut().toString() == "Ctrl+Shift+X"
+    assert "Redazione" in entries, sorted(entries)
+    assert entries["Redazione"].isCheckable(), "e` una modalita`, non un comando secco"
+    assert entries["Redazione"].shortcut().toString() == "Ctrl+Shift+X"
 
 
-def test_la_redazione_senza_documento_avvisa(qapp, monkeypatch, windows):
+def test_redaction_without_a_document_warns(qapp, monkeypatch, windows):
     mw = windows()
 
     avvisi: list[str] = []
@@ -1473,7 +1495,7 @@ def test_la_redazione_senza_documento_avvisa(qapp, monkeypatch, windows):
     assert not mw._page_view.redaction_mode()
 
 
-def test_la_modalita_redazione_si_accende_e_si_spegne(qapp, tmp_path, windows):
+def test_redaction_mode_turns_on_and_off(qapp, tmp_path, windows):
     pdf = str(tmp_path / "doc.pdf")
     _make_pdf(pdf, pages=3)
     mw = windows()
@@ -1488,7 +1510,7 @@ def test_la_modalita_redazione_si_accende_e_si_spegne(qapp, tmp_path, windows):
     assert not mw._page_view.redaction_mode()
 
 
-def test_esc_esce_dalla_redazione(qapp, tmp_path, windows):
+def test_esc_leaves_redaction(qapp, tmp_path, windows):
     pdf = str(tmp_path / "doc.pdf")
     _make_pdf(pdf, pages=1)
     mw = windows()
@@ -1503,25 +1525,25 @@ def test_esc_esce_dalla_redazione(qapp, tmp_path, windows):
     assert not mw._page_view.redaction_mode()
 
 
-def test_aprire_un_altro_documento_spegne_la_redazione(qapp, tmp_path, windows):
-    """Altrimenti il primo trascinamento segnerebbe una pagina mai vista."""
-    primo = str(tmp_path / "primo.pdf")
-    secondo = str(tmp_path / "secondo.pdf")
-    _make_pdf(primo, pages=1)
-    _make_pdf(secondo, pages=1)
+def test_opening_another_document_turns_redaction_off(qapp, tmp_path, windows):
+    """Otherwise the first drag would mark a page never seen."""
+    first = str(tmp_path / "primo.pdf")
+    second = str(tmp_path / "secondo.pdf")
+    _make_pdf(first, pages=1)
+    _make_pdf(second, pages=1)
 
     mw = windows()
-    _open(mw, primo)
+    _open(mw, first)
     mw._redact_act.trigger()
     assert mw._page_view.redaction_mode()
 
-    _open(mw, secondo)
+    _open(mw, second)
 
     assert not mw._redact_act.isChecked()
     assert not mw._page_view.redaction_mode()
 
 
-def test_trascinare_sulla_pagina_crea_una_redazione(qapp, tmp_path, windows):
+def test_dragging_on_the_page_creates_a_redaction(qapp, tmp_path, windows):
     pdf = str(tmp_path / "doc.pdf")
     _make_pdf(pdf, pages=1)
     mw = windows()
@@ -1530,20 +1552,20 @@ def test_trascinare_sulla_pagina_crea_una_redazione(qapp, tmp_path, windows):
     mw._redact_act.trigger()
     canvas = mw._page_view._canvases[0]
 
-    _trascina(canvas.label, (20, 20), (120, 80))
+    _drag(canvas.label, (20, 20), (120, 80))
     _pump(0.1)
 
-    redazioni = mw._doc_model.pages[0].redactions
-    assert len(redazioni) == 1, "il trascinamento non ha lasciato una redazione"
-    rect = redazioni[0]
-    larghezza, altezza = mw._doc_model.pages[0].unrotated_size
-    assert 0.0 <= rect.x0 < rect.x1 <= larghezza
-    assert 0.0 <= rect.y0 < rect.y1 <= altezza
+    redactions = mw._doc_model.pages[0].redactions
+    assert len(redactions) == 1, "il trascinamento non ha lasciato una redazione"
+    rect = redactions[0]
+    width, height = mw._doc_model.pages[0].unrotated_size
+    assert 0.0 <= rect.x0 < rect.x1 <= width
+    assert 0.0 <= rect.y0 < rect.y1 <= height
     assert mw._undo_stack.count() == 1
     assert mw._undo_stack.undoText() == "Redazione su pagina 1"
 
 
-def test_annullare_il_comando_toglie_la_redazione(qapp, tmp_path, windows):
+def test_undoing_the_command_removes_the_redaction(qapp, tmp_path, windows):
     pdf = str(tmp_path / "doc.pdf")
     _make_pdf(pdf, pages=1)
     mw = windows()
@@ -1551,7 +1573,7 @@ def test_annullare_il_comando_toglie_la_redazione(qapp, tmp_path, windows):
 
     mw._redact_act.trigger()
     canvas = mw._page_view._canvases[0]
-    _trascina(canvas.label, (20, 20), (120, 80))
+    _drag(canvas.label, (20, 20), (120, 80))
     assert len(mw._doc_model.pages[0].redactions) == 1
 
     mw._undo_stack.undo()
@@ -1562,8 +1584,8 @@ def test_annullare_il_comando_toglie_la_redazione(qapp, tmp_path, windows):
     assert len(mw._doc_model.pages[0].redactions) == 1
 
 
-def test_un_clic_su_una_zona_la_annulla(qapp, tmp_path, windows):
-    """Un clic secco e` il modo di riprendersi un rettangolo sbagliato."""
+def test_a_click_on_a_mark_removes_it(qapp, tmp_path, windows):
+    """A plain click is the way to take back a wrong rectangle."""
     pdf = str(tmp_path / "doc.pdf")
     _make_pdf(pdf, pages=1)
     mw = windows()
@@ -1571,19 +1593,19 @@ def test_un_clic_su_una_zona_la_annulla(qapp, tmp_path, windows):
 
     mw._redact_act.trigger()
     canvas = mw._page_view._canvases[0]
-    _trascina(canvas.label, (20, 20), (120, 80))
+    _drag(canvas.label, (20, 20), (120, 80))
     assert len(mw._doc_model.pages[0].redactions) == 1
 
-    # Un clic al centro della zona appena disegnata.
-    _trascina(canvas.label, (70, 50), (70, 50))
+    # A click in the middle of the zone just drawn.
+    _drag(canvas.label, (70, 50), (70, 50))
     _pump(0.1)
 
     assert mw._doc_model.pages[0].redactions == []
     assert mw._undo_stack.undoText() == "Annulla redazione su pagina 1"
 
 
-def test_dal_trascinamento_al_file_il_testo_sparisce(qapp, tmp_path, monkeypatch, windows):
-    """Il giro completo: si disegna sulla parola, si salva, la parola non c'e` piu`."""
+def test_from_the_drag_to_the_file_the_text_disappears(qapp, tmp_path, monkeypatch, windows):
+    """The full round: draw on the word, save, the word is no longer there."""
     pdf = str(tmp_path / "doc.pdf")
     out = str(tmp_path / "out.pdf")
     _pdf_da_redigere(pdf)
@@ -1593,8 +1615,8 @@ def test_dal_trascinamento_al_file_il_testo_sparisce(qapp, tmp_path, monkeypatch
 
     mw._redact_act.trigger()
     canvas = mw._page_view._canvases[0]
-    da, a = _pixel_di(canvas, pdf, "SEGRETO")
-    _trascina(canvas.label, da, a)
+    da, a = _pixel_for(canvas, pdf, "SEGRETO")
+    _drag(canvas.label, da, a)
     assert len(mw._doc_model.pages[0].redactions) == 1
 
     monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
@@ -1602,14 +1624,14 @@ def test_dal_trascinamento_al_file_il_testo_sparisce(qapp, tmp_path, monkeypatch
     mw._save_file_as()
     _pump()
 
-    with fitz.open(out) as doc:
-        testo = doc[0].get_text()
-    assert "SEGRETO" not in testo, "il giro completo non ha rimosso il testo"
-    assert "PUBBLICO" in testo, "la redazione ha portato via anche il resto"
+    with pymupdf.open(out) as doc:
+        text = doc[0].get_text()
+    assert "SEGRETO" not in text, "il giro completo non ha rimosso il testo"
+    assert "PUBBLICO" in text, "la redazione ha portato via anche il resto"
 
 
-def test_il_trascinamento_regge_anche_ruotando_la_pagina(qapp, tmp_path, monkeypatch, windows):
-    """Dove il rettangolo puo` finire nel posto sbagliato: pagina ruotata."""
+def test_the_drag_also_holds_with_a_rotated_page(qapp, tmp_path, monkeypatch, windows):
+    """Where the rectangle can end up in the wrong place: a rotated page."""
     pdf = str(tmp_path / "doc.pdf")
     out = str(tmp_path / "out.pdf")
     _pdf_da_redigere(pdf)
@@ -1622,84 +1644,85 @@ def test_il_trascinamento_regge_anche_ruotando_la_pagina(qapp, tmp_path, monkeyp
     mw._redact_act.trigger()
     canvas = mw._page_view._canvases[0]
     assert canvas.item.total_rotation == 90
-    da, a = _pixel_di(canvas, pdf, "SEGRETO")
-    _trascina(canvas.label, da, a)
+    da, a = _pixel_for(canvas, pdf, "SEGRETO")
+    _drag(canvas.label, da, a)
 
     monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
     monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
     mw._save_file_as()
     _pump()
 
-    with fitz.open(out) as doc:
+    with pymupdf.open(out) as doc:
         assert doc[0].rotation == 90
-        testo = doc[0].get_text()
-    assert "SEGRETO" not in testo, "ruotando, il rettangolo e` finito altrove"
-    assert "PUBBLICO" in testo
+        text = doc[0].get_text()
+    assert "SEGRETO" not in text, "ruotando, il rettangolo e` finito altrove"
+    assert "PUBBLICO" in text
 
 
 # --------------------------------------------------------------------- #
-#  Form AcroForm: il pannello, il clic sulla pagina e il salvataggio
+#  AcroForm form: the panel, the click on the page and the save
 # --------------------------------------------------------------------- #
 
-def _aggiungi_campo(pagina, nome: str, tipo: int, rect, valore=None) -> None:
-    """Un campo sul modulo di prova. La pagina deve essere viva."""
-    widget = fitz.Widget()
-    widget.field_name = nome
-    widget.field_type = tipo
-    widget.rect = fitz.Rect(*rect)
-    if valore is not None:
-        widget.field_value = valore
-    pagina.add_widget(widget)
+def _add_field(page, name: str, kind: int, rect, value=None) -> None:
+    """A field on the test form. The page must be alive."""
+    widget = pymupdf.Widget()
+    widget.field_name = name
+    widget.field_type = kind
+    widget.rect = pymupdf.Rect(*rect)
+    if value is not None:
+        widget.field_value = value
+    page.add_widget(widget)
     widget.update()
 
 
-def _pdf_modulo(path: str, pagine: int = 1) -> None:
-    """Un modulo con un campo di testo e una casella, sull'ultima pagina."""
-    with fitz.open() as doc:
-        for _ in range(max(0, pagine - 1)):
+def _form_pdf(path: str, pages: int = 1) -> None:
+    """A form with a text field and a checkbox, on the last page."""
+    with pymupdf.open() as doc:
+        for _ in range(max(0, pages - 1)):
             doc.new_page(width=595, height=842)
-        pagina = doc.new_page(width=595, height=842)
-        pagina.insert_text((72, 60), "Modulo", fontsize=16)
-        _aggiungi_campo(
-            pagina, "nome", fitz.PDF_WIDGET_TYPE_TEXT, (72, 100, 300, 128), "vecchio"
+        page = doc.new_page(width=595, height=842)
+        page.insert_text((72, 60), "Modulo", fontsize=16)
+        _add_field(
+            page, "nome", pymupdf.PDF_WIDGET_TYPE_TEXT, (72, 100, 300, 128), "vecchio"
         )
-        _aggiungi_campo(pagina, "accetto", fitz.PDF_WIDGET_TYPE_CHECKBOX, (72, 140, 92, 160))
+        _add_field(page, "accetto", pymupdf.PDF_WIDGET_TYPE_CHECKBOX, (72, 140, 92, 160))
         doc.save(path, garbage=4, deflate=True)
 
 
-def _valori_del_file(path: str) -> dict[str, str]:
-    with fitz.open(path) as doc:
-        pagina = doc[0]
-        return {w.field_name or "": w.field_value or "" for w in pagina.widgets() or ()}
+def _file_values(path: str) -> dict[str, str]:
+    with pymupdf.open(path) as doc:
+        page = doc[0]
+        return {w.field_name or "": w.field_value or "" for w in page.widgets() or ()}
 
 
-def _editor_di(mw: MainWindow, nome: str):
-    """L'editor che il pannello ha costruito per *nome*."""
-    return mw._form_panel._editors[nome]
+def _editor_di(mw: MainWindow, name: str):
+    """The editor the panel built for *nome*."""
+    return mw._form_panel._editors[name]
 
 
-def _scrivi_nel_pannello(mw: MainWindow, nome: str, valore: str) -> None:
-    """Simula la digitazione nel pannello.
+def _type_in_panel(mw: MainWindow, name: str, value: str) -> None:
+    """Simulates typing in the panel.
 
-    QtTest non esiste in questa installazione, quindi per il campo di testo si
-    mette il valore nell'editor e si emette lo stesso segnale che Qt emette
-    digitando. Casella e tendina emettono da sole, quindi li` basta agire.
+    QtTest does not exist in this installation, so for the text field the
+    value is put into the editor and the same signal Qt emits while typing is
+    emitted. Checkbox and combo box emit on their own, so there it is enough
+    to act.
     """
-    editor = _editor_di(mw, nome)
+    editor = _editor_di(mw, name)
     if isinstance(editor, QCheckBox):
-        editor.setChecked(valore not in ("", "Off"))
+        editor.setChecked(value not in ("", "Off"))
         return
     if isinstance(editor, QComboBox):
-        editor.setCurrentText(valore)
+        editor.setCurrentText(value)
         return
     assert isinstance(editor, QLineEdit), editor
-    editor.setText(valore)
-    editor.textEdited.emit(valore)
+    editor.setText(value)
+    editor.textEdited.emit(value)
 
 
-def test_il_pannello_mostra_i_campi_della_pagina(qapp, tmp_path, windows):
+def test_the_panel_shows_the_page_fields(qapp, tmp_path, windows):
     pdf = str(tmp_path / "modulo.pdf")
-    _pdf_modulo(pdf)
+    _form_pdf(pdf)
 
     mw = windows()
     _open(mw, pdf)
@@ -1711,15 +1734,15 @@ def test_il_pannello_mostra_i_campi_della_pagina(qapp, tmp_path, windows):
     assert not _editor_di(mw, "accetto").isChecked()
 
 
-def test_senza_documento_il_pannello_e_vuoto(qapp, windows):
+def test_without_a_document_the_panel_is_empty(qapp, windows):
     mw = windows()
     assert mw._form_panel._editors == {}
 
 
-def test_il_pannello_segue_la_pagina_scelta(qapp, tmp_path, windows):
-    """I campi stanno su una pagina: cambiando pagina cambiano loro."""
+def test_the_panel_follows_the_selected_page(qapp, tmp_path, windows):
+    """Fields live on one page: changing page changes them."""
     pdf = str(tmp_path / "due.pdf")
-    _pdf_modulo(pdf, pagine=2)
+    _form_pdf(pdf, pages=2)
 
     mw = windows()
     _open(mw, pdf)
@@ -1731,17 +1754,17 @@ def test_il_pannello_segue_la_pagina_scelta(qapp, tmp_path, windows):
     assert set(mw._form_panel._editors) == {"nome", "accetto"}
 
 
-def test_scrivere_nel_pannello_diventa_un_comando_e_finisce_nel_file(
+def test_typing_in_the_panel_becomes_a_command_and_reaches_the_file(
     qapp, tmp_path, monkeypatch, windows
 ):
     pdf = str(tmp_path / "modulo.pdf")
     out = str(tmp_path / "out.pdf")
-    _pdf_modulo(pdf)
+    _form_pdf(pdf)
 
     mw = windows()
     _open(mw, pdf)
 
-    _scrivi_nel_pannello(mw, "nome", "Anna")
+    _type_in_panel(mw, "nome", "Anna")
 
     assert mw._doc_model.pages[0].form_values["nome"] == "Anna"
     assert mw._undo_stack.count() == 1
@@ -1754,122 +1777,122 @@ def test_scrivere_nel_pannello_diventa_un_comando_e_finisce_nel_file(
     mw._save_file_as()
     _pump()
 
-    assert _valori_del_file(out)["nome"] == "Anna"
-    assert _valori_del_file(pdf)["nome"] == "vecchio", "la sorgente non si tocca"
+    assert _file_values(out)["nome"] == "Anna"
+    assert _file_values(pdf)["nome"] == "vecchio", "la sorgente non si tocca"
 
 
-def test_undo_toglie_la_modifica_del_pannello(qapp, tmp_path, windows):
+def test_undo_removes_the_panel_edit(qapp, tmp_path, windows):
     pdf = str(tmp_path / "modulo.pdf")
-    _pdf_modulo(pdf)
+    _form_pdf(pdf)
 
     mw = windows()
     _open(mw, pdf)
-    _scrivi_nel_pannello(mw, "nome", "Anna")
+    _type_in_panel(mw, "nome", "Anna")
 
     mw._undo_stack.undo()
 
     assert "nome" not in mw._doc_model.pages[0].form_values
 
 
-def test_la_casella_del_pannello_registra_lo_stato(qapp, tmp_path, windows):
+def test_the_panel_checkbox_records_the_state(qapp, tmp_path, windows):
     pdf = str(tmp_path / "modulo.pdf")
-    _pdf_modulo(pdf)
+    _form_pdf(pdf)
 
     mw = windows()
     _open(mw, pdf)
 
-    _scrivi_nel_pannello(mw, "accetto", "Yes")
+    _type_in_panel(mw, "accetto", "Yes")
     assert mw._doc_model.pages[0].form_values["accetto"] == "Yes"
 
     mw._undo_stack.undo()
     assert "accetto" not in mw._doc_model.pages[0].form_values
 
 
-def test_un_clic_sulla_pagina_seleziona_il_campo(qapp, tmp_path, windows):
-    """Il clic non compila: dice al pannello quale campo si sta guardando."""
+def test_a_click_on_the_page_selects_the_field(qapp, tmp_path, windows):
+    """The click does not fill in: it tells the panel which field is being looked at."""
     pdf = str(tmp_path / "modulo.pdf")
-    _pdf_modulo(pdf)
+    _form_pdf(pdf)
 
     mw = windows()
     _open(mw, pdf)
 
     canvas = mw._page_view._canvases[0]
-    campo = next(c for c in canvas.item.form_fields if c.name == "nome")
-    dentro = (
-        int((campo.rect[0] + campo.rect[2]) / 2 * canvas.scale),
-        int((campo.rect[1] + campo.rect[3]) / 2 * canvas.scale),
+    field = next(c for c in canvas.item.form_fields if c.name == "nome")
+    inside = (
+        int((field.rect[0] + field.rect[2]) / 2 * canvas.scale),
+        int((field.rect[1] + field.rect[3]) / 2 * canvas.scale),
     )
-    _trascina(canvas.label, dentro, dentro)  # da == a: un clic secco
+    _drag(canvas.label, inside, inside)  # da == a: a plain click
 
     assert mw._page_view.selected_field() == (0, "nome")
     assert mw._form_panel.focusWidget() is not None
 
 
-def test_un_clic_fuori_dai_campi_non_seleziona_niente(qapp, tmp_path, windows):
+def test_a_click_outside_the_fields_selects_nothing(qapp, tmp_path, windows):
     pdf = str(tmp_path / "modulo.pdf")
-    _pdf_modulo(pdf)
+    _form_pdf(pdf)
 
     mw = windows()
     _open(mw, pdf)
 
     canvas = mw._page_view._canvases[0]
-    _trascina(canvas.label, (5, 700), (5, 700))
+    _drag(canvas.label, (5, 700), (5, 700))
 
     assert mw._page_view.selected_field() is None
 
 
-def test_il_valore_disegnato_viene_dal_modello(qapp, tmp_path, windows):
-    """L'anteprima sulla pagina deve seguire il modello, non il file."""
+def test_the_drawn_value_comes_from_the_model(qapp, tmp_path, windows):
+    """The preview on the page must follow the model, not the file."""
     pdf = str(tmp_path / "modulo.pdf")
-    _pdf_modulo(pdf)
+    _form_pdf(pdf)
 
     mw = windows()
     _open(mw, pdf)
 
     canvas = mw._page_view._canvases[0]
-    campo = next(c for c in canvas.item.form_fields if c.name == "nome")
-    assert canvas.label._valore_mostrato(canvas.item, campo) == "vecchio"
+    field = next(c for c in canvas.item.form_fields if c.name == "nome")
+    assert canvas.label._value_shown(canvas.item, field) == "vecchio"
 
-    _scrivi_nel_pannello(mw, "nome", "Anna")
+    _type_in_panel(mw, "nome", "Anna")
 
-    assert canvas.label._valore_mostrato(canvas.item, campo) == "Anna"
-    assert campo.value == "vecchio", "il descrittore resta quello del file"
+    assert canvas.label._value_shown(canvas.item, field) == "Anna"
+    assert field.value == "vecchio", "il descrittore resta quello del file"
 
 
 # --------------------------------------------------------------------- #
-#  Redigi testo: cercare una parola e marcarla ovunque
+#  Redigi testo: search for a word and mark it everywhere
 # --------------------------------------------------------------------- #
 
 
-def _cerca(mw, monkeypatch, testo: str, conferma: bool = True) -> None:
-    """Finge il dialogo di ricerca e lancia l'azione del menu."""
+def _search(mw, monkeypatch, text: str, conferma: bool = True) -> None:
+    """Fakes the search dialog and triggers the menu action."""
     monkeypatch.setattr(
-        QInputDialog, "getText", staticmethod(lambda *a, **k: (testo, conferma))
+        QInputDialog, "getText", staticmethod(lambda *a, **k: (text, conferma))
     )
     mw._redact_text()
 
 
-def test_la_voce_redigi_testo_e_nel_menu_modifica(windows) -> None:
-    """L'azione esiste, sta in Modifica e porta la sua scorciatoia."""
+def test_the_redact_text_entry_is_in_the_edit_menu(windows) -> None:
+    """The action exists, it is in Modifica and carries its shortcut."""
     mw = windows()
     modifica = next(a.menu() for a in mw.menuBar().actions() if "Modifica" in a.text())
     assert modifica is not None
-    azione = next(
+    action = next(
         a for a in modifica.actions() if a.text().replace("&", "") == "Redigi testo…"
     )
-    assert azione.shortcut().toString() == "Ctrl+Shift+F"
+    assert action.shortcut().toString() == "Ctrl+Shift+F"
 
 
-def test_redigi_testo_marca_tutte_le_occorrenze_in_un_solo_passo(
+def test_redact_text_marks_every_occurrence_in_one_step(
     windows, monkeypatch, tmp_path
 ) -> None:
-    """Tre pagine marcate devono costare UN Annulla, non tre."""
+    """Three marked pages must cost ONE Annulla, not three."""
     pdf = str(tmp_path / "doc.pdf")
     _make_pdf(pdf, pages=3)
     mw = windows()
     _open(mw, pdf)
 
-    _cerca(mw, monkeypatch, "Pagina")
+    _search(mw, monkeypatch, "Pagina")
 
     assert mw._undo_stack.count() == 1, "una macro, non un comando per pagina"
     assert mw._undo_stack.undoText() == "Redigi «Pagina»"
@@ -1880,64 +1903,64 @@ def test_redigi_testo_marca_tutte_le_occorrenze_in_un_solo_passo(
     assert all(not item.redactions for item in mw._doc_model.pages)
 
 
-def test_redigi_testo_salva_un_file_senza_la_parola(
+def test_redact_text_saves_a_file_without_the_word(
     windows, monkeypatch, tmp_path
 ) -> None:
-    """Dal menu al disco: la parola cercata non e` piu` nel file."""
+    """From the menu to the disk: the searched word is no longer in the file."""
     pdf = str(tmp_path / "doc.pdf")
     out = str(tmp_path / "out.pdf")
     _make_pdf(pdf, pages=2)
     mw = windows()
     _open(mw, pdf)
 
-    _cerca(mw, monkeypatch, "Pagina")
+    _search(mw, monkeypatch, "Pagina")
     save_as(mw._doc_model, out)
 
-    with fitz.open(out) as doc:
+    with pymupdf.open(out) as doc:
         assert doc.page_count == 2
         for page in doc:
             assert "Pagina" not in page.get_text()
 
-    with fitz.open(pdf) as doc:
+    with pymupdf.open(pdf) as doc:
         assert "Pagina 1" in doc[0].get_text(), "la sorgente resta com'era"
 
 
-def test_redigi_testo_annullato_non_marca_niente(windows, monkeypatch, tmp_path) -> None:
+def test_redact_text_cancelled_marks_nothing(windows, monkeypatch, tmp_path) -> None:
     pdf = str(tmp_path / "doc.pdf")
     _make_pdf(pdf, pages=2)
     mw = windows()
     _open(mw, pdf)
 
-    _cerca(mw, monkeypatch, "Pagina", conferma=False)
+    _search(mw, monkeypatch, "Pagina", conferma=False)
 
     assert mw._undo_stack.count() == 0
     assert all(not item.redactions for item in mw._doc_model.pages)
 
 
-def test_redigi_testo_senza_occorrenze_lo_dice(windows, monkeypatch, tmp_path) -> None:
-    """Nessun comando, nessun segno, e lo stato lo racconta."""
+def test_redact_text_without_occurrences_says_so(windows, monkeypatch, tmp_path) -> None:
+    """No command, no mark, and the status tells it."""
     pdf = str(tmp_path / "doc.pdf")
     _make_pdf(pdf, pages=2)
     mw = windows()
     _open(mw, pdf)
 
-    _cerca(mw, monkeypatch, "INESISTENTE")
+    _search(mw, monkeypatch, "INESISTENTE")
 
     assert mw._undo_stack.count() == 0
     assert "Nessuna occorrenza" in mw._status.text()
 
 
-def test_redigi_testo_senza_documento_avvisa(windows, monkeypatch) -> None:
-    """Senza niente aperto si avvisa, e il dialogo non si apre nemmeno."""
+def test_redact_text_without_a_document_warns(windows, monkeypatch) -> None:
+    """With nothing open it warns, and the dialog does not even open."""
     avvisi: list[str] = []
     monkeypatch.setattr(
         QMessageBox, "warning", staticmethod(lambda *a, **k: avvisi.append(a[2]))
     )
 
-    def _mai(*a, **k):
+    def _never(*a, **k):
         raise AssertionError("il dialogo non deve aprirsi")
 
-    monkeypatch.setattr(QInputDialog, "getText", staticmethod(_mai))
+    monkeypatch.setattr(QInputDialog, "getText", staticmethod(_never))
     mw = windows()
 
     mw._redact_text()
@@ -1945,19 +1968,19 @@ def test_redigi_testo_senza_documento_avvisa(windows, monkeypatch) -> None:
     assert avvisi and "Nessun documento" in avvisi[0]
 
 
-def test_la_ricerca_non_marca_due_volte_lo_stesso_punto(
+def test_the_search_does_not_mark_the_same_spot_twice(
     windows, monkeypatch, tmp_path
 ) -> None:
-    """La seconda ricerca non trova piu` niente, e non crea un comando."""
+    """The second search finds nothing more, and creates no command."""
     pdf = str(tmp_path / "doc.pdf")
     _make_pdf(pdf, pages=1)
     mw = windows()
     _open(mw, pdf)
 
-    _cerca(mw, monkeypatch, "Pagina")
+    _search(mw, monkeypatch, "Pagina")
     assert sum(len(item.redactions) for item in mw._doc_model.pages) == 1
 
-    _cerca(mw, monkeypatch, "Pagina")
+    _search(mw, monkeypatch, "Pagina")
 
     assert sum(len(item.redactions) for item in mw._doc_model.pages) == 1
     assert mw._undo_stack.count() == 1, "la seconda ricerca non crea un comando"
@@ -1965,11 +1988,11 @@ def test_la_ricerca_non_marca_due_volte_lo_stesso_punto(
 
 
 # --------------------------------------------------------------------- #
-#  Modifiche non salvate: Salva, il [*] nel titolo, la domanda prima di perderle
+#  Unsaved changes: Salva, the [*] in the title, the question before losing them
 # --------------------------------------------------------------------- #
 
-def _risposta(monkeypatch, bottone) -> list[str]:
-    """Risponde a QMessageBox.question con *bottone*, annotando le domande."""
+def _answer(monkeypatch, bottone) -> list[str]:
+    """Answers QMessageBox.question with *bottone*, recording the questions."""
     domande: list[str] = []
 
     def rispondi(*args, **kwargs):
@@ -1980,11 +2003,11 @@ def _risposta(monkeypatch, bottone) -> list[str]:
     return domande
 
 
-def _chiudi(mw: MainWindow) -> bool:
-    """Consegna un QCloseEvent vero e dice se la finestra lo ha accettato."""
-    evento = QCloseEvent()
-    mw.closeEvent(evento)
-    return evento.isAccepted()
+def _close_window(mw: MainWindow) -> bool:
+    """Delivers a real QCloseEvent and says whether the window accepted it."""
+    event = QCloseEvent()
+    mw.closeEvent(event)
+    return event.isAccepted()
 
 
 def test_a_fresh_document_is_not_modified(windows, tmp_path, monkeypatch):
@@ -1992,12 +2015,12 @@ def test_a_fresh_document_is_not_modified(windows, tmp_path, monkeypatch):
     _make_pdf(pdf, pages=2)
     mw = windows()
     _open(mw, pdf)
-    domande = _risposta(monkeypatch, QMessageBox.StandardButton.Cancel)
+    domande = _answer(monkeypatch, QMessageBox.StandardButton.Cancel)
 
     assert not mw.is_modified()
     assert not mw.isWindowModified()
     assert mw.windowTitle() == "doc.pdf[*]"
-    assert _chiudi(mw), "niente da perdere: la finestra si chiude senza chiedere"
+    assert _close_window(mw), "niente da perdere: la finestra si chiude senza chiedere"
     assert domande == []
 
 
@@ -2017,15 +2040,15 @@ def test_an_edit_marks_the_title_and_undo_clears_it(windows, tmp_path):
 
 
 def test_closing_with_changes_can_be_cancelled(windows, tmp_path, monkeypatch):
-    """Annulla: la finestra resta aperta, la modifica resta nel modello."""
+    """Annulla: the window stays open, the change stays in the model."""
     pdf = str(tmp_path / "doc.pdf")
     _make_pdf(pdf, pages=3)
     mw = windows()
     _open(mw, pdf)
     mw._delete_page()
-    domande = _risposta(monkeypatch, QMessageBox.StandardButton.Cancel)
+    domande = _answer(monkeypatch, QMessageBox.StandardButton.Cancel)
 
-    assert not _chiudi(mw)
+    assert not _close_window(mw)
     assert len(domande) == 1 and "doc.pdf" in domande[0]
     assert mw._doc_model.page_count == 2
     assert mw._thread.isRunning(), "una chiusura annullata non ferma il worker"
@@ -2037,29 +2060,29 @@ def test_closing_with_changes_can_discard_them(windows, tmp_path, monkeypatch):
     mw = windows()
     _open(mw, pdf)
     mw._delete_page()
-    _risposta(monkeypatch, QMessageBox.StandardButton.Discard)
+    _answer(monkeypatch, QMessageBox.StandardButton.Discard)
 
-    assert _chiudi(mw)
-    with fitz.open(pdf) as doc:
+    assert _close_window(mw)
+    with pymupdf.open(pdf) as doc:
         assert doc.page_count == 3, "«Non salvare» non scrive niente"
 
 
 def test_closing_with_changes_can_save_them(windows, tmp_path, monkeypatch):
-    """«Salva» passa da Ctrl+S: scrive sul file aperto, senza chiedere dove."""
+    """«Salva» goes through Ctrl+S: it writes to the open file, without asking where."""
     pdf = str(tmp_path / "doc.pdf")
     _make_pdf(pdf, pages=3)
     mw = windows()
     _open(mw, pdf)
     mw._delete_page()
-    _risposta(monkeypatch, QMessageBox.StandardButton.Save)
+    _answer(monkeypatch, QMessageBox.StandardButton.Save)
 
-    def _mai(*a, **k):
+    def _never(*a, **k):
         raise AssertionError("Salva non deve chiedere il nome del file")
 
-    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(_mai))
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(_never))
 
-    assert _chiudi(mw)
-    with fitz.open(pdf) as doc:
+    assert _close_window(mw)
+    with pymupdf.open(pdf) as doc:
         assert doc.page_count == 2
 
 
@@ -2069,7 +2092,7 @@ def test_a_failed_save_keeps_the_window_open(windows, tmp_path, monkeypatch):
     mw = windows()
     _open(mw, pdf)
     mw._delete_page()
-    _risposta(monkeypatch, QMessageBox.StandardButton.Save)
+    _answer(monkeypatch, QMessageBox.StandardButton.Save)
     monkeypatch.setattr(QMessageBox, "critical", staticmethod(lambda *a, **k: None))
 
     def _guasto(*a, **k):
@@ -2077,12 +2100,12 @@ def test_a_failed_save_keeps_the_window_open(windows, tmp_path, monkeypatch):
 
     monkeypatch.setattr(plico.main_window, "save_as", _guasto)
 
-    assert not _chiudi(mw), "il salvataggio è fallito: le modifiche ci sono ancora"
+    assert not _close_window(mw), "il salvataggio è fallito: le modifiche ci sono ancora"
     assert mw.is_modified()
 
 
 def test_save_as_moves_the_target_and_keeps_the_undo_history(windows, tmp_path, monkeypatch):
-    """Dopo «Salva con nome» Ctrl+S scrive lì, e l'annulla funziona ancora."""
+    """After «Salva con nome» Ctrl+S writes there, and undo still works."""
     pdf = str(tmp_path / "doc.pdf")
     altro = str(tmp_path / "altro.pdf")
     _make_pdf(pdf, pages=3)
@@ -2100,41 +2123,41 @@ def test_save_as_moves_the_target_and_keeps_the_undo_history(windows, tmp_path, 
     mw._delete_page()
     assert mw.is_modified()
     assert mw._save_file()
-    with fitz.open(altro) as doc:
+    with pymupdf.open(altro) as doc:
         assert doc.page_count == 1
-    with fitz.open(pdf) as doc:
+    with pymupdf.open(pdf) as doc:
         assert doc.page_count == 3, "Ctrl+S scrive sull'ultimo «Salva con nome»"
 
 
 def test_a_merge_counts_as_a_change(windows, tmp_path, monkeypatch):
-    """Unire non passa dall'undo stack, ma va salvato lo stesso."""
+    """Unire does not go through the undo stack, but must be saved all the same."""
     pdf = str(tmp_path / "doc.pdf")
-    secondo = str(tmp_path / "secondo.pdf")
+    second = str(tmp_path / "secondo.pdf")
     _make_pdf(pdf, pages=2)
-    _make_pdf(secondo, pages=2)
+    _make_pdf(second, pages=2)
     mw = windows()
     _open(mw, pdf)
-    mw.merge_path(secondo)
-    domande = _risposta(monkeypatch, QMessageBox.StandardButton.Cancel)
+    mw.merge_path(second)
+    domande = _answer(monkeypatch, QMessageBox.StandardButton.Cancel)
 
     assert mw.is_modified() and mw.isWindowModified()
-    assert not _chiudi(mw)
+    assert not _close_window(mw)
     assert len(domande) == 1
 
 
 def test_opening_another_file_asks_first(windows, tmp_path, monkeypatch):
-    """La domanda arriva prima del dialogo: Annulla non mostra nemmeno il file picker."""
+    """The question comes before the dialog: Annulla does not even show the file picker."""
     pdf = str(tmp_path / "doc.pdf")
     _make_pdf(pdf, pages=3)
     mw = windows()
     _open(mw, pdf)
     mw._delete_page()
-    domande = _risposta(monkeypatch, QMessageBox.StandardButton.Cancel)
+    domande = _answer(monkeypatch, QMessageBox.StandardButton.Cancel)
 
-    def _mai(*a, **k):
+    def _never(*a, **k):
         raise AssertionError("con Annulla il dialogo di apertura non deve comparire")
 
-    monkeypatch.setattr(QFileDialog, "getOpenFileName", staticmethod(_mai))
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", staticmethod(_never))
 
     mw._open_file()
     assert len(domande) == 1

@@ -1,12 +1,12 @@
 """Tests for RenderWorker rendering."""
 
-import fitz
+import pymupdf
 
 from plico.rendering import RenderRequest, RenderWorker
 
 
 def _make_pdf(path, text="Test Page"):
-    doc = fitz.open()
+    doc = pymupdf.open()
     page = doc.new_page()
     page.insert_text((72, 72), text, fontsize=24)
     doc.save(str(path))
@@ -115,8 +115,8 @@ def test_evict_ignores_an_unknown_path(tmp_path):
 
 def test_worker_rotation():
     """Verify that prerotate produces a different transformation matrix."""
-    mat_normal = fitz.Matrix(1.0, 1.0)
-    mat_rotated = fitz.Matrix(1.0, 1.0).prerotate(90)
+    mat_normal = pymupdf.Matrix(1.0, 1.0)
+    mat_rotated = pymupdf.Matrix(1.0, 1.0).prerotate(90)
     # A 90° rotation matrix should differ from the identity
     assert mat_rotated != mat_normal
 
@@ -130,7 +130,7 @@ def test_worker_reports_a_mupdf_error_as_a_failure(tmp_path):
     MuPDF checks the size before allocating, so this costs no memory.
     """
     pdf_path = tmp_path / "poster.pdf"
-    doc = fitz.open()
+    doc = pymupdf.open()
     doc.new_page(width=14400, height=14400)
     doc.save(str(pdf_path))
     doc.close()

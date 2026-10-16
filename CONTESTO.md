@@ -50,7 +50,7 @@ plico/
 │   │   ├── save.py           # save_as, save_compressed, extract_pages, parse_page_ranges
 │   │   └── optimize.py       # livelli di compressione, optimize_in_place  ← pikepdf
 │   ├── rendering/
-│   │   └── worker.py         # RenderWorker: unico proprietario degli handle fitz
+│   │   └── worker.py         # RenderWorker: unico proprietario degli handle PyMuPDF
 │   └── widgets/
 │       ├── page_view.py      # QScrollArea: rendering, zoom, HiDPI, redazione, campi
 │       ├── thumbnail_bar.py  # QListView + modello + cache, caricamento lazy
@@ -62,10 +62,10 @@ plico/
     ├── test_optimize.py      # i livelli di compressione e optimize_in_place
     ├── test_redact.py        # rotazione e rimozione *vera* del testo
     ├── test_forms.py         # campi AcroForm: letti, scritti, riletti dal file
-    └── test_integration.py   # MainWindow vera, offscreen: ~67 test end-to-end
+    └── test_integration.py   # MainWindow vera, offscreen: 88 test end-to-end
 ```
 
-Gate di qualità attuale: **198 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **205 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
 (17 file sorgente).
 
 ---
@@ -210,7 +210,7 @@ occupare spazio, una per ogni rotazione (avanti e indietro).
 
 ## 6. RenderWorker — il pezzo critico (`src/plico/rendering/worker.py`)
 
-Un `QObject` spostato in un `QThread`, che possiede **l'unico** handle fitz.
+Un `QObject` spostato in un `QThread`, che possiede **l'unico** handle PyMuPDF.
 La UI comunica solo via signal; le connessioni fra thread diversi sono
 `queued`, quindi gli slot girano nel thread giusto senza gestire nulla a mano.
 
@@ -282,7 +282,7 @@ Punti che sembrano dettagli e non lo sono:
 `MainWindow.shutdown_worker()` fa, **in quest'ordine**:
 
 1. `QMetaObject.invokeMethod(worker, "shutdown", BlockingQueuedConnection)` —
-   chiude i fitz handle **dentro** il thread del worker. Chiamare
+   chiude gli handle PyMuPDF **dentro** il thread del worker. Chiamare
    `worker.shutdown()` direttamente dal thread GUI toccherebbe il documento
    dal thread sbagliato, in gara con un render in corso;
 2. `thread.quit()`;
@@ -426,14 +426,22 @@ La rotazione di più pagine selezionate va raggruppata con
   sorgente**, così un documento solo riordinato si copia con pochi
   `insert_pdf` invece di uno per pagina (il raggruppamento si interrompe
   quando cambia `source_id`);
-- `save_as(model, out_path)` / `extract_pages(model, out_path, indices)`
-  condividono `_write_atomically`, che scrive su un file temporaneo nella
-  **stessa directory** e poi fa `os.replace()`. Salvare sopra il file aperto
-  è sicuro: un errore a metà scrittura non può distruggere l'originale;
+- `save_as(model, out_path)` / `extract_pages(model, out_path, indices)` /
+  `save_compressed(...)` condividono `_write_atomically`, che scrive **sempre**
+  su un file temporaneo nella **stessa directory** e poi fa `os.replace()`: non
+  esiste una scorciatoia che scriva direttamente sulla destinazione. Il prezzo è
+  che la *directory* deve essere scrivibile; il guadagno è che un errore a metà
+  scrittura non può troncare niente — nemmeno un «Salva con nome» sopra un file
+  che l'utente non ha mai aperto — e che i permessi del file sostituito
+  sopravvivono (`os.chmod` sul temporaneo: PyMuPDF ricrea il file e altrimenti
+  riporterebbe la destinazione a `0o664`);
 - `DocumentModel.sources_at(path)` dice quali sorgenti sono lo stesso file di
   *path*, confrontando l'**inode** (un'altra grafia del percorso o un hard link
-  contano). È l'unico test di «sto scrivendo sopra un file aperto»: lo usano
-  `_write_atomically` e `MainWindow`, che prima ne avevano due copie;
+  contano). Lo usa `MainWindow._save_file`, e con esso `_adopt_saved_file`, per
+  sapere se il salvataggio ha sovrascritto una sorgente aperta: in quel caso il
+  documento va riadottato e l'handle del worker dimenticato
+  (`evict_requested`), perché `os.replace()` cambia l'inode mentre la copia
+  cachata continua a leggere il documento vecchio;
 - `extract_pages` **rifiuta** di scrivere sopra una sorgente aperta
   (`ValueError`): un sottoinsieme lì lascerebbe le pagine non estratte a
   puntare a pagine che non esistono più;
@@ -518,8 +526,12 @@ l'XMP e i file allegati della sorgente non ci arrivano mai. Verificato con una
 sorgente che li portava tutti e tre: dopo `save_as` il titolo è vuoto, l'XMP è
 0 byte e gli allegati sono scomparsi. Per lo stesso motivo un salvataggio
 normale **non conserva** titolo e autore, che è una perdita da tenere a mente.
-Le **annotazioni**, invece, vengono copiate: un commento che ripete la parola
-redatta resta nel file.
+Le **annotazioni**, invece, vengono copiate da `insert_pdf()`: è `_redact()` a
+eliminare quelle che toccano un rettangolo di redazione, perché
+`apply_redactions()` toglie il **contenuto** ma lascia l'annotazione in piedi
+(misurato: una nota «SEGRETO» appoggiata sulla parola redatta sopravviveva al
+salvataggio, cioè trapelava proprio ciò che la redazione doveva nascondere). Un
+commento lontano dal segno resta nel file.
 
 ### Compilazione dei form (`model/forms.py`)
 
@@ -539,9 +551,17 @@ chiamare `update()` mentre la pagina che si sta salvando è ancora viva.
   emette un segnale **per tasto**, e senza fusione scrivere «Anna» costerebbe
   quattro Ctrl+Z. Fonde solo modifiche consecutive **allo stesso campo** e
   conserva il valore del primo comando, così un undo disfa il campo intero;
-- `save.py` chiama `_fill_fields()` **prima** di `_redact()`: una redazione
-  sopra un campo deve portarselo via, e un valore appena scritto non deve
-  sparire per una redazione altrove sulla stessa pagina;
+- i valori si scrivono **sulla sorgente in memoria** prima della copia
+  (`_fill_source_fields(doc, values)`, che passa su tutte le pagine), non sulla
+  pagina già copiata: `insert_pdf()` **rinomina** la seconda copia di un campo
+  omonimo (`nome` → `nome [12]`), quindi scrivere per nome dopo la copia non
+  troverebbe più niente. Era il difetto per cui lo stesso campo su due pagine
+  restava vecchio sulla seconda, con un esito che dipendeva dall'ordine delle
+  pagine. L'handle modificato **non viene mai salvato**: il file su disco resta
+  intatto;
+- `save.py` scrive i campi **prima** di `_redact()`: una redazione sopra un
+  campo deve portarselo via, e un valore appena scritto non deve sparire per
+  una redazione altrove sulla stessa pagina;
 - vale per `save_as` **e** per `save_compressed`: `clean=True` conserva il
   modulo e i suoi valori (verificato);
 - i tipi modificabili sono **testo**, **casella** e **tendina/lista**. I
@@ -583,9 +603,14 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
   sistema (`/usr/lib/python3/dist-packages`), PyMuPDF è installato nel venv;
 - `pip install --user` **non funziona**: la site-packages utente è in sola
   lettura (`OSError: [Errno 30]`). Da qui il venv con `--system-site-packages`;
-- `import fitz` stampa un avviso di deprecazione (`use import pymupdf`). Il
-  codice usa `fitz` ovunque: o si migra tutto insieme, o si lascia stare. Non
-  mescolare i due import;
+- **`import fitz` è un alias deprecato**: dalla 1.24.3 (maggio 2024) il modulo
+  si chiama `pymupdf`. Il progetto ha migrato tutto insieme (11 file) e il
+  pavimento di versione in `pyproject.toml` è `pymupdf>=1.24.3`. Non mescolare
+  i due import. Attenzione: con `pymupdf` mypy vede un pacchetto con `py.typed`
+  e stub generati che **non elencano** le costanti dei tipi di widget
+  (`PDF_WIDGET_TYPE_*`, definite a runtime in `pymupdf/mupdf.py`), quindi
+  `model/forms.py` porta sei `# type: ignore[attr-defined]` con il perché
+  scritto sopra;
 - gli script di validazione che servono un pacchetto (per esempio
   `jsonschema`) vanno creati e usati **nella stessa invocazione**: `/tmp` non
   sopravvive fra un comando e l'altro.
@@ -625,6 +650,11 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
   sposta la voce in testa: le righe intorno al viewport sono rilette a ogni
   repaint, quindi con il solo `__getitem__` venivano sfrattate proprio le voci
   più usate. `ThumbnailCache` sposta la voce in testa in lettura e in scrittura.
+- Il **nome di un `QUndoCommand`** va dato *prima* di `super().__init__()`, cioè
+  quando la metà `QObject` del comando non esiste ancora: `self.tr()` non è
+  disponibile. Si usa `QCoreApplication.translate("<NomeClasse>", "…")` — anche
+  la forma che `lupdate` si aspetta — e si passa la stringa già formattata al
+  costruttore.
 
 ### Thread e distruzione degli oggetti
 
@@ -662,6 +692,11 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
   `height_px` in `_relayout()` e calcola la visibilità in modo deterministico.
   (Con una finestra *mostrata* il codice vecchio funzionava: è il motivo per
   cui il bug è rimasto nascosto.)
+- La **cache delle pagine conta i byte**: `PageView._cache_put` deve togliere i
+  byte della pixmap che sta sostituendo (`self._cache.pop(key, None)`) *prima*
+  di aggiungere i nuovi, altrimenti il budget di 64 MB sfratta più del dovuto.
+  Il caso è raro — la stessa key si ricalcola solo quando cambiano zoom o dpr —
+  ma il conto deve tornare, non «quasi tornare».
 
 ### Drag & drop
 
@@ -710,10 +745,14 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
 
 - Salvare **sopra il file aperto** richiede il salvataggio incrementale:
   `ValueError: save to original must be incremental`. Il progetto evita del
-  tutto il problema scrivendo su un temporaneo e facendo `os.replace()`.
-- `fitz.Matrix` non ha attributi `x0` / `xy`: per le rotazioni si usa
+  tutto il problema scrivendo su un temporaneo e facendo `os.replace()` — e da
+  lì **ogni** scrittura passa dal temporaneo, «Salva con nome» sopra un file
+  esistente compreso: la scorciatoia diretta era un buco (un errore a metà
+  troncava la destinazione) e perdeva anche i permessi, perché PyMuPDF ricrea
+  il file con l'umask (`0o640` tornava `0o664`).
+- `pymupdf.Matrix` non ha attributi `x0` / `xy`: per le rotazioni si usa
   `prerotate()`.
-- `fitz.Pixmap(csRGB, w, h, bytes)` **non è una firma valida** in 1.28.
+- `pymupdf.Pixmap(csRGB, w, h, bytes)` **non è una firma valida** in 1.28.
   Peggio: l'eccezione che solleva incorpora nel messaggio L'INTERO buffer di
   pixel, quindi un `traceback` stampato diventa qualche megabyte di «log»
   binario. Per costruire un'immagine di prova si usa
@@ -732,6 +771,12 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
   sola sequenza che svuota e ridipinge è `field_value = ""` → `/V` a `()` →
   `update()` (inchiostro 0). Per questo `write_fields()` chiama
   `_clear_value()`, che risale anche a `/Parent`.
+- **`insert_pdf()` rinomina i campi omonimi.** Se due pagine portano un widget
+  con lo stesso nome, dopo la copia il secondo si chiama `nome [12]` (misurato:
+  stesso xref nella sorgente, nomi diversi nel file costruito). Conseguenza:
+  `write_fields(page, {"nome": …})` sulla pagina già copiata restituisce `0` e
+  non scrive niente. Per questo `save.py` scrive i valori **sulla sorgente in
+  memoria** (`_fill_source_fields`) prima di copiare le pagine.
 
 ### Test
 
@@ -842,7 +887,14 @@ sostituita con la sorgente `git` del tag di rilascio.
    fare e va per ultimo: una firma non sopravvive a nessuna modifica
    successiva;
 2. **redaction vera** — ✅ **fatta**, vedi §8;
-3. **OCR** integrato (Tesseract);
+3. **OCR** integrato (Tesseract) — **rinviato, con le prove**: sulla macchina di
+   sviluppo c'è la libreria (`libtesseract5`) ma **non** il programma
+   `tesseract`, e `/usr/share/tesseract-ocr/5/tessdata` contiene solo
+   `configs`, `pdf.ttf` e `tessconfigs` — nessun dato di lingua (servirebbe
+   `sudo`, quindi una password); dentro la sandbox Flatpak mancano entrambi, e
+   su Flathub non esiste un'extension Tesseract. Servirebbe compilare
+   leptonica e tesseract dai sorgenti nel manifest **senza poterli provare in
+   locale**: si fa quando c'è una ragione per farlo, non prima;
 4. **modifica minima del testo** — la parte difficile, ma è il vero
    differenziale rispetto a PDF Arranger e simili.
 
@@ -870,49 +922,26 @@ sostituita con la sorgente `git` del tag di rilascio.
   `self.tr()` su tutto il testo visibile, `QSettings` per geometria/dock/zoom);
   manca solo l'infrastruttura di traduzione vera (`.ts` + `lrelease`).
 
-**Punti aperti dalla review (ottobre 2026)**, dal più importante. Quando se ne
-chiude uno, va tolto da qui e la decisione va scritta nella sezione giusta.
-
-*Correttezza*
-
-- **«Salva con nome» sopra un file esistente non è atomico.** In
-  `save.py::_write_atomically`, se la destinazione esiste ma non è una
-  sorgente, la scorciatoia `if not overwriting and optimize is None` fa
-  scrivere `_write_pdf` direttamente sopra: un errore a metà distrugge quel
-  file. Basta passare sempre dal temporaneo;
-- **campi con lo stesso nome su più pagine.** `form_values` è per pagina e
-  `forms.write_fields()` aggiorna solo i widget della pagina in cui l'utente
-  ha scritto. Il `/V` però sta nel campo padre, condiviso: le altre pagine
-  restano col vecchio aspetto, e nei PDF uniti il risultato dipende
-  dall'ordine;
-- **byte contati due volte nella cache delle pagine.**
-  `PageView._cache_put` aggiunge i byte anche quando la key c'è già, senza
-  togliere quelli della pixmap sostituita. È raro, ma il budget di 64 MB
-  finisce per sfrattare più del dovuto.
-
-*Funzioni mancanti*
+**Punti aperti**, dal più importante. Quando se ne chiude uno, va tolto da qui
+e la decisione va scritta nella sezione giusta:
 
 - **PDF cifrati**: aprirli dà un errore generico. Serve `doc.needs_pass` +
   `doc.authenticate()` in `DocumentModel._items_for` **e** nel worker, che
   apre i file per conto suo (la password va quindi portata fin lì);
 - **l'unione non si annulla**: è l'unica modifica fuori dall'undo stack, ed è
   il motivo per cui esiste `MainWindow._merged_since_save`. Un comando
-  `AppendDocument` toglierebbe il flag;
-- **annotazioni sopra le redazioni** (vedi §8): andrebbero eliminate quelle
-  che toccano un rettangolo di redazione.
+  `AppendDocument` toglierebbe il flag.
 
-*Pulizia*
-
-- `MainWindow._on_doc_changed` non ha chiamanti: è codice morto;
-- i nomi dei comandi di undo (`model/commands.py`) sono f-string italiane
-  senza `tr()`, quindi non traducibili;
-- §13 vuole codice e commenti **in inglese**, ma docstring e commenti di
-  `optimize.py`, `compress.py` e parti di `main_window.py` sono in italiano
-  (spesso con `e`` al posto di «è»), come molti nomi di variabile (`pagina`,
-  `coperto`, `trovati`, `valori`, `scelta`, `nome`); anche i nomi dei test sono
-  misti;
-- `import fitz` stampa un avviso di deprecazione a ogni avvio: la migrazione a
-  `import pymupdf` va fatta tutta insieme (vedi §9).
+Delle dieci voci della review dell'ottobre 2026 restano solo le due qui sopra,
+che non sono difetti ma **capacità** mai esistite (aprire un file cifrato,
+annullare un'unione). Tutto il resto è chiuso, e le decisioni sono scritte dove
+servono: in §8 (salvataggio sempre atomico e con i permessi conservati, campi
+omonimi scritti sulla sorgente prima della copia, cache delle pagine che
+restituisce i byte sostituiti, annotazioni che toccano una redazione eliminate
+insieme al contenuto, nomi dei comandi via `QCoreApplication.translate()`), in
+§9 (`fitz` → `pymupdf`) e in §10 (le insidie corrispondenti). Il codice —
+docstring, commenti, nomi di variabile e nomi dei test compresi — è tutto in
+inglese.
 
 ---
 

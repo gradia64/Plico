@@ -147,49 +147,49 @@ class _PageLabel(QLabel):
         item = canvas.item
         if not item.form_fields:
             return
-        scelto = self._view.selected_field()
-        for campo in item.form_fields:
-            area = self._rect_pixels(campo.rect)
-            acceso = scelto == (canvas.index, campo.name)
+        picked = self._view.selected_field()
+        for field in item.form_fields:
+            area = self._rect_pixels(field.rect)
+            is_selected = picked == (canvas.index, field.name)
             painter.fillRect(
-                area, QBrush(FIELD_SELECTED_WASH if acceso else FIELD_WASH)
+                area, QBrush(FIELD_SELECTED_WASH if is_selected else FIELD_WASH)
             )
-            spessore = 2 if acceso else 1
-            bordo = FIELD_SELECTED_BORDER if acceso else FIELD_BORDER
-            painter.setPen(QPen(bordo, spessore))
+            thickness = 2 if is_selected else 1
+            border = FIELD_SELECTED_BORDER if is_selected else FIELD_BORDER
+            painter.setPen(QPen(border, thickness))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(area)
-            testo = self._valore_mostrato(item, campo)
-            if testo:
-                self._paint_value(painter, area, campo, testo)
+            text = self._value_shown(item, field)
+            if text:
+                self._paint_value(painter, area, field, text)
 
     @staticmethod
-    def _valore_mostrato(item: PageItem, campo: Field) -> str:
-        valore = item.form_values.get(campo.name, campo.value)
-        if campo.kind == CHECKBOX:
+    def _value_shown(item: PageItem, field: Field) -> str:
+        value = item.form_values.get(field.name, field.value)
+        if field.kind == CHECKBOX:
             # A checkbox has no text of its own: it is ticked, or it is not.
-            return "X" if valore not in ("", UNCHECKED) else ""
-        return valore
+            return "X" if value not in ("", UNCHECKED) else ""
+        return value
 
     @staticmethod
     def _paint_value(
-        painter: QPainter, area: QRectF, campo: Field, testo: str
+        painter: QPainter, area: QRectF, field: Field, text: str
     ) -> None:
-        """Write *testo* inside *area*, clipped so it can never spill out."""
-        dentro = area.adjusted(3.0, 2.0, -3.0, -2.0)
-        if dentro.width() <= 1.0 or dentro.height() <= 1.0:
+        """Write *text* inside *area*, clipped so it can never spill out."""
+        inside = area.adjusted(3.0, 2.0, -3.0, -2.0)
+        if inside.width() <= 1.0 or inside.height() <= 1.0:
             return
         painter.save()
-        painter.setClipRect(dentro)
+        painter.setClipRect(inside)
         painter.setPen(QPen(FIELD_TEXT))
         font = painter.font()
-        font.setPixelSize(max(6, min(int(dentro.height() * 0.7), 18)))
+        font.setPixelSize(max(6, min(int(inside.height() * 0.7), 18)))
         painter.setFont(font)
-        bandiere = int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        if campo.multiline:
-            painter.drawText(dentro, bandiere | int(Qt.TextFlag.TextWordWrap), testo)
+        flags = int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        if field.multiline:
+            painter.drawText(inside, flags | int(Qt.TextFlag.TextWordWrap), text)
         else:
-            painter.drawText(dentro, bandiere, testo)
+            painter.drawText(inside, flags, text)
         painter.restore()
 
     # -- the gesture ---------------------------------------------------- #
@@ -202,9 +202,9 @@ class _PageLabel(QLabel):
         canvas = self.canvas
         if canvas is None:
             return
-        for campo in reversed(canvas.item.form_fields):
-            if self._rect_pixels(campo.rect).contains(point):
-                self._view.report_field_click(canvas.index, campo.name)
+        for field in reversed(canvas.item.form_fields):
+            if self._rect_pixels(field.rect).contains(point):
+                self._view.report_field_click(canvas.index, field.name)
                 return
 
     def mousePressEvent(self, event) -> None:
@@ -627,7 +627,7 @@ class PageView(QScrollArea):
             return  # stale result
         img.setDevicePixelRatio(dpr)  # crisp HiDPI
         pix = QPixmap.fromImage(img)
-        self._cache_put(key, pix, img)
+        self._cache_put(key, pix)
         c.current_key = key
         c.pending_key = None
         c.label.setPixmap(pix)
@@ -645,10 +645,22 @@ class PageView(QScrollArea):
         if c is not None and c.pending_key == key:
             c.pending_key = None
 
-    def _cache_put(self, key, pix, img) -> None:
+    def _cache_put(self, key, pix) -> None:
+        """Store *pix* under *key*, keeping the byte budget honest.
+
+        The same key can be put twice -- a page re-rendered after a failure,
+        or after the window moved to a screen with another density -- and the
+        entry it displaces still owns its bytes. Forgetting to give them back
+        shrinks the budget by that much on every re-render, so the cache ends
+        up evicting pages it could have kept.
+        """
+        displaced = self._cache.pop(key, None)
+        if displaced is not None:
+            self._cache_bytes -= displaced.width() * displaced.height() * 4
+        # Re-inserting puts the key at the end, which is the recency order the
+        # eviction below relies on.
         self._cache[key] = pix
-        self._cache.move_to_end(key)
-        self._cache_bytes += img.width() * img.height() * 4
+        self._cache_bytes += pix.width() * pix.height() * 4
         while self._cache_bytes > CACHE_BUDGET and len(self._cache) > 1:
             _, old = self._cache.popitem(last=False)
             self._cache_bytes -= old.width() * old.height() * 4

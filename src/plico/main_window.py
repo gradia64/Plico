@@ -100,7 +100,7 @@ class MainWindow(QMainWindow):
         # --- caches ---
         self._thumbnail_cache = ThumbnailCache(maxsize=60)
 
-        # --- compressione: gira nel thread pool, non in quello dei render ---
+        # --- compression: it runs in the thread pool, not the render one ---
         self._compression_task: CompressionTask | None = None
         self._progress: QProgressDialog | None = None
         self._compression_path = ""
@@ -548,19 +548,19 @@ class MainWindow(QMainWindow):
         """
         if not self.is_modified():
             return True
-        nome = os.path.basename(self._save_target or "") or self.tr("documento")
-        scelta = QMessageBox.question(
+        name = os.path.basename(self._save_target or "") or self.tr("documento")
+        choice = QMessageBox.question(
             self,
             self.tr("Modifiche non salvate"),
-            self.tr("«{0}» ha modifiche non salvate.\nVuoi salvarle?").format(nome),
+            self.tr("«{0}» ha modifiche non salvate.\nVuoi salvarle?").format(name),
             QMessageBox.StandardButton.Save
             | QMessageBox.StandardButton.Discard
             | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Save,
         )
-        if scelta == QMessageBox.StandardButton.Save:
+        if choice == QMessageBox.StandardButton.Save:
             return self._save_file()
-        return scelta == QMessageBox.StandardButton.Discard
+        return choice == QMessageBox.StandardButton.Discard
 
     def _adopt_saved_file(self, path: str, overwritten: list[str]) -> None:
         """Bring the model back in line after a save that replaced a source.
@@ -602,22 +602,22 @@ class MainWindow(QMainWindow):
         )
 
     # ------------------------------------------------------------------ #
-    #  Compressione
+    #  Compression
     # ------------------------------------------------------------------ #
 
     def _compress_file(self) -> None:
-        """Scrive una copia compressa del documento materializzato.
+        """Write a compressed copy of the materialised document.
 
-        Non e` un'alternativa a "Salva con nome": il contenuto e` lo stesso,
-        solo piu` piccolo -- eliminazioni, riordini e rotazioni compresi. I
-        PDF di partenza non vengono toccati.
+        It is not an alternative to "Salva con nome": the content is the same,
+        only smaller -- deletions, reorderings and rotations included. The
+        source PDFs are not touched.
         """
         if not self._doc_model.sources:
             QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
             return
 
-        scelta = CompressionDialog(self)
-        if scelta.exec() != QDialog.DialogCode.Accepted:
+        choice = CompressionDialog(self)
+        if choice.exec() != QDialog.DialogCode.Accepted:
             return
 
         path, _ = QFileDialog.getSaveFileName(
@@ -628,44 +628,44 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
-        self._start_compression(path, scelta.level)
+        self._start_compression(path, choice.level)
 
     def _proposed_compressed_path(self) -> str:
         """``documento.pdf`` -> ``documento-compresso.pdf``."""
-        origine = self._doc_model.path or ""
-        radice, estensione = os.path.splitext(origine)
-        if not radice:
+        origin = self._doc_model.path or ""
+        stem, extension = os.path.splitext(origin)
+        if not stem:
             return str(os.path.expanduser("~"))
-        return f"{radice}-compresso{estensione or '.pdf'}"
+        return f"{stem}-compresso{extension or '.pdf'}"
 
     def _start_compression(self, path: str, level: CompressionLevel) -> None:
-        # Va calcolato PRIMA di scrivere: comprimendo sopra un sorgente il
-        # file cambia inode, e dopo il confronto non riconoscerebbe piu`
-        # l'originale.
+        # Computed BEFORE writing: compressing over a source gives that file
+        # a new inode, and afterwards the comparison would no longer
+        # recognise the original.
         self._compression_overwritten = self._doc_model.sources_at(path)
         self._compression_path = path
 
-        progresso = QProgressDialog(self)
-        progresso.setWindowTitle(self.tr("Salva compresso"))
-        progresso.setLabelText(self.tr("Compressione in corso…"))
-        progresso.setRange(0, 100)
-        # Il lavoro non e` interrompibile a meta`: meglio non offrire un
-        # pulsante che non potrebbe mantenere quello che promette.
-        progresso.setCancelButton(None)
-        progresso.setWindowModality(Qt.WindowModality.WindowModal)
-        progresso.setMinimumDuration(0)
-        progresso.setAutoClose(False)
-        progresso.setAutoReset(False)
-        progresso.setValue(0)
-        self._progress = progresso
+        progress = QProgressDialog(self)
+        progress.setWindowTitle(self.tr("Salva compresso"))
+        progress.setLabelText(self.tr("Compressione in corso…"))
+        progress.setRange(0, 100)
+        # The work cannot be interrupted half-way: better to offer no button
+        # than one that cannot keep what it promises.
+        progress.setCancelButton(None)
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+        progress.setValue(0)
+        self._progress = progress
 
-        attivita = CompressionTask(self._doc_model, path, level)
-        attivita.signals.progress.connect(progresso.setValue)
-        attivita.signals.finished.connect(self._on_compression_finished)
-        attivita.signals.failed.connect(self._on_compression_failed)
-        # Finche` il pool non ha finito qualcuno deve tenere vivo il task.
-        self._compression_task = attivita
-        QThreadPool.globalInstance().start(attivita)
+        task = CompressionTask(self._doc_model, path, level)
+        task.signals.progress.connect(progress.setValue)
+        task.signals.finished.connect(self._on_compression_finished)
+        task.signals.failed.connect(self._on_compression_failed)
+        # Until the pool is done, someone has to keep the task alive.
+        self._compression_task = task
+        QThreadPool.globalInstance().start(task)
 
     def _on_compression_finished(self, result: CompressionResult) -> None:
         self._close_progress()
@@ -702,12 +702,12 @@ class MainWindow(QMainWindow):
                 ).format(path, format_size(result.source_size)),
             )
 
-    def _on_compression_failed(self, messaggio: str) -> None:
+    def _on_compression_failed(self, message: str) -> None:
         self._close_progress()
         QMessageBox.critical(
             self,
             self.tr("Errore"),
-            self.tr("Impossibile comprimere:\n{0}").format(messaggio),
+            self.tr("Impossibile comprimere:\n{0}").format(message),
         )
 
     def _close_progress(self) -> None:
@@ -765,13 +765,6 @@ class MainWindow(QMainWindow):
     #  Page operations (undo commands)
     # ------------------------------------------------------------------ #
 
-    def _on_doc_changed(self) -> None:
-        """Kept for explicit callers; the views observe the model already."""
-        if self._doc_model.page_count == 0:
-            self._page_view.clear()
-            return
-        self._thumb_bar.refresh()
-
     def _on_page_selected(self, row: int) -> None:
         """Keep the main view aligned with the thumbnail selection."""
         self._page_view.ensure_page_visible(row)
@@ -823,7 +816,7 @@ class MainWindow(QMainWindow):
         self._thumb_bar.set_current_row(to_row)
 
     # ------------------------------------------------------------------ #
-    #  Redazione (undo commands)
+    #  Redaction (undo commands)
     # ------------------------------------------------------------------ #
 
     def _on_redaction_toggled(self, active: bool) -> None:
@@ -865,23 +858,23 @@ class MainWindow(QMainWindow):
         if not self._doc_model.sources:
             QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
             return
-        testo, ok = QInputDialog.getText(
+        text, ok = QInputDialog.getText(
             self,
             self.tr("Redigi testo"),
             self.tr("Testo da eliminare, in tutte le pagine:"),
         )
-        if not ok or not testo:
+        if not ok or not text:
             return
-        occorrenze = self._doc_model.find_text(testo)
-        if not occorrenze:
-            self._status.setText(self.tr("Nessuna occorrenza di «{0}».").format(testo))
+        occurrences = self._doc_model.find_text(text)
+        if not occurrences:
+            self._status.setText(self.tr("Nessuna occorrenza di «{0}».").format(text))
             return
 
-        self._undo_stack.beginMacro(self.tr("Redigi «{0}»").format(testo))
+        self._undo_stack.beginMacro(self.tr("Redigi «{0}»").format(text))
         try:
-            for indice, rects in occorrenze.items():
+            for index, rects in occurrences.items():
                 for rect in rects:
-                    self._undo_stack.push(AddRedaction(self._doc_model, indice, rect))
+                    self._undo_stack.push(AddRedaction(self._doc_model, index, rect))
         finally:
             self._undo_stack.endMacro()
 
@@ -891,10 +884,10 @@ class MainWindow(QMainWindow):
         self._redact_act.setChecked(True)
         self._on_redaction_toggled(True)
 
-        quante = sum(len(rects) for rects in occorrenze.values())
+        count = sum(len(rects) for rects in occurrences.values())
         self._status.setText(
             self.tr("Redatte {0} occorrenze di «{1}» su {2} pagine.").format(
-                quante, testo, len(occorrenze)
+                count, text, len(occurrences)
             )
         )
 
@@ -921,10 +914,10 @@ class MainWindow(QMainWindow):
         item = self._doc_model.pages[row]
         # What the save would write right now: the model's value, or the one
         # the file already carries when the field was never touched.
-        originale = next(
-            (campo.value for campo in item.form_fields if campo.name == name), ""
+        current = next(
+            (field.value for field in item.form_fields if field.name == name), ""
         )
-        if item.form_values.get(name, originale) == value:
+        if item.form_values.get(name, current) == value:
             return
         self._undo_stack.push(SetFieldValue(self._doc_model, row, name, value))
 
@@ -1013,13 +1006,13 @@ class MainWindow(QMainWindow):
           1. Close the PDF *inside* the worker thread. A BlockingQueued
              connection waits for the worker's event loop to run the slot,
              so it cannot race an in-flight render (calling shutdown()
-             directly from the GUI thread would touch the fitz document
+             directly from the GUI thread would touch the PyMuPDF document
              from the wrong thread).
           2. Quit the loop and wait, so the thread is no longer running
              when the window -- and this object -- are destroyed.
         """
-        # Una compressione in corso gira nel thread pool e sta scrivendo un
-        # file: aspettarla evita che il processo esca a meta` scrittura.
+        # A compression job is running in the thread pool and is writing a
+        # file: waiting for it keeps the process from exiting mid-write.
         QThreadPool.globalInstance().waitForDone()
         if not self._thread.isRunning():
             return

@@ -13,7 +13,7 @@ Two things this widget deliberately does NOT do:
   - it never reorders itself (drag & drop is translated into a MovePage
     command emitted as `move_requested`), because a view that reorders
     itself and a model that doesn't would silently diverge;
-  - it never touches fitz: every render goes through the worker's signals.
+  - it never touches PyMuPDF: every render goes through the worker's signals.
 """
 
 from collections import OrderedDict

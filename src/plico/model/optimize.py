@@ -1,22 +1,22 @@
-"""Compressione mirata: rimpicciolire un PDF materializzato senza romperlo.
+"""Targeted compression: shrinking a materialised PDF without breaking it.
 
-Due passaggi indipendenti, entrambi dei quali riscrivono il file per intero:
+Two independent passes, both of which rewrite the file end to end:
 
-``mutool clean`` (tramite ``clean=True`` di PyMuPDF)
-    Fonde e ripulisce i content stream. Un PDF nato copiando pagine in giro
-    si porta dietro centinaia di content stream minuscoli, uno per ogni
-    operazione di editing: fonderli **non perde nulla** ed e` li` che sta
-    quasi tutto il guadagno sui documenti di testo (188 KB -> 12 KB su un
-    documento di prova di 20 pagine, contro l'11% di qpdf da solo).
+``mutool clean`` (through PyMuPDF's ``clean=True``)
+    Merges and grooms the content streams. A PDF born from copying pages
+    around carries hundreds of tiny content streams, one per edit: merging
+    them **loses nothing**, and that is where nearly all the gain on text
+    documents comes from (188 KB -> 12 KB on a 20-page test document, against
+    qpdf's 11% on its own).
 
-``qpdf`` (tramite pikepdf)
-    Object stream, deduplicazione e un secondo passaggio Flate al massimo
-    sforzo. Da solo vale poco, ma sommato al precedente rifinisce il file.
+``qpdf`` (through pikepdf)
+    Object streams, deduplication and a second, maximum-effort Flate pass.
+    Alone it is worth little, but on top of the pass above it polishes the
+    file.
 
-Sui due livelli piu` forti gira prima un passaggio **con perdita**, che
-ricampiona le immagini incorporate a una risoluzione e a una qualita` JPEG
-piu` basse. E` l'unico passo che butta via informazione, ed e` quello che
-decide tutto sulle scansioni.
+On the two stronger levels a **lossy** pass runs first, resampling the
+embedded images to a lower resolution and JPEG quality. It is the only step
+that throws information away, and it is what decides everything on scans.
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ import tempfile
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
-import fitz
 import pikepdf
+import pymupdf
 
 __all__ = [
     "LEVELS",
@@ -39,22 +39,26 @@ __all__ = [
     "optimize_in_place",
 ]
 
-#: Chiamata con una percentuale intera (0-100) mentre la compressione procede.
+#: Called with an integer percentage (0-100) while compression runs.
 Progress = Callable[[int], None]
 
 
 @dataclass(frozen=True)
 class CompressionLevel:
-    """Uno dei preset offerti all'utente."""
+    """One of the presets offered to the user.
+
+    ``label`` and ``detail`` are user-facing text, so they are written in the
+    source language and translated where they are put on screen.
+    """
 
     key: str
     label: str
     detail: str
-    #: Risoluzione (dpi) oltre la quale un'immagine viene ricampionata.
+    #: Resolution (dpi) above which an image is resampled.
     image_threshold: int = 0
-    #: Risoluzione di destinazione; 0 significa "non toccare le immagini".
+    #: Target resolution; 0 means "leave the images alone".
     image_target: int = 0
-    #: Qualita` del JPEG in uscita.
+    #: Quality of the outgoing JPEG.
     image_quality: int = 0
 
     @property
@@ -101,7 +105,7 @@ LEVELS_BY_KEY: dict[str, CompressionLevel] = {level.key: level for level in LEVE
 
 @dataclass(frozen=True)
 class CompressionResult:
-    """Quanto si e` guadagnato davvero."""
+    """How much was really gained."""
 
     source_size: int
     output_size: int
@@ -112,7 +116,7 @@ class CompressionResult:
 
     @property
     def ratio(self) -> float:
-        """Dimensione finale in frazione di quella iniziale (0.52 = 52%)."""
+        """Final size as a fraction of the initial one (0.52 = 52%)."""
         if self.source_size <= 0:
             return 1.0
         return self.output_size / self.source_size
@@ -128,10 +132,10 @@ class CompressionResult:
 
 @contextlib.contextmanager
 def _scratch(directory: str) -> Iterator[str]:
-    """Un file temporaneo nella stessa directory, rimosso in ogni caso.
+    """A temporary file in *directory*, removed whatever happens.
 
-    Stessa directory e non ``/tmp`` perche' il passo finale e` un
-    ``os.replace``, che e` atomico solo dentro lo stesso filesystem.
+    The same directory and not ``/tmp`` because the final step is an
+    ``os.replace``, which is atomic only inside one filesystem.
     """
     handle, path = tempfile.mkstemp(dir=directory, suffix=".pdf.tmp")
     os.close(handle)
@@ -143,22 +147,22 @@ def _scratch(directory: str) -> Iterator[str]:
 
 
 def _rewrite(src: str, out: str, level: CompressionLevel) -> None:
-    """Primo passaggio: clean di MuPDF, con l'eventuale passo sulle immagini."""
-    with fitz.open(src) as doc:
+    """First pass: MuPDF's clean, plus the image step when the level asks for it."""
+    with pymupdf.open(src) as doc:
         if level.rewrites_images:
             doc.rewrite_images(
                 dpi_threshold=level.image_threshold,
                 dpi_target=level.image_target,
                 quality=level.image_quality,
             )
-        # `clean` e` il passo che vale di piu`: un PDF costruito copiando
-        # pagine in giro porta un content stream per ogni operazione, e
-        # fonderli non perde nulla.
+        # `clean` is the step that is worth the most: a PDF built by copying
+        # pages around carries one content stream per operation, and merging
+        # them loses nothing.
         doc.save(out, garbage=4, deflate=True, clean=True)
 
 
 def _compact(src: str, out: str, progress: Progress | None) -> None:
-    """Secondo passaggio: object stream, deduplicazione, un altro giro di Flate."""
+    """Second pass: object streams, deduplication, one more Flate round."""
     with pikepdf.open(src) as pdf:
         pdf.save(
             out,
@@ -173,13 +177,13 @@ def _compact(src: str, out: str, progress: Progress | None) -> None:
 def optimize_in_place(
     path: str, level: CompressionLevel, progress: Progress | None = None
 ) -> CompressionResult:
-    """Riscrive *path* piu` piccolo, in modo atomico, e riferisce il guadagno.
+    """Rewrite *path* smaller, atomically, and report the gain.
 
-    Il file originale non viene mai lasciato troncato: ogni passaggio scrive
-    su un file temporaneo nella stessa directory e solo alla fine il vincitore
-    prende il posto di *path*. Se non si e` guadagnato niente il file resta
-    esattamente com'era: un PDF gia` ottimizzato non deve **crescere** perche'
-    l'utente ha chiesto di comprimerlo.
+    The original file is never left truncated: every pass writes to a
+    temporary file in the same directory, and only at the end does the winner
+    take *path*'s place. If nothing was gained the file stays exactly as it
+    was: an already optimised PDF must not **grow** because the user asked to
+    compress it.
     """
     directory = os.path.dirname(os.path.abspath(path)) or "."
     before = os.path.getsize(path)
@@ -190,19 +194,19 @@ def optimize_in_place(
 
     report(0)
 
-    with _scratch(directory) as ripulito:
-        _rewrite(path, ripulito, level)
+    with _scratch(directory) as cleaned:
+        _rewrite(path, cleaned, level)
         report(60)
-        with _scratch(directory) as compatto:
-            _compact(ripulito, compatto, lambda valore: report(60 + valore * 4 // 10))
-            # qpdf non e` detto che vinca su un file che MuPDF ha gia`
-            # riorganizzato, quindi si adotta il migliore dei due.
-            candidati = (ripulito, compatto)
-            migliore = min(candidati, key=os.path.getsize)
-            if os.path.getsize(migliore) < before:
-                # Conserva i permessi dell'originale attraverso lo scambio.
-                os.chmod(migliore, os.stat(path).st_mode & 0o7777)
-                os.replace(migliore, path)
+        with _scratch(directory) as compacted:
+            _compact(cleaned, compacted, lambda value: report(60 + value * 4 // 10))
+            # qpdf is not bound to beat a file MuPDF has already reorganised,
+            # so adopt whichever of the two came out smaller.
+            candidates = (cleaned, compacted)
+            best = min(candidates, key=os.path.getsize)
+            if os.path.getsize(best) < before:
+                # Carry the original's permissions across the swap.
+                os.chmod(best, os.stat(path).st_mode & 0o7777)
+                os.replace(best, path)
 
     report(100)
     return CompressionResult(before, os.path.getsize(path))
