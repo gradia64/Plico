@@ -77,6 +77,11 @@ def _write_pdf(
 
     *pages* selects a subset by 0-based index, preserving the given order;
     ``None`` means "every page, in model order".
+
+    The output is rebuilt from pages and nothing else, so no document-level
+    data follows its source: ``/Info``, the XMP packet and the embedded files
+    are all left behind. That is why a redaction needs no separate metadata
+    cleanup -- and it is also why a plain "save as" does not keep the title.
     """
     assert model.sources, "No document open"
     items = model.pages if pages is None else [model.pages[i] for i in pages]

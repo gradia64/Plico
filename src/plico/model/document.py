@@ -86,6 +86,28 @@ class PageItem:
         return derotation_matrix(width, height, self.total_rotation)
 
 
+def _not_already_marked(
+    item: PageItem, rects: list[RedactionRect]
+) -> list[RedactionRect]:
+    """Drop the occurrences that a redaction on this page already covers.
+
+    Searching twice for the same word must not stack two rectangles on the
+    same spot: the user would then have to undo the page one command at a
+    time, and the second mark would hide the first.
+    """
+
+    def coperto(rect: RedactionRect) -> bool:
+        return any(
+            mark.x0 <= rect.x0
+            and mark.y0 <= rect.y0
+            and rect.x1 <= mark.x1
+            and rect.y1 <= mark.y1
+            for mark in item.redactions
+        )
+
+    return [rect for rect in rects if not coperto(rect)]
+
+
 class DocumentModel(QObject):
     """Holds the virtual page list; the real PDF is never mutated until save."""
 
@@ -162,6 +184,42 @@ class DocumentModel(QObject):
     def source_for(self, item: PageItem) -> str:
         """Path of the document that *item* points into."""
         return self.sources[item.source_id]
+
+    def find_text(self, text: str) -> dict[int, list[RedactionRect]]:
+        """Every occurrence of *text*, as redaction rectangles by page index.
+
+        ``Page.search_for`` answers in the page's UNROTATED space, which is
+        exactly the space a redaction is stored in, so the rectangles are used
+        as they come -- the same reason the drawing tool hands them over
+        untouched. The sources are opened read-only, one handle each, and
+        closed again: searching is a read, and the model owns nothing.
+        """
+        if not text:
+            return {}
+        handles: dict[int, fitz.Document] = {}
+        trovati: dict[int, list[RedactionRect]] = {}
+        try:
+            for indice, item in enumerate(self.pages):
+                doc = handles.get(item.source_id)
+                if doc is None:
+                    doc = fitz.open(self.sources[item.source_id])
+                    handles[item.source_id] = doc
+                # Bound to a local on purpose: a widget-like object read from a
+                # temporary page would be collected with it.
+                pagina = doc[item.source_index]
+                larghezza, altezza = item.unrotated_size
+                rects = [
+                    RedactionRect.from_corners(r.x0, r.y0, r.x1, r.y1).clamped_to(
+                        larghezza, altezza
+                    )
+                    for r in pagina.search_for(text)
+                ]
+                if nuovi := _not_already_marked(item, rects):
+                    trovati[indice] = nuovi
+        finally:
+            for doc in handles.values():
+                doc.close()
+        return trovati
 
     @property
     def page_count(self) -> int:

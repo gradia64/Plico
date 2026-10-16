@@ -454,15 +454,28 @@ esiste.
   riapplicare la rotazione;
 - vale per `save_as` **e** per `save_compressed`: comprimere un documento
   redatto non fa riapparire niente;
+- `DocumentModel.find_text()` cerca una parola in **tutte** le pagine e
+  restituisce i rettangoli già pronti: `search_for()` risponde nello spazio non
+  ruotato, cioè esattamente quello delle redazioni, quindi non c'è niente da
+  convertire. Le occorrenze già coperte da un segno non tornano una seconda
+  volta, e `MainWindow._redact_text()` avvolge l'intera ricerca in una
+  `beginMacro`/`endMacro`: un solo `Ctrl+Z` disfa tutto;
 - la vista **non tocca il modello**: `PageView` emette `redaction_added` /
   `redaction_removed` e `MainWindow` spinge il comando sullo stack, esattamente
   come per il drag & drop delle miniature.
 
 Limiti da conoscere: `apply_redactions()` con i valori di default
 (`images=2`, `graphics=1`) elimina anche la **grafica vettoriale** che tocca il
-rettangolo — un bordo o una tabella a cavallo del segno possono sparire; e la
-redazione non tocca i **metadati** (`/Info`, XMP, i nomi dei livelli), che
-possono contenere lo stesso segreto.
+rettangolo — un bordo o una tabella a cavallo del segno possono sparire.
+
+I metadati **non sono un problema**, al contrario di quanto sembri: il file di
+uscita è ricostruito con `insert_pdf()` dalle sole pagine, quindi `/Info`,
+l'XMP e i file allegati della sorgente non ci arrivano mai. Verificato con una
+sorgente che li portava tutti e tre: dopo `save_as` il titolo è vuoto, l'XMP è
+0 byte e gli allegati sono scomparsi. Per lo stesso motivo un salvataggio
+normale **non conserva** titolo e autore, che è una perdita da tenere a mente.
+Le **annotazioni**, invece, vengono copiate: un commento che ripete la parola
+redatta resta nel file.
 
 ### Compilazione dei form (`model/forms.py`)
 
@@ -775,10 +788,11 @@ sostituita con la sorgente `git` del tag di rilascio.
 
 **Debito tecnico noto:**
 
-- la redazione si disegna solo a mano, un rettangolo alla volta: niente
-  selezione di testo o di area, niente "trova tutte le occorrenze di una
-  parola", e i metadati (`/Info`, XMP) non vengono ripuliti — per un uso
-  forense servirebbe anche quello;
+- la redazione si disegna a mano o si chiede per parola (`Ctrl+Shift+F` →
+  `DocumentModel.find_text()`, tutte le occorrenze in tutte le pagine, un solo
+  Annulla): mancano la selezione di testo e la selezione di area. I metadati
+  non sono più un debito — `/Info`, XMP e allegati non sopravvivono alla
+  ricostruzione (vedi §8) — mentre le **annotazioni** vengono copiate;
 - la compressione ha tre livelli fissi, applicati a tutto il documento: non si
   può ancora scegliere "solo le immagini" o escludere delle pagine, e il
   guadagno si vede solo a lavoro finito (niente stima prima di partire);
@@ -786,9 +800,12 @@ sostituita con la sorgente `git` del tag di rilascio.
   un campo lo seleziona nel dock «Modulo», ma non si digita in-place. I
   radiobutton non sono modificabili e le firme non sono ancora gestite (vedi
   §8);
-- `PageView._on_screen_changed` esiste ma **non è connesso** (fu rimosso
-  perché `self.window()` è `None` durante la costruzione): il rendering HiDPI
-  oggi non reagisce al cambio di monitor a finestra aperta;
+- il cambio di monitor è gestito da `MainWindow`, non da `PageView`:
+  `_watch_screen()` si connette una volta sola a `windowHandle().screenChanged`
+  (dal `showEvent`, perché durante la costruzione `self.window()` è `None`) e
+  `_on_screen_changed()` richiama `refresh_geometry()` e `_thumb_bar.refresh()`.
+  La densità è già letta a ogni richiesta di render — `devicePixelRatioF()` entra
+  anche nella chiave della miniatura — mancava solo il segnale;
 - il resto dei "Tocchi KDE" è fatto (icone dal tema senza asset impacchettati,
   `self.tr()` su tutto il testo visibile, `QSettings` per geometria/dock/zoom);
   manca solo l'infrastruttura di traduzione vera (`.ts` + `lrelease`).

@@ -312,3 +312,128 @@ def test_senza_redazioni_il_testo_resta(tmp_path) -> None:
     with fitz.open(out) as doc:
         assert SEGRETO in doc[0].get_text()
         assert PUBBLICO in doc[0].get_text()
+
+
+# --------------------------------------------------------------------- #
+#  Cercare una parola e marcarla ovunque
+# --------------------------------------------------------------------- #
+
+
+def test_find_text_trova_le_occorrenze_su_tutte_le_pagine(tmp_path) -> None:
+    """La ricerca guarda ogni pagina, non solo quella che si vede."""
+    src = str(tmp_path / "doc.pdf")
+    _pdf_con_testo(src, pagine=3)
+
+    model = DocumentModel()
+    model.open(src)
+
+    trovati = model.find_text(SEGRETO)
+    assert sorted(trovati) == [0, 1, 2]
+    assert all(len(rects) == 1 for rects in trovati.values())
+
+
+def test_find_text_trova_piu_occorrenze_sulla_stessa_pagina(tmp_path) -> None:
+    src = str(tmp_path / "doc.pdf")
+    with fitz.open() as doc:
+        page = doc.new_page(width=595, height=842)
+        page.insert_text((100, 100), SEGRETO, fontsize=20)
+        page.insert_text((100, 300), SEGRETO, fontsize=20)
+        page.insert_text((100, 700), PUBBLICO, fontsize=20)
+        doc.save(src)
+
+    model = DocumentModel()
+    model.open(src)
+
+    assert len(model.find_text(SEGRETO)[0]) == 2
+
+
+def test_find_text_non_trova_cio_che_non_ce(tmp_path) -> None:
+    src = str(tmp_path / "doc.pdf")
+    _pdf_con_testo(src)
+
+    model = DocumentModel()
+    model.open(src)
+
+    assert model.find_text("INESISTENTE") == {}
+    assert model.find_text("") == {}
+
+
+def test_find_text_non_tocca_niente(tmp_path) -> None:
+    """Cercare e` una lettura: nessuna redazione nasce da sola."""
+    src = str(tmp_path / "doc.pdf")
+    _pdf_con_testo(src, pagine=2)
+
+    model = DocumentModel()
+    model.open(src)
+    model.find_text(SEGRETO)
+
+    assert all(not item.redactions for item in model.pages)
+
+
+def test_find_text_non_si_ripete_sopra_una_redazione_gia_messa(tmp_path) -> None:
+    """Cercare due volte la stessa parola non accatasta rettangoli uguali."""
+    src = str(tmp_path / "doc.pdf")
+    _pdf_con_testo(src)
+
+    model = DocumentModel()
+    model.open(src)
+
+    primo = model.find_text(SEGRETO)
+    assert len(primo[0]) == 1
+    model.pages[0].redactions.extend(primo[0])
+
+    assert model.find_text(SEGRETO) == {}
+
+
+def test_find_text_segue_la_lista_virtuale_dopo_un_unione(tmp_path) -> None:
+    """Le occorrenze sono indicizzate sulle pagine del modello, non del file."""
+    primo = str(tmp_path / "a.pdf")
+    secondo = str(tmp_path / "b.pdf")
+    _pdf_con_testo(primo)
+    _pdf_con_testo(secondo)
+
+    model = DocumentModel()
+    model.open(primo)
+    model.append_document(secondo)
+    model.pages.pop(0)
+
+    assert list(model.find_text(SEGRETO)) == [0]
+
+
+def test_find_text_e_la_redazione_che_ne_deriva_cancellano_davvero(tmp_path) -> None:
+    """Il giro completo: cerca, marca, salva, verifica."""
+    src = str(tmp_path / "doc.pdf")
+    out = str(tmp_path / "out.pdf")
+    _pdf_con_testo(src, pagine=3)
+
+    model = DocumentModel()
+    model.open(src)
+    for indice, rects in model.find_text(SEGRETO).items():
+        model.pages[indice].redactions.extend(rects)
+    save_as(model, out)
+
+    with fitz.open(out) as doc:
+        assert doc.page_count == 3
+        for page in doc:
+            assert SEGRETO not in page.get_text()
+            assert PUBBLICO in page.get_text()
+
+
+@pytest.mark.parametrize("rotazione", [90, 180, 270])
+def test_find_text_regge_anche_ruotando_la_pagina(tmp_path, rotazione: int) -> None:
+    """La ricerca risponde nello spazio che la redazione si aspetta."""
+    src = str(tmp_path / "doc.pdf")
+    out = str(tmp_path / "out.pdf")
+    _pdf_con_testo(src, rotation=rotazione)
+
+    model = DocumentModel()
+    model.open(src)
+    trovati = model.find_text(SEGRETO)
+    assert len(trovati[0]) == 1
+    model.pages[0].redactions.extend(trovati[0])
+    save_as(model, out)
+
+    with fitz.open(out) as doc:
+        assert doc[0].rotation == rotazione
+        assert SEGRETO not in doc[0].get_text()
+        assert PUBBLICO in doc[0].get_text()

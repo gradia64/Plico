@@ -4,7 +4,7 @@ import os
 from collections.abc import Callable
 
 from PySide6.QtCore import QMetaObject, QSettings, Qt, QThread, QThreadPool
-from PySide6.QtGui import QAction, QIcon, QKeySequence, QUndoStack
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QUndoStack, QWindow
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -44,6 +44,10 @@ from .widgets.thumbnail_bar import ThumbnailBar, ThumbnailCache
 
 
 class MainWindow(QMainWindow):
+    # The window handle `screenChanged` has already been connected to. None
+    # until the window is shown: before that there is no QWindow to watch.
+    _screen_handle: QWindow | None = None
+
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Plico")
@@ -244,6 +248,15 @@ class MainWindow(QMainWindow):
             )
         )
         edit_menu.addAction(self._redact_act)
+
+        edit_menu.addAction(
+            self._act(
+                self.tr("Redigi te&sto…"),
+                "edit-find",
+                "Ctrl+Shift+F",
+                self._redact_text,
+            )
+        )
 
         # Esc leaves the tool whatever has focus. It sets the check state
         # directly: setChecked() does not emit `triggered`, so the mode is
@@ -721,6 +734,48 @@ class MainWindow(QMainWindow):
         """An existing mark was clicked away."""
         self._undo_stack.push(RemoveRedaction(self._doc_model, index, rect))
 
+    def _redact_text(self) -> None:
+        """Mark every occurrence of a string the user types.
+
+        The whole search is ONE undo step: the user asked for one operation,
+        and undoing it word by word would be absurd.
+        """
+        if not self._doc_model.sources:
+            QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
+            return
+        testo, ok = QInputDialog.getText(
+            self,
+            self.tr("Redigi testo"),
+            self.tr("Testo da eliminare, in tutte le pagine:"),
+        )
+        if not ok or not testo:
+            return
+        occorrenze = self._doc_model.find_text(testo)
+        if not occorrenze:
+            self._status.setText(self.tr("Nessuna occorrenza di «{0}».").format(testo))
+            return
+
+        self._undo_stack.beginMacro(self.tr("Redigi «{0}»").format(testo))
+        try:
+            for indice, rects in occorrenze.items():
+                for rect in rects:
+                    self._undo_stack.push(AddRedaction(self._doc_model, indice, rect))
+        finally:
+            self._undo_stack.endMacro()
+
+        # Turn the tool on: redactions are only painted while it is, and marks
+        # the user cannot see are worse than no marks at all. setChecked() does
+        # not emit `triggered`, so the mode is applied explicitly.
+        self._redact_act.setChecked(True)
+        self._on_redaction_toggled(True)
+
+        quante = sum(len(rects) for rects in occorrenze.values())
+        self._status.setText(
+            self.tr("Redatte {0} occorrenze di «{1}» su {2} pagine.").format(
+                quante, testo, len(occorrenze)
+            )
+        )
+
     # ------------------------------------------------------------------ #
     #  Form fields (an AcroForm field is state of the virtual page too)
     # ------------------------------------------------------------------ #
@@ -764,6 +819,31 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
     #  Lifecycle
     # ------------------------------------------------------------------ #
+
+    def showEvent(self, event) -> None:
+        """Start watching the screen as soon as there is a window handle."""
+        super().showEvent(event)
+        self._watch_screen()
+
+    def _watch_screen(self) -> None:
+        """Re-render at the right resolution when the window changes screen.
+
+        Every render request reads the device pixel ratio afresh, so the only
+        thing missing is the signal: dragging the window onto a monitor with a
+        different scaling would otherwise keep the pixmaps rendered for the
+        old one until something else happened to force a relayout.
+        """
+        handle = self.windowHandle()
+        if handle is None or handle is self._screen_handle:
+            return
+        self._screen_handle = handle
+        handle.screenChanged.connect(self._on_screen_changed)
+
+    def _on_screen_changed(self, screen) -> None:
+        """A different monitor: refresh pages and thumbnails for it."""
+        del screen
+        self._page_view.refresh_geometry()
+        self._thumb_bar.refresh()
 
     def closeEvent(self, event) -> None:
         """Persist the UI state and shut the worker thread down cleanly."""

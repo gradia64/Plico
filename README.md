@@ -136,10 +136,16 @@ ricadono nella zona: nel file non restano né il testo né l'immagine sotto il
 rettangolo. Un rettangolo nero disegnato sopra — quello che fanno parecchi
 strumenti — lascerebbe il segreto copiabile e ricercabile.
 
-Due cose da sapere: si redige solo quello che si disegna a mano (niente
-ricerca automatica di parole, e i metadati del PDF non vengono ripuliti), e
-`apply_redactions()` elimina anche la grafica vettoriale che tocca il
-rettangolo, quindi un bordo o una tabella a cavallo del segno possono sparire.
+`Ctrl+Shift+F` (*Modifica → Redigi testo…*) cerca invece una parola in **tutte**
+le pagine e marca ogni occorrenza in un colpo solo, come un unico passo di
+undo.
+
+Due cose da sapere: si redige quello che si disegna o quello che si cerca
+(mancano la selezione di testo e la selezione di area), e `apply_redactions()`
+elimina anche la grafica vettoriale che tocca il rettangolo, quindi un bordo o
+una tabella a cavallo del segno possono sparire. I metadati del PDF, invece,
+non sono un rischio: il file di uscita è ricostruito dalle sole pagine, quindi
+`/Info`, l'XMP e gli allegati non ci arrivano mai.
 
 ### Form: compilare il PDF, non solo leggerlo
 

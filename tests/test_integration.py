@@ -1695,3 +1695,131 @@ def test_il_valore_disegnato_viene_dal_modello(qapp, tmp_path, windows):
 
     assert canvas.label._valore_mostrato(canvas.item, campo) == "Anna"
     assert campo.value == "vecchio", "il descrittore resta quello del file"
+
+
+# --------------------------------------------------------------------- #
+#  Redigi testo: cercare una parola e marcarla ovunque
+# --------------------------------------------------------------------- #
+
+
+def _cerca(mw, monkeypatch, testo: str, conferma: bool = True) -> None:
+    """Finge il dialogo di ricerca e lancia l'azione del menu."""
+    monkeypatch.setattr(
+        QInputDialog, "getText", staticmethod(lambda *a, **k: (testo, conferma))
+    )
+    mw._redact_text()
+
+
+def test_la_voce_redigi_testo_e_nel_menu_modifica(windows) -> None:
+    """L'azione esiste, sta in Modifica e porta la sua scorciatoia."""
+    mw = windows()
+    modifica = next(a.menu() for a in mw.menuBar().actions() if "Modifica" in a.text())
+    assert modifica is not None
+    azione = next(
+        a for a in modifica.actions() if a.text().replace("&", "") == "Redigi testo…"
+    )
+    assert azione.shortcut().toString() == "Ctrl+Shift+F"
+
+
+def test_redigi_testo_marca_tutte_le_occorrenze_in_un_solo_passo(
+    windows, monkeypatch, tmp_path
+) -> None:
+    """Tre pagine marcate devono costare UN Annulla, non tre."""
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=3)
+    mw = windows()
+    _open(mw, pdf)
+
+    _cerca(mw, monkeypatch, "Pagina")
+
+    assert mw._undo_stack.count() == 1, "una macro, non un comando per pagina"
+    assert mw._undo_stack.undoText() == "Redigi «Pagina»"
+    assert sum(len(item.redactions) for item in mw._doc_model.pages) == 3
+    assert mw._redact_act.isChecked(), "le tacche vanno mostrate, non solo messe"
+
+    mw._undo_stack.undo()
+    assert all(not item.redactions for item in mw._doc_model.pages)
+
+
+def test_redigi_testo_salva_un_file_senza_la_parola(
+    windows, monkeypatch, tmp_path
+) -> None:
+    """Dal menu al disco: la parola cercata non e` piu` nel file."""
+    pdf = str(tmp_path / "doc.pdf")
+    out = str(tmp_path / "out.pdf")
+    _make_pdf(pdf, pages=2)
+    mw = windows()
+    _open(mw, pdf)
+
+    _cerca(mw, monkeypatch, "Pagina")
+    save_as(mw._doc_model, out)
+
+    with fitz.open(out) as doc:
+        assert doc.page_count == 2
+        for page in doc:
+            assert "Pagina" not in page.get_text()
+
+    with fitz.open(pdf) as doc:
+        assert "Pagina 1" in doc[0].get_text(), "la sorgente resta com'era"
+
+
+def test_redigi_testo_annullato_non_marca_niente(windows, monkeypatch, tmp_path) -> None:
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=2)
+    mw = windows()
+    _open(mw, pdf)
+
+    _cerca(mw, monkeypatch, "Pagina", conferma=False)
+
+    assert mw._undo_stack.count() == 0
+    assert all(not item.redactions for item in mw._doc_model.pages)
+
+
+def test_redigi_testo_senza_occorrenze_lo_dice(windows, monkeypatch, tmp_path) -> None:
+    """Nessun comando, nessun segno, e lo stato lo racconta."""
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=2)
+    mw = windows()
+    _open(mw, pdf)
+
+    _cerca(mw, monkeypatch, "INESISTENTE")
+
+    assert mw._undo_stack.count() == 0
+    assert "Nessuna occorrenza" in mw._status.text()
+
+
+def test_redigi_testo_senza_documento_avvisa(windows, monkeypatch) -> None:
+    """Senza niente aperto si avvisa, e il dialogo non si apre nemmeno."""
+    avvisi: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox, "warning", staticmethod(lambda *a, **k: avvisi.append(a[2]))
+    )
+
+    def _mai(*a, **k):
+        raise AssertionError("il dialogo non deve aprirsi")
+
+    monkeypatch.setattr(QInputDialog, "getText", staticmethod(_mai))
+    mw = windows()
+
+    mw._redact_text()
+
+    assert avvisi and "Nessun documento" in avvisi[0]
+
+
+def test_la_ricerca_non_marca_due_volte_lo_stesso_punto(
+    windows, monkeypatch, tmp_path
+) -> None:
+    """La seconda ricerca non trova piu` niente, e non crea un comando."""
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=1)
+    mw = windows()
+    _open(mw, pdf)
+
+    _cerca(mw, monkeypatch, "Pagina")
+    assert sum(len(item.redactions) for item in mw._doc_model.pages) == 1
+
+    _cerca(mw, monkeypatch, "Pagina")
+
+    assert sum(len(item.redactions) for item in mw._doc_model.pages) == 1
+    assert mw._undo_stack.count() == 1, "la seconda ricerca non crea un comando"
+    assert "Nessuna occorrenza" in mw._status.text()
