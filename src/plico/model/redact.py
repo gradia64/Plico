@@ -77,6 +77,26 @@ class RedactionRect:
             min(max(self.y1, 0.0), height),
         )
 
+    def translated(self, dx: float, dy: float) -> "RedactionRect":
+        """The same rectangle moved by *dx*, *dy* points, size untouched."""
+        return RedactionRect(self.x0 + dx, self.y0 + dy, self.x1 + dx, self.y1 + dy)
+
+    def with_corner(self, corner: str, x: float, y: float) -> "RedactionRect":
+        """The rectangle with the corner *corner* dragged to *x*, *y*.
+
+        The dragged corner moves and the opposite one stays where it was, so
+        resizing a zone does not also shift it. The result is normalised, so
+        dragging a corner past the opposite one turns the rectangle over
+        instead of inverting it.
+        """
+        if corner == "tl":
+            return RedactionRect.from_corners(x, y, self.x1, self.y1)
+        if corner == "tr":
+            return RedactionRect.from_corners(self.x0, y, x, self.y1)
+        if corner == "bl":
+            return RedactionRect.from_corners(x, self.y0, self.x1, y)
+        return RedactionRect.from_corners(self.x0, self.y0, x, y)
+
 
 def rotation_matrix(
     unrotated_width: float, unrotated_height: float, rotation: int

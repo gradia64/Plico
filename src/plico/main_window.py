@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 from .model import (
     IMAGE_SUFFIXES,
     AddRedaction,
+    AdjustRedaction,
     AppendDocument,
     CompressionLevel,
     CompressionResult,
@@ -162,6 +163,7 @@ class MainWindow(QMainWindow):
         # gesture, the window pushes the undoable command.
         self._page_view.redaction_added.connect(self._add_redaction)
         self._page_view.redaction_removed.connect(self._remove_redaction)
+        self._page_view.redaction_adjusted.connect(self._adjust_redaction)
         self._page_view.selection_made.connect(self._add_selection)
         self._page_view.text_edited.connect(self._on_text_edited)
         self._page_view.text_edit_refused.connect(self._status.setText)
@@ -1445,6 +1447,19 @@ class MainWindow(QMainWindow):
     def _add_redaction(self, index: int, rect: RedactionRect) -> None:
         """A rectangle was drawn on page *index*."""
         self._undo_stack.push(AddRedaction(self._doc_model, index, rect))
+
+    def _adjust_redaction(
+        self,
+        index: int,
+        position: int,
+        before: RedactionRect,
+        after: RedactionRect,
+        moved: bool,
+    ) -> None:
+        """A mark on page *index* was moved or resized with the mouse."""
+        self._undo_stack.push(
+            AdjustRedaction(self._doc_model, index, position, before, after, moved)
+        )
 
     def _add_selection(self, index: int, words: list[RedactionRect]) -> None:
         """Words were selected on page *index*: mark them all, as ONE step.

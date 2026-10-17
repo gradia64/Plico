@@ -161,9 +161,11 @@ anche sui file grandi.
 ### Cancella zona: il testo se ne va davvero
 
 `Ctrl+Shift+X` (*Modifica → Cancella zona*) attiva lo strumento: si trascina un rettangolo sui dati da
-eliminare, un clic secco su una zona la annulla, `Esc` esce. Le zone restano
-**modificabili finché non salvi** — sono comandi undo come gli altri (`Ctrl+Z`)
-e l'anteprima scura sulla pagina mostra esattamente dove finiranno.
+eliminare, un clic secco su una zona la annulla, `Esc` esce. Una zona già
+disegnata si **corregge senza rifarla**: gli angoli la ridimensionano, il
+centro la sposta. Le zone restano **modificabili finché non salvi** — sono
+comandi undo come gli altri (`Ctrl+Z`) e l'anteprima scura sulla pagina mostra
+esattamente dove finiranno.
 
 Al salvataggio PyMuPDF riscrive i content stream e **toglie** le parole che
 ricadono nella zona: nel file non restano né il testo né l'immagine sotto il
@@ -179,7 +181,8 @@ si aspetta chi ha usato un editor: si trascina sulle parole da eliminare e
 vengono marcate **per intero**, una per una, con un segno stretto quanto la
 parola. Il trascinamento è un gesto solo, quindi un `Ctrl+Z` disfa tutta la
 selezione; trascinare dove non c'è testo non lascia niente; un clic su un segno
-lo toglie, come nella zona. Funziona anche sulle parole lette dall'OCR.
+lo toglie, come nella zona, e anche qui un segno si sposta e si ridimensiona.
+Funziona anche sulle parole lette dall'OCR.
 
 Tre cose da sapere: le parole si prendono **intere** (un segno a metà parola
 non nasconderebbe niente), l'unità minima è la parola e non la lettera, e

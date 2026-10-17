@@ -181,13 +181,13 @@ def test_optimize_keeps_page_rotation(qapp, tmp_path):
 def test_optimize_reports_progress(qapp, tmp_path):
     path = str(tmp_path / "progresso.pdf")
     _fragmented_text(path, pages=5)
-    visti: list[int] = []
+    seen: list[int] = []
 
-    optimize_in_place(path, LEVELS_BY_KEY["light"], progress=visti.append)
+    optimize_in_place(path, LEVELS_BY_KEY["light"], progress=seen.append)
 
-    assert visti, "pikepdf deve riportare l'avanzamento"
-    assert visti[-1] == 100
-    assert all(0 <= value <= 100 for value in visti)
+    assert seen, "pikepdf deve riportare l'avanzamento"
+    assert seen[-1] == 100
+    assert all(0 <= value <= 100 for value in seen)
 
 
 def test_optimize_without_progress_does_not_complain(qapp, tmp_path):

@@ -14,7 +14,7 @@ import pymupdf
 import pytest
 
 from plico.model import LEVELS_BY_KEY, DocumentModel, RedactionRect, save_as, save_compressed
-from plico.model.commands import AddRedaction, RemoveRedaction
+from plico.model.commands import AddRedaction, AdjustRedaction, RemoveRedaction
 from plico.model.redact import (
     derotation_matrix,
     map_point,
@@ -142,6 +142,28 @@ def test_the_rect_is_clamped_to_the_page() -> None:
     assert rect.as_tuple() == (0.0, 0.0, 595.0, 842.0)
 
 
+def test_a_moved_rect_keeps_its_size() -> None:
+    rect = RedactionRect.from_corners(100.0, 150.0, 200.0, 300.0)
+    moved = rect.translated(20.0, -30.0)
+    assert moved.as_tuple() == (120.0, 120.0, 220.0, 270.0)
+    assert moved.width == rect.width
+    assert moved.height == rect.height
+
+
+def test_dragging_a_corner_leaves_the_others_where_they_are() -> None:
+    rect = RedactionRect.from_corners(100.0, 150.0, 200.0, 300.0)
+    assert rect.with_corner("br", 260.0, 380.0).as_tuple() == (100.0, 150.0, 260.0, 380.0)
+    assert rect.with_corner("tl", 40.0, 50.0).as_tuple() == (40.0, 50.0, 200.0, 300.0)
+    assert rect.with_corner("tr", 220.0, 40.0).as_tuple() == (100.0, 40.0, 220.0, 300.0)
+    assert rect.with_corner("bl", 60.0, 320.0).as_tuple() == (60.0, 150.0, 200.0, 320.0)
+
+
+def test_a_corner_dragged_past_the_other_side_turns_the_rect_around() -> None:
+    """A rectangle with a negative width hides nothing but draws strangely."""
+    rect = RedactionRect.from_corners(100.0, 150.0, 200.0, 300.0)
+    assert rect.with_corner("br", 40.0, 360.0).as_tuple() == (40.0, 150.0, 100.0, 360.0)
+
+
 # --------------------------------------------------------------------- #
 #  Commands
 # --------------------------------------------------------------------- #
@@ -152,21 +174,21 @@ def test_adding_a_redaction_is_undoable(tmp_path) -> None:
 
     model = DocumentModel()
     model.open(src)
-    visti: list[int] = []
-    model.page_changed.connect(visti.append)
+    seen: list[int] = []
+    model.page_changed.connect(seen.append)
 
     rect = _secret_rect(src)
-    comando = AddRedaction(model, 0, rect)
+    command = AddRedaction(model, 0, rect)
 
-    comando.redo()
+    command.redo()
     assert model.pages[0].redactions == [rect]
-    assert visti == [0], "la pagina deve ridisegnarsi subito"
+    assert seen == [0], "la pagina deve ridisegnarsi subito"
 
-    comando.undo()
+    command.undo()
     assert model.pages[0].redactions == []
-    assert visti == [0, 0], "anche l'annullamento deve ridisegnare"
+    assert seen == [0, 0], "anche l'annullamento deve ridisegnare"
 
-    comando.redo()
+    command.redo()
     assert model.pages[0].redactions == [rect], "un redo dopo l'undo deve rimetterla"
 
 
@@ -179,15 +201,60 @@ def test_removing_a_redaction_is_undoable(tmp_path) -> None:
     rect = _secret_rect(src)
     model.pages[0].redactions.append(rect)
 
-    comando = RemoveRedaction(model, 0, rect)
-    comando.redo()
+    command = RemoveRedaction(model, 0, rect)
+    command.redo()
     assert model.pages[0].redactions == []
 
-    comando.undo()
+    command.undo()
     assert model.pages[0].redactions == [rect], "l'undo deve rimetterla dov'era"
 
-    comando.redo()
+    command.redo()
     assert model.pages[0].redactions == []
+
+
+def test_moving_a_redaction_is_undoable(tmp_path) -> None:
+    """One gesture, one step: the rectangle goes back where it was."""
+    src = str(tmp_path / "doc.pdf")
+    _pdf_with_text(src)
+
+    model = DocumentModel()
+    model.open(src)
+    drawn: list[int] = []
+    model.page_changed.connect(drawn.append)
+
+    before = _secret_rect(src)
+    AddRedaction(model, 0, before).redo()
+    after = before.translated(30.0, 15.0)
+    command = AdjustRedaction(model, 0, 0, before, after, moved=True)
+
+    command.redo()
+    assert model.pages[0].redactions == [after]
+    assert drawn == [0, 0], "anche lo spostamento deve far ridisegnare la pagina"
+
+    command.undo()
+    assert model.pages[0].redactions == [before]
+
+    command.redo()
+    assert model.pages[0].redactions == [after], "un redo dopo l'undo deve rimetterla"
+
+
+def test_resizing_a_redaction_is_undoable(tmp_path) -> None:
+    src = str(tmp_path / "doc.pdf")
+    _pdf_with_text(src)
+
+    model = DocumentModel()
+    model.open(src)
+    before = _secret_rect(src)
+    AddRedaction(model, 0, before).redo()
+    after = before.with_corner("br", before.x1 + 40.0, before.y1 + 20.0)
+    command = AdjustRedaction(model, 0, 0, before, after, moved=False)
+
+    command.redo()
+    assert model.pages[0].redactions == [after]
+    assert after.x0 == before.x0, "l'angolo opposto non si muove"
+
+    command.undo()
+    assert model.pages[0].redactions == [before]
 
 
 # --------------------------------------------------------------------- #

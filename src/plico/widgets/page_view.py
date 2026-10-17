@@ -63,6 +63,13 @@ REDACTION_DRAG = QColor(214, 48, 48, 170)
 # Below this (in pixels) a press-and-release is a click, not a drag.
 CLICK_SLOP = 4.0
 
+# Handles of an existing mark: a square this wide sits on each corner, and a
+# press within that distance of a corner resizes instead of moving. In pixels,
+# because it is a target for a mouse and must not shrink with the zoom.
+MARK_HANDLE = 8.0
+# A mark smaller than this (in points) hides nothing worth hiding.
+MIN_MARK = 2.0
+
 # Form fields, drawn over the page: a light wash says "there is a field here",
 # and the selected one is picked out so that the page and the panel agree.
 FIELD_WASH = QColor(64, 120, 200, 26)
@@ -186,6 +193,11 @@ class _PageLabel(QLabel):
         self.canvas: _Canvas | None = None
         self._drag_from: QPointF | None = None
         self._drag_to: QPointF | None = None
+        # A mark being moved or resized: (position in the page's list, the
+        # corner handle grabbed or None for a move, the rectangle as it was
+        # before the gesture started, and where the grab happened in page
+        # space -- the last one so a move keeps the distance the user grabbed).
+        self._adjust: tuple[int, str | None, RedactionRect, tuple[float, float]] | None = None
         # Background colour behind each edited span, sampled from the render
         # it was painted over. Keyed by the render too: a new pixmap (zoom,
         # rotation) may sample differently, and toImage() is too costly to
@@ -339,6 +351,22 @@ class _PageLabel(QLabel):
             painter.setPen(QPen(REDACTION_BORDER, 2))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(area)
+            # Drawn only here, and this is only ever called while a tool that
+            # works on marks is on: the corners are what a press can grab, so
+            # showing them is the only way to tell that a mark can be moved
+            # and resized instead of only removed.
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(REDACTION_BORDER))
+            half = MARK_HANDLE / 2
+            for corner in (
+                area.topLeft(),
+                area.topRight(),
+                area.bottomLeft(),
+                area.bottomRight(),
+            ):
+                painter.drawRect(
+                    QRectF(corner.x() - half, corner.y() - half, MARK_HANDLE, MARK_HANDLE)
+                )
         if self._drag_from is not None and self._drag_to is not None:
             painter.setPen(QPen(REDACTION_DRAG, 2, Qt.PenStyle.DashLine))
             painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -451,6 +479,17 @@ class _PageLabel(QLabel):
             self._select_field_under(event.position())
             super().mousePressEvent(event)
             return
+        hit = self._mark_under(event.position())
+        if hit is not None:
+            position, corner = hit
+            canvas = self.canvas
+            assert canvas is not None
+            self._adjust = (
+                position,
+                corner,
+                canvas.item.redactions[position],
+                self._to_page(event.position()),
+            )
         self._drag_from = event.position()
         self._drag_to = self._drag_from
         self.update()
@@ -460,7 +499,64 @@ class _PageLabel(QLabel):
             super().mouseMoveEvent(event)
             return
         self._drag_to = event.position()
+        if self._adjust is not None:
+            self._move_mark(event.position())
         self.update()
+
+    def _mark_under(self, point: QPointF) -> tuple[int, str | None] | None:
+        """The mark under *point*, and the corner handle it was grabbed by.
+
+        Last match first, so the mark the user sees is the one that answers.
+        A corner grabs a resize; anywhere else inside the mark moves the whole
+        rectangle. ``None`` means the click was outside every mark, which is
+        how a new zone gets drawn.
+        """
+        canvas = self.canvas
+        if canvas is None:
+            return None
+        for position in range(len(canvas.item.redactions) - 1, -1, -1):
+            area = self._to_pixels(canvas.item.redactions[position])
+            for name, corner in (
+                ("tl", area.topLeft()),
+                ("tr", area.topRight()),
+                ("bl", area.bottomLeft()),
+                ("br", area.bottomRight()),
+            ):
+                if (
+                    abs(point.x() - corner.x()) <= MARK_HANDLE
+                    and abs(point.y() - corner.y()) <= MARK_HANDLE
+                ):
+                    return position, name
+            if area.contains(point):
+                return position, None
+        return None
+
+    def _move_mark(self, point: QPointF) -> None:
+        """Show an adjustment as it happens.
+
+        The model is written here only so the page repaints while the mouse
+        moves: the command that makes the change undoable is pushed when the
+        drag ends, and until then ``forget_drag()`` can put everything back.
+        """
+        canvas = self.canvas
+        if canvas is None or self._adjust is None:
+            return
+        position, corner, before, start = self._adjust
+        now = self._to_page(point)
+        width, height = canvas.item.unrotated_size
+        if corner is None:
+            # Keep the size and slide it back inside the page if the mouse
+            # leaves it, so a mark cannot be pushed off the edge.
+            dx = min(max(now[0] - start[0], -before.x0), width - before.x1)
+            dy = min(max(now[1] - start[1], -before.y0), height - before.y1)
+            rect = before.translated(dx, dy)
+        else:
+            rect = before.with_corner(corner, now[0], now[1]).clamped_to(width, height)
+        # A zone narrower than a point hides nothing: refusing the step leaves
+        # the previous rectangle on screen instead of an unusable one.
+        if rect.width < MIN_MARK or rect.height < MIN_MARK:
+            return
+        canvas.item.redactions[position] = rect
 
     def mouseReleaseEvent(self, event) -> None:
         if self._drag_from is None or event.button() != Qt.MouseButton.LeftButton:
@@ -468,6 +564,32 @@ class _PageLabel(QLabel):
             return
         start = self._drag_from
         end = event.position()
+        if self._adjust is not None:
+            position, corner, before, _start = self._adjust
+            # Cleared first: forget_drag() would undo the very adjustment that
+            # just ended.
+            self._adjust = None
+            self.forget_drag()
+            self.update()
+            canvas = self.canvas
+            assert canvas is not None
+            if (end - start).manhattanLength() < CLICK_SLOP:
+                # A click on a mark still takes it back: moving it is a drag.
+                for rect in reversed(canvas.item.redactions):
+                    if self._to_pixels(rect).contains(end):
+                        self._view.forget_redaction(canvas, rect)
+                        break
+                return
+            after = canvas.item.redactions[position]
+            if after == before:
+                return
+            # The drag wrote the new rectangle straight into the model so the
+            # page could follow the mouse. The command must own the change:
+            # putting the old one back and letting redo() apply the new one
+            # keeps the whole gesture a single undo step.
+            canvas.item.redactions[position] = before
+            self._view.adjust_redaction(canvas, position, before, after, corner is None)
+            return
         self.forget_drag()
         self.update()
         canvas = self.canvas
@@ -486,7 +608,18 @@ class _PageLabel(QLabel):
         self._view.commit_redaction(canvas, *self._to_page(start), *self._to_page(end))
 
     def forget_drag(self) -> None:
-        """Drop the rectangle being dragged, if any (a tool was left)."""
+        """Drop the rectangle being dragged, if any (a tool was left).
+
+        An adjustment still in the air is put back the way it was: the drag
+        has written into the model only to show itself, and a change that no
+        Ctrl+Z can take back must not survive a gesture nobody finished.
+        """
+        if self._adjust is not None:
+            canvas = self.canvas
+            position, _corner, before, _start = self._adjust
+            if canvas is not None and position < len(canvas.item.redactions):
+                canvas.item.redactions[position] = before
+        self._adjust = None
         self._drag_from = None
         self._drag_to = None
 
@@ -519,6 +652,11 @@ class PageView(QScrollArea):
     # model: it reports the gesture and MainWindow pushes an undoable command.
     redaction_added = Signal(int, object)
     redaction_removed = Signal(int, object)
+    # (page index, position in that page's list, the rectangle before, the one
+    # after, whether the mark was moved rather than resized): a mark the user
+    # nudged with the mouse. One signal for the whole gesture, so it is one
+    # step to undo.
+    redaction_adjusted = Signal(int, int, object, object, bool)
     # (page index, list of RedactionRect): the words a selection covered. One
     # signal for the whole selection, because the window makes it ONE undo
     # step: words are what the user picked, not the rectangle they dragged.
@@ -981,6 +1119,10 @@ class PageView(QScrollArea):
         cursor = self._tool_cursor()
         for c in self._canvases:
             c.label.setCursor(cursor)
+            # A mark moved with the mouse is in the model before the button is
+            # released: leaving the tool mid-gesture has to put it back, or the
+            # change would sit there with nothing to undo.
+            c.label.forget_drag()
             # The marks are painted only while the tool is on, so leaving it
             # has to wipe them off the screen immediately.
             c.label.update()
@@ -996,6 +1138,21 @@ class PageView(QScrollArea):
         if rect.width < 1.0 or rect.height < 1.0:
             return
         self.redaction_added.emit(canvas.index, rect)
+
+    def adjust_redaction(
+        self,
+        canvas: _Canvas,
+        position: int,
+        before: RedactionRect,
+        after: RedactionRect,
+        moved: bool,
+    ) -> None:
+        """A mark was moved or resized: report it, in page space.
+
+        The view says only what the gesture was; the window decides what it
+        means and pushes the command that makes it undoable.
+        """
+        self.redaction_adjusted.emit(canvas.index, position, before, after, moved)
 
     # ------------------------------------------------------------------ #
     #  Selecting text to redact

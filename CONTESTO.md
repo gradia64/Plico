@@ -658,6 +658,36 @@ l'unità minima.
   `_on_page_changed()` (l'OCR aggiunge parole) e quando le canvas vengono
   riusate dopo un salvataggio (il `PageItem` è un altro).
 
+**Un segno già disegnato si sposta e si ridimensiona.** Con la zona o la
+selezione accesa ogni segno mostra i quattro angoli: preso dal centro si sposta
+(misura invariata, e se il mouse esce dalla pagina scivola indietro lungo il
+bordo invece di uscirne), preso da un angolo si ridimensiona. Sono gli handle a
+dire che un segno si può correggere: senza, l'unico modo di aggiustare un
+rettangolo sarebbe toglierlo e ridisegnarlo — su una pagina fitta di testo,
+sbagliare di nuovo.
+
+- la vista scrive il rettangolo nuovo **nel modello mentre il mouse si muove**
+  (altrimenti la pagina non seguirebbe), ma è una scrittura provvisoria: al
+  rilascio `mouseReleaseEvent()` rimette quello di prima e chiede a
+  `MainWindow` un `AdjustRedaction`, che applica quello nuovo. Così l'intero
+  gesto resta **un solo passo** di Annulla, e niente cambia senza che la pila
+  lo sappia;
+- se il gesto non finisce — si lascia lo strumento, Esc, si apre un altro
+  documento — `_PageLabel.forget_drag()` rimette il rettangolo di partenza
+  (`set_redaction_mode()` e `set_selection_mode()` la chiamano su ogni canvas):
+  una modifica che nessun `Ctrl+Z` potrebbe togliere non deve sopravvivere;
+- `RedactionRect.translated(dx, dy)` e `.with_corner(angolo, x, y)` fanno la
+  geometria in spazio pagina; `with_corner()` passa da `from_corners()`, quindi
+  trascinare un angolo oltre il lato opposto **ribalta** il rettangolo invece di
+  produrne uno con larghezza negativa;
+- `AdjustRedaction(modello, indice, posizione, prima, dopo, moved)` si chiama
+  «Sposta zona su pagina n» o «Ridimensiona zona su pagina n»;
+- un segno sotto `MIN_MARK` (2 pt) non viene applicato: nasconderebbe niente;
+- l'hit test degli angoli lavora in **pixel** (`MARK_HANDLE`, 8 px): un
+  bersaglio per il mouse non deve rimpicciolirsi con la pagina;
+- l'ancoraggio tiene la distanza dal punto preso, non dall'angolo: il segno
+  segue il mouse com'era stato afferrato.
+
 Limiti da conoscere: `apply_redactions()` con i valori di default
 (`images=2`, `graphics=1`) elimina anche la **grafica vettoriale** che tocca il
 rettangolo — un bordo o una tabella a cavallo del segno possono sparire.
@@ -1432,10 +1462,10 @@ sostituita con la sorgente `git` del tag di rilascio.
   (*Cancella selezione*, `Ctrl+Shift+L`: ogni parola toccata diventa un segno
   stretto, tutti in un solo Annulla) oppure si **cerca** la parola
   (`Ctrl+Shift+F` → `DocumentModel.find_text()`, tutte le occorrenze in tutte
-  le pagine, un solo Annulla). Quello che manca è solo poter ritoccare una
-  zona già disegnata (si toglie con un clic e si ridisegna). I metadati
-  non sono più un debito — `/Info`, XMP e allegati non sopravvivono alla
-  ricostruzione (vedi §8) — mentre le **annotazioni** vengono copiate;
+  le pagine, un solo Annulla), e una zona già disegnata si **ritocca** col
+  mouse (`AdjustRedaction`: gli angoli la ridimensionano, il centro la sposta).
+  I metadati non sono più un debito — `/Info`, XMP e allegati non sopravvivono
+  alla ricostruzione (vedi §8) — mentre le **annotazioni** vengono copiate;
 - la compressione ha tre livelli fissi, applicati a tutto il documento: non si
   può ancora scegliere "solo le immagini" o escludere delle pagine, e il
   guadagno si vede solo a lavoro finito (niente stima prima di partire);
@@ -1451,7 +1481,12 @@ sostituita con la sorgente `git` del tag di rilascio.
   anche nella chiave della miniatura — mancava solo il segnale;
 - il resto dei "Tocchi KDE" è fatto (icone dal tema senza asset impacchettati,
   `self.tr()` su tutto il testo visibile, `QSettings` per geometria/dock/zoom);
-  manca solo l'infrastruttura di traduzione vera (`.ts` + `lrelease`).
+  manca solo l'infrastruttura di traduzione vera (`.ts` + `lrelease`);
+- nei test restano una quarantina di **messaggi di `assert` in italiano**
+  (identificatori, docstring e nomi dei test sono in inglese): sono per chi
+  sviluppa, non per l'utente, e vanno tradotti quando si ripassa quel file.
+  Vanno invece **lasciati in italiano** quelli che confrontano testo
+  dell'interfaccia («Cancella zona», «Salva con &nome…») e i dati di prova.
 
 **Punti aperti: nessuno.** Le ultime due, che non erano difetti ma
 **capacità** mai esistite, sono chiuse:
@@ -1467,9 +1502,8 @@ sostituita con la sorgente `git` del tag di rilascio.
 **Con la firma, la roadmap lunga è finita**: le quattro voci dell'idea
 originale ci sono tutte e nessuna è un abbozzo — ognuna ha la sua sezione in
 §8 e i suoi test. Quello che resta è l'elenco del debito tecnico qui sopra:
-rifiniture (selezione col mouse per la redazione, livelli di compressione
-flessibili, scrittura in-place nei form, infrastruttura `.ts`), non capacità
-mai esistite.
+rifiniture (livelli di compressione flessibili, scrittura in-place nei form,
+infrastruttura `.ts`), non capacità mai esistite.
 
 Delle dieci voci della review dell'ottobre 2026 non resta niente, e le
 decisioni sono scritte dove servono: in §5 e §6 (le API e il giro della

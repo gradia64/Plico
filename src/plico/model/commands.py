@@ -185,6 +185,41 @@ class RemoveRedaction(QUndoCommand):
         self._model.page_changed.emit(self._index)
 
 
+class AdjustRedaction(QUndoCommand):
+    """Move or resize a redaction already on the page at *index*.
+
+    ``before`` and ``after`` are the same rectangle at the two ends of one
+    gesture: the drag itself touches nothing, so a Ctrl+Z takes back the whole
+    move and not the last mouse step of it.
+    """
+
+    def __init__(
+        self,
+        model: DocumentModel,
+        index: int,
+        position: int,
+        before: RedactionRect,
+        after: RedactionRect,
+        moved: bool,
+    ) -> None:
+        source = "MoveRedaction" if moved else "ResizeRedaction"
+        text = "Sposta zona su pagina {0}" if moved else "Ridimensiona zona su pagina {0}"
+        super().__init__(QCoreApplication.translate(source, text).format(index + 1))
+        self._model = model
+        self._index = index
+        self._position = position
+        self._before = before
+        self._after = after
+
+    def redo(self) -> None:
+        self._model.pages[self._index].redactions[self._position] = self._after
+        self._model.page_changed.emit(self._index)
+
+    def undo(self) -> None:
+        self._model.pages[self._index].redactions[self._position] = self._before
+        self._model.page_changed.emit(self._index)
+
+
 class SetFieldValue(QUndoCommand):
     """Write *value* into the form field *name* of the page at *index*.
 

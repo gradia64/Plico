@@ -1443,7 +1443,7 @@ def _drag(label, start: tuple[int, int], end: tuple[int, int]) -> None:
 
     QtTest is not available in this PySide6 installation, so the events are
     built by hand and delivered to the same label that would receive them
-    from the user. With ``da == a`` it becomes a plain click.
+    from the user. With ``start == end`` it becomes a plain click.
     """
     label.mousePressEvent(_event(QEvent.Type.MouseButtonPress, start))
     if end != start:
@@ -1606,6 +1606,91 @@ def test_a_click_on_a_mark_removes_it(qapp, tmp_path, windows):
     assert mw._undo_stack.undoText() == "Ripristina zona su pagina 1"
 
 
+def test_a_mark_is_moved_with_the_mouse(qapp, tmp_path, windows):
+    """Grabbing a zone and dragging it moves it, keeping its size."""
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=1)
+    mw = windows()
+    _open(mw, pdf)
+
+    mw._redact_act.trigger()
+    canvas = mw._page_view._canvases[0]
+    _drag(canvas.label, (20, 20), (120, 80))
+    _pump(0.1)
+    before = mw._doc_model.pages[0].redactions[0]
+    assert mw._undo_stack.count() == 1
+
+    # The middle of the zone, dragged down and to the right.
+    _drag(canvas.label, (70, 50), (100, 70))
+    _pump(0.1)
+
+    after = mw._doc_model.pages[0].redactions[0]
+    assert after.width == pytest.approx(before.width)
+    assert after.height == pytest.approx(before.height)
+    assert after.x0 > before.x0
+    assert after.y0 > before.y0
+    assert mw._undo_stack.count() == 2, "lo spostamento deve essere un solo passo"
+    assert mw._undo_stack.undoText() == "Sposta zona su pagina 1"
+
+    mw._undo_stack.undo()
+    assert mw._doc_model.pages[0].redactions[0] == before
+
+    mw._undo_stack.redo()
+    assert mw._doc_model.pages[0].redactions[0] == after
+
+
+def test_a_mark_is_resized_from_its_corner(qapp, tmp_path, windows):
+    """The corner handle resizes; the opposite corner stays where it was."""
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=1)
+    mw = windows()
+    _open(mw, pdf)
+
+    mw._redact_act.trigger()
+    canvas = mw._page_view._canvases[0]
+    _drag(canvas.label, (20, 20), (120, 80))
+    _pump(0.1)
+    before = mw._doc_model.pages[0].redactions[0]
+
+    _drag(canvas.label, (120, 80), (170, 120))
+    _pump(0.1)
+
+    after = mw._doc_model.pages[0].redactions[0]
+    assert after.x0 == pytest.approx(before.x0)
+    assert after.y0 == pytest.approx(before.y0)
+    assert after.x1 > before.x1
+    assert after.y1 > before.y1
+    assert mw._undo_stack.undoText() == "Ridimensiona zona su pagina 1"
+
+    mw._undo_stack.undo()
+    assert mw._doc_model.pages[0].redactions[0] == before
+
+
+def test_leaving_the_tool_puts_back_a_mark_still_in_the_air(qapp, tmp_path, windows):
+    """A gesture nobody finished must not change anything: no Ctrl+Z could."""
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=1)
+    mw = windows()
+    _open(mw, pdf)
+
+    mw._redact_act.trigger()
+    canvas = mw._page_view._canvases[0]
+    _drag(canvas.label, (20, 20), (120, 80))
+    _pump(0.1)
+    before = mw._doc_model.pages[0].redactions[0]
+
+    label = canvas.label
+    label.mousePressEvent(_event(QEvent.Type.MouseButtonPress, (70, 50)))
+    label.mouseMoveEvent(_event(QEvent.Type.MouseMove, (110, 70)))
+    assert mw._doc_model.pages[0].redactions[0] != before, "la zona deve seguire il mouse"
+
+    # The button is never released: the tool goes off instead.
+    mw._redact_act.trigger()
+
+    assert mw._doc_model.pages[0].redactions[0] == before
+    assert mw._undo_stack.count() == 1, "niente è finito nella pila"
+
+
 def test_from_the_drag_to_the_file_the_text_disappears(qapp, tmp_path, monkeypatch, windows):
     """The full round: draw on the word, save, the word is no longer there."""
     pdf = str(tmp_path / "doc.pdf")
@@ -1617,8 +1702,8 @@ def test_from_the_drag_to_the_file_the_text_disappears(qapp, tmp_path, monkeypat
 
     mw._redact_act.trigger()
     canvas = mw._page_view._canvases[0]
-    da, a = _pixel_for(canvas, pdf, "SEGRETO")
-    _drag(canvas.label, da, a)
+    start, end = _pixel_for(canvas, pdf, "SEGRETO")
+    _drag(canvas.label, start, end)
     assert len(mw._doc_model.pages[0].redactions) == 1
 
     monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
@@ -1646,8 +1731,8 @@ def test_the_drag_also_holds_with_a_rotated_page(qapp, tmp_path, monkeypatch, wi
     mw._redact_act.trigger()
     canvas = mw._page_view._canvases[0]
     assert canvas.item.total_rotation == 90
-    da, a = _pixel_for(canvas, pdf, "SEGRETO")
-    _drag(canvas.label, da, a)
+    start, end = _pixel_for(canvas, pdf, "SEGRETO")
+    _drag(canvas.label, start, end)
 
     monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
     monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
@@ -1972,7 +2057,7 @@ def test_a_click_on_the_page_selects_the_field(qapp, tmp_path, windows):
         int((field.rect[0] + field.rect[2]) / 2 * canvas.scale),
         int((field.rect[1] + field.rect[3]) / 2 * canvas.scale),
     )
-    _drag(canvas.label, inside, inside)  # da == a: a plain click
+    _drag(canvas.label, inside, inside)  # start == end: a plain click
 
     assert mw._page_view.selected_field() == (0, "nome")
     assert mw._form_panel.focusWidget() is not None

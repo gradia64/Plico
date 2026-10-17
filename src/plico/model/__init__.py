@@ -1,5 +1,6 @@
 from .commands import (
     AddRedaction,
+    AdjustRedaction,
     AppendDocument,
     DeletePage,
     EditText,
@@ -58,6 +59,7 @@ __all__ = [
     "LEVELS",
     "LEVELS_BY_KEY",
     "AddRedaction",
+    "AdjustRedaction",
     "AppendDocument",
     "CompressionLevel",
     "CompressionResult",
