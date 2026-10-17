@@ -47,6 +47,8 @@ plico/
 ├── flatpak/                  # packaging: manifest, metadati AppStream, .desktop, icona
 ├── src/plico/
 │   ├── app.py                # entry point: QApplication + apertura da riga di comando
+│   ├── i18n.py               # cataloghi .qm: dove cercarli, quali chiedere, caricarli
+│   ├── translations/         # plico_en.ts: le stringhe da tradurre (oggi vuote)
 │   ├── main_window.py        # finestra, menu, toolbar, dock, QSettings, dialogs
 │   ├── model/
 │   │   ├── document.py       # DocumentModel, PageItem  ← il cuore
@@ -79,11 +81,13 @@ plico/
     ├── test_ocr.py           # OCR: spazio pagina, strato invisibile, undo (12)
     ├── test_sign.py          # certificati, firma, verdetto, secondo salvataggio (26)
     ├── test_edit_text.py     # EditText e salvataggio: undo, redazioni, estrai, comprimi (21)
+    ├── test_i18n.py          # cataloghi: estrazione, nomi, caricamento, traduzione (8)
     └── test_integration.py   # MainWindow vera, offscreen: 153 test end-to-end
 ```
 
-Gate di qualità attuale: **395 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
-(23 file sorgente).
+Gate di qualità attuale: **402 passed, 2 skipped**, `ruff` pulito, `mypy` pulito
+(24 file sorgente). Il secondo `skip` è il giro `.ts` → `.qm`: `lrelease` sta
+solo nell'SDK di Qt (`tests/test_i18n.py`).
 
 ---
 
@@ -1532,7 +1536,8 @@ sostituita con la sorgente `git` del tag di rilascio.
    differenziale rispetto a PDF Arranger e simili. ✅ **fatta**, vedi §8:
    *Modifica → Modifica testo* (`Ctrl+Shift+T`), una riga alla volta.
 
-**Debito tecnico noto:**
+**Debito tecnico: le voci e come sono state chiuse** (l'ordine in cui sono
+state affrontate è quello di questo elenco):
 
 - la redazione ha tutte e tre le strade e sono tutte fatte: si **disegna** la
   zona che copre il segreto (*Modifica → Cancella zona*, `Ctrl+Shift+X`, un
@@ -1591,9 +1596,17 @@ sostituita con la sorgente `git` del tag di rilascio.
 
 **Con la firma, la roadmap lunga è finita**: le quattro voci dell'idea
 originale ci sono tutte e nessuna è un abbozzo — ognuna ha la sua sezione in
-§8 e i suoi test. Quello che resta è l'elenco del debito tecnico qui sopra:
-rifinitura (l'infrastruttura `.ts`), non capacità mai
-esistite.
+§8 e i suoi test.
+
+**Anche il debito tecnico qui sopra è chiuso**, un punto per commit: la zona di
+redazione si ritocca col mouse (`AdjustRedaction`, `26c679a`), la compressione
+si sceglie anche in *cosa* (`CompressionOptions`, `dc17c4c`), i form si
+compilano **sulla pagina** compresi i radiobutton (`33dd6ab`) e l'infrastruttura
+di traduzione esiste (`4a60786`). Due voci restano scritte come **scelte**, non
+come mancanze: il guadagno della compressione si legge a lavoro finito (un
+preventivo richiederebbe di fare il lavoro che si vuole evitare) e le firme non
+si compilano dal pannello (si calcolano su un file). Quello che resta è una
+rifinitura: la quarantina di messaggi di `assert` in italiano nei test.
 
 Delle dieci voci della review dell'ottobre 2026 non resta niente, e le
 decisioni sono scritte dove servono: in §5 e §6 (le API e il giro della
