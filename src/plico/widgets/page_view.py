@@ -11,7 +11,7 @@ Key design:
 from collections import OrderedDict
 from dataclasses import dataclass
 
-from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QBrush,
     QColor,
@@ -28,7 +28,6 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QScrollArea,
     QSizePolicy,
-    QToolTip,
     QVBoxLayout,
     QWidget,
 )
@@ -67,6 +66,15 @@ FIELD_TEXT = QColor(20, 20, 20)
 # can find what was changed; the replacement itself is always painted.
 TEXT_EDIT_BORDER = QColor(46, 140, 87, 170)
 TEXT_EDIT_REFUSED = "border: 2px solid #d63030;"
+# Why a click opened no editor, written on the page next to the click. A
+# widget of the page and not a QToolTip: a tooltip is a separate window, and
+# on Wayland it may simply not appear -- which is how the first two versions
+# of this message went unseen.
+NOTICE_STYLE = (
+    "background-color: #fff4ce; color: #3d3000; border: 1px solid #d9b44a;"
+    "border-radius: 4px; padding: 4px 8px;"
+)
+NOTICE_MS = 4000
 # The preview font is laid out at this pixel size and then scaled by the
 # painter: QFont sizes are integers, and a 10.5 pt span at 150% would round.
 _PREVIEW_PX = 100
@@ -404,8 +412,9 @@ class _PageLabel(QLabel):
         if self._view.text_mode():
             canvas = self.canvas
             if canvas is not None:
-                where = self.mapToGlobal(event.position().toPoint())
-                self._view.begin_text_edit(canvas, *self._to_page(event.position()), where)
+                self._view.begin_text_edit(
+                    canvas, *self._to_page(event.position()), event.position()
+                )
             return
         if not self._view.redaction_mode():
             self._select_field_under(event.position())
@@ -501,6 +510,11 @@ class PageView(QScrollArea):
         # The editor open over a span, and which span of which page it edits.
         self._editor: _SpanEditor | None = None
         self._editing: tuple[_Canvas, TextSpan] | None = None
+        # The note that says why a click opened no editor, and its timer.
+        self._notice: QLabel | None = None
+        self._notice_timer = QTimer(self)
+        self._notice_timer.setSingleShot(True)
+        self._notice_timer.timeout.connect(self._hide_notice)
         # The (page index, field name) the form panel is editing, so the field
         # can be picked out on the page. None when nothing is selected.
         self._selected_field: tuple[int, str] | None = None
@@ -544,6 +558,7 @@ class PageView(QScrollArea):
         # The page list changed shape: the editor's page index may now point
         # elsewhere, and its label may be about to go.
         self._close_text_editor()
+        self._hide_notice()
         first_page = self._first_visible_page()
         self._items = list(self._model.pages)
         # No size list to copy: each item carries its own oriented size.
@@ -956,7 +971,7 @@ class PageView(QScrollArea):
         return self._editor
 
     def begin_text_edit(
-        self, canvas: _Canvas, x: float, y: float, where: QPoint | None = None
+        self, canvas: _Canvas, x: float, y: float, where: QPointF | None = None
     ) -> None:
         """Open the editor over the span under the page-space point (*x*, *y*).
 
@@ -964,12 +979,13 @@ class PageView(QScrollArea):
         editor is confirmed first (a QLabel takes no focus, so the editor
         would never hear about the click otherwise).
 
-        A click that cannot open the editor SAYS why, next to the pointer
-        (*where*, in global coordinates) and in the status bar. The first
-        version stayed silent, and "Modifica testo does nothing" was all the
-        user could conclude.
+        A click that cannot open the editor SAYS why, on the page next to
+        the click (*where*, in the label's pixels) and in the status bar. The
+        first version stayed silent, and "Modifica testo does nothing" was all
+        the user could conclude.
         """
         self._commit_text_edit(keep_open=False)
+        self._hide_notice()
         if self._model is None:
             return
         index = canvas.index
@@ -985,18 +1001,20 @@ class PageView(QScrollArea):
                         "Questa pagina non contiene testo modificabile: "
                         "probabilmente è un'immagine, come una scansione."
                     )
-                self._notify(reason, where)
+                self._notify(reason, canvas, where)
                 return
             # Refuse at once what can never be edited (vertical text, Type3),
             # instead of letting the user type a correction first.
             self._model.check_text_edit(index, span, span.text)
         except ValueError as error:
-            self._notify(str(error), where)
+            self._notify(str(error), canvas, where)
             return
         # The source can be gone or unreadable: say so -- never a traceback
         # out of a mouse click.
         except Exception as error:  # noqa: BLE001
-            self._notify(self.tr("Impossibile leggere il testo: {0}").format(error), where)
+            self._notify(
+                self.tr("Impossibile leggere il testo: {0}").format(error), canvas, where
+            )
             return
         editor = _SpanEditor(canvas.label)
         editor.setText(canvas.item.text_of(span))
@@ -1010,11 +1028,38 @@ class PageView(QScrollArea):
         editor.setFocus(Qt.FocusReason.MouseFocusReason)
         editor.selectAll()
 
-    def _notify(self, message: str, where: QPoint | None) -> None:
-        """Tell the user why the text tool did nothing: by the pointer, and in the status bar."""
+    def text_notice(self) -> QLabel | None:
+        """The note on the page explaining the last click, while it is shown."""
+        return self._notice
+
+    def _notify(self, message: str, canvas: _Canvas, where: QPointF | None) -> None:
+        """Say why the text tool did nothing: on the page by the click, and in the status bar."""
         self.text_edit_refused.emit(message)
-        if where is not None:
-            QToolTip.showText(where, message, self)
+        self._hide_notice()
+        label = canvas.label
+        notice = QLabel(message, label)
+        notice.setWordWrap(True)
+        notice.setStyleSheet(NOTICE_STYLE)
+        notice.setMaximumWidth(max(160, min(360, label.width() - 16)))
+        notice.adjustSize()
+        point = where if where is not None else QPointF(8.0, 8.0)
+        # Just below and right of the click, kept inside the page.
+        x = int(min(max(4.0, point.x() + 12.0), max(4, label.width() - notice.width() - 4)))
+        y = int(min(max(4.0, point.y() + 12.0), max(4, label.height() - notice.height() - 4)))
+        notice.move(x, y)
+        notice.show()
+        notice.raise_()
+        self._notice = notice
+        self._notice_timer.start(NOTICE_MS)
+
+    def _hide_notice(self) -> None:
+        notice = self._notice
+        if notice is None:
+            return
+        self._notice = None
+        self._notice_timer.stop()
+        notice.hide()
+        notice.deleteLater()
 
     def _place_text_editor(self) -> None:
         """Lay the editor over its span: same place, a usable size.
@@ -1140,6 +1185,7 @@ class PageView(QScrollArea):
 
     def clear(self) -> None:
         self._close_text_editor()
+        self._hide_notice()
         for c in self._canvases:
             self._layout.removeWidget(c.label)
             c.label.deleteLater()

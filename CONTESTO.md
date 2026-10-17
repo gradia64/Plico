@@ -69,7 +69,7 @@ plico/
     └── test_integration.py   # MainWindow vera, offscreen: 94 test end-to-end
 ```
 
-Gate di qualità attuale: **288 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **289 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
 (18 file sorgente).
 
 ---
@@ -557,13 +557,21 @@ thread sbagliata.
 
 ### Redazione vera (`model/redact.py`)
 
-**Nell'interfaccia si chiama «Oscuramento»** (*Modifica → Oscuramento*,
-`Ctrl+Shift+X`; la ricerca per parola è *Oscura parola…*, `Ctrl+Shift+F`), e
-non «Redazione» / «Redigi testo» come all'inizio. In italiano corrente
-*redigere un testo* vuol dire **scriverlo**: «Redigi testo» si leggeva come
-«Scrivi testo», cioè l'opposto di quello che fa, ed è stato segnalato
-dall'utente. Nel codice e in questo documento resta *redaction*/redazione,
-il termine tecnico; nei testi per l'utente si scrive *oscurare*.
+**Nell'interfaccia si chiama «Cancella zona»** (*Modifica → Cancella zona*,
+`Ctrl+Shift+X`, anche nella barra degli strumenti); la ricerca per parola è
+*Cancella parola…* (`Ctrl+Shift+F`, «Parola da eliminare in tutte le
+pagine»). Il nome è cambiato due volte, entrambe su segnalazione dell'utente:
+
+1. «Redazione» / «Redigi testo»: in italiano corrente *redigere un testo*
+   vuol dire **scriverlo**, quindi «Redigi testo» si leggeva come «Scrivi
+   testo», l'opposto di quello che fa;
+2. «Oscuramento» / «Oscura parola»: non è una parola che un utente italiano
+   si aspetta in un editor, e non diceva *cosa* sparisce (c'è stato chi l'ha
+   confuso con «Elimina pagina»).
+
+La regola che ne viene: **nei testi per l'utente un verbo che dice cosa
+succede** (cancella, elimina), non il termine di settore. Nel codice e in
+questo documento resta *redaction*/redazione, il termine tecnico.
 
 La differenza fra una redazione e un rettangolo nero: **il testo se ne va**.
 `add_redact_annot()` + `apply_redactions()` riscrivono i content stream e
@@ -732,7 +740,7 @@ corretto.
 - Vale per `save_as`, `extract_pages` e `save_compressed`, e per il
   salvataggio sopra il file aperto.
 
-**Limiti noti:** `find_text()` (Oscura parola) cerca nelle sorgenti, quindi
+**Limiti noti:** `find_text()` (Cancella parola) cerca nelle sorgenti, quindi
 trova le parole *vecchie* di uno span modificato e non quelle nuove. Una
 modifica che al salvataggio non si può più scrivere (per esempio il font di
 sistema è stato disinstallato) fa fallire il salvataggio con il messaggio di
@@ -748,8 +756,15 @@ sistema è stato disinstallato) fa fallire il salvataggio con il messaggio di
   clic non serve. `_PageLabel.mousePressEvent` converte il punto in spazio
   pagina e chiama `PageView.begin_text_edit()`, che chiede lo span a
   `DocumentModel.text_span_at()` (sorgente, anche cifrata).
-- **Un clic che non apre l'editor lo dice**, con un tooltip accanto al
-  puntatore e nella barra di stato (`_notify`): «Qui non c'è testo» se la
+- **Un clic che non apre l'editor lo dice**, con un avviso **disegnato nella
+  pagina** accanto al clic (una `QLabel` figlia della pagina, `text_notice()`,
+  sparisce dopo 4 secondi o al clic successivo) e nella barra di stato
+  (`_notify`). **Non un `QToolTip`**: il tooltip è una finestra separata, e
+  nella prova reale su Wayland non è stato visto (nel terminale solo «This
+  plugin supports grabbing the mouse only for popup windows»), quindi anche la
+  seconda versione sembrava muta. Il PDF della prova era una **scansione**:
+  il caso esatto che il messaggio doveva spiegare, e che è emerso solo quando
+  il messaggio è diventato un widget della pagina. «Qui non c'è testo» se la
   pagina ha testo altrove, «non contiene testo modificabile» se non ne ha
   (`DocumentModel.page_has_text`: una scansione), e il motivo di
   `check_text_edit()` per uno span che non si potrà mai salvare (verticale,

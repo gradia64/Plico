@@ -136,7 +136,7 @@ class AddRedaction(QUndoCommand):
     """
 
     def __init__(self, model: DocumentModel, index: int, rect: RedactionRect) -> None:
-        name = QCoreApplication.translate("AddRedaction", "Oscuramento su pagina {0}")
+        name = QCoreApplication.translate("AddRedaction", "Cancella zona su pagina {0}")
         super().__init__(name.format(index + 1))
         self._model = model
         self._index = index
@@ -158,7 +158,7 @@ class RemoveRedaction(QUndoCommand):
     """Take back the redaction *rect* from the page at *index*."""
 
     def __init__(self, model: DocumentModel, index: int, rect: RedactionRect) -> None:
-        name = QCoreApplication.translate("RemoveRedaction", "Annulla oscuramento su pagina {0}")
+        name = QCoreApplication.translate("RemoveRedaction", "Ripristina zona su pagina {0}")
         super().__init__(name.format(index + 1))
         self._model = model
         self._index = index
