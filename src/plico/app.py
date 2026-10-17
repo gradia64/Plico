@@ -4,6 +4,7 @@ import sys
 
 from PySide6.QtWidgets import QApplication
 
+from .i18n import install_translators
 from .main_window import MainWindow
 
 
@@ -15,6 +16,8 @@ def main() -> int:
     QApplication.setApplicationDisplayName("Plico")
 
     app = QApplication.instance() or QApplication(sys.argv)
+    # Before the first window: the strings are read while it is built.
+    install_translators(app)
     window = MainWindow()
     window.show()
 

@@ -99,7 +99,9 @@
       "name": "plico",
       "buildsystem": "simple",
       "build-commands": [
-        "pip3 install --no-build-isolation --no-deps --prefix=/app ."
+        "pip3 install --no-build-isolation --no-deps --prefix=/app .",
+        "install -d /app/share/plico/translations",
+        "for ts in src/plico/translations/*.ts; do name=$(basename \"$ts\" .ts); lrelease \"$ts\" -qm \"/app/share/plico/translations/$name.qm\"; done"
       ],
       "sources": [
         {

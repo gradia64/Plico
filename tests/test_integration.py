@@ -1200,14 +1200,19 @@ def _chosen_level(
     monkeypatch.setattr(plico.main_window, "CompressionDialog", _Dialog)
 
 
-def _wait_for_compression() -> None:
+def _wait_for_compression(window) -> None:
     """Waits for the thread pool, then delivers the queued signals to the GUI.
 
     The compression runs on a QRunnable: ``finished`` reaches the window as a
-    queued connection, so an event loop round is needed too.
+    queued connection, so an event loop round is needed too. The loop is
+    bounded by the window's own state -- it drops the task when the run is
+    over -- because on a busy machine the fixed round is not always enough.
     """
     QThreadPool.globalInstance().waitForDone()
-    _pump()
+    deadline = time.monotonic() + 10.0
+    while window._compression_task is not None and time.monotonic() < deadline:
+        _pump(0.05)
+    _pump(0.05)
 
 
 def test_the_compressed_entry_is_in_the_file_menu(windows):
@@ -1249,7 +1254,7 @@ def test_compress_writes_a_smaller_copy_and_leaves_the_source_alone(
     _chosen_level(monkeypatch, "light")
 
     mw._compress_file()
-    _wait_for_compression()
+    _wait_for_compression(mw)
 
     assert os.path.getsize(out) < before * 0.5, "il file compresso non e` piu` piccolo"
     with pymupdf.open(out) as doc:
@@ -1277,7 +1282,7 @@ def test_compress_writes_the_virtual_document(qapp, tmp_path, monkeypatch, windo
     _chosen_level(monkeypatch, "light")
 
     mw._compress_file()
-    _wait_for_compression()
+    _wait_for_compression(mw)
 
     with pymupdf.open(out) as doc:
         assert doc.page_count == 4
@@ -1341,7 +1346,7 @@ def test_compressing_over_the_open_file_evicts_the_stale_handle(
     _chosen_level(monkeypatch, "light")
 
     mw._compress_file()
-    _wait_for_compression()
+    _wait_for_compression(mw)
 
     assert previous.is_closed, "il worker tiene ancora il documento sovrascritto"
     assert mw._worker._docs.get(pdf) is not previous
@@ -1369,7 +1374,7 @@ def test_compressing_over_the_open_file_reopens_the_document(
     _chosen_level(monkeypatch, "light")
 
     mw._compress_file()
-    _wait_for_compression()
+    _wait_for_compression(mw)
 
     assert [(p.source_index, p.base_rotation, p.rotation) for p in mw._doc_model.pages] == [
         (0, 90, 0),
@@ -1422,7 +1427,7 @@ def test_a_failed_compression_arrives_as_a_message(qapp, tmp_path, monkeypatch, 
     _chosen_level(monkeypatch, "light")
 
     mw._compress_file()
-    _wait_for_compression()
+    _wait_for_compression(mw)
 
     assert errors and "Impossibile comprimere" in errors[0], errors
     assert mw._progress is None, "anche fallendo, il dialogo di avanzamento deve sparire"
@@ -1462,13 +1467,19 @@ def _image_bytes(path: str, page: int) -> int:
 
 
 def _collected_information(monkeypatch) -> list[str]:
-    """Keeps the texts the window shows in a message box."""
+    """Keeps the texts the window shows in a message box.
+
+    Errors are collected too: a run that fails must show up as the message it
+    really was, not as an empty list.
+    """
     messages: list[str] = []
-    monkeypatch.setattr(
-        QMessageBox,
-        "information",
-        staticmethod(lambda _p, _t, text, *a, **k: messages.append(text)),
-    )
+
+    def record(_parent, _title, text, *args, **kwargs):
+        del args, kwargs
+        messages.append(text)
+
+    for name in ("information", "warning", "critical"):
+        monkeypatch.setattr(QMessageBox, name, staticmethod(record))
     return messages
 
 
@@ -1485,7 +1496,7 @@ def test_resampling_can_be_limited_to_some_pages(qapp, tmp_path, monkeypatch, wi
     _chosen_level(monkeypatch, "strong", pages="1")
 
     mw._compress_file()
-    _wait_for_compression()
+    _wait_for_compression(mw)
 
     assert os.path.exists(out)
     assert _image_bytes(out, 0) < _image_bytes(pdf, 0) / 2, "la pagina scelta rimpicciolisce"
@@ -1512,7 +1523,7 @@ def test_a_page_whose_image_is_shared_with_another_gains_nothing(
     _chosen_level(monkeypatch, "strong", pages="1")
 
     mw._compress_file()
-    _wait_for_compression()
+    _wait_for_compression(mw)
 
     assert not os.path.exists(out), "un file che non guadagna non si scrive"
     assert messages and "pagine che non hai scelto" in messages[0], messages
@@ -1534,7 +1545,7 @@ def test_skipping_the_structural_pass_is_reported_when_it_gains_nothing(
     _chosen_level(monkeypatch, "light", images_only=True)
 
     mw._compress_file()
-    _wait_for_compression()
+    _wait_for_compression(mw)
 
     assert not os.path.exists(out)
     assert messages and "niente da guadagnare" in messages[0], messages

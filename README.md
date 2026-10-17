@@ -360,7 +360,7 @@ Il packaging è in `flatpak/` ed è pensato per essere pubblicabile su Flathub.
 | `io.github.gradia64.Plico.metainfo.xml` | metadati AppStream |
 | `io.github.gradia64.Plico.svg` | icona |
 
-Cinque scelte non ovvie:
+Sei scelte non ovvie:
 
 - **`base: io.qt.PySide.BaseApp`** invece di installare PySide6 con pip. La
   BaseApp di Flathub contiene già PySide6 compilato e allineato al Qt di
@@ -383,6 +383,11 @@ Cinque scelte non ovvie:
   Sono i venti file elencati nel modulo, ciascuno con il suo `sha256`: la
   firma digitale è la parte del programma in cui "più o meno quella versione"
   non è una risposta accettabile.
+- **Le traduzioni si compilano durante la build**: `lrelease` esiste solo
+  nell'SDK di Qt, non nella runtime, e i `.qm` sono gli unici file che
+  servono a runtime. Il modulo `plico` installa i `.ts` con il pacchetto e poi
+  li compila in `/app/share/plico/translations`, così nel bundle non finisce
+  anche il compilatore.
 - **`cleanup-commands: /app/cleanup-BaseApp.sh`**, richiesto dalla BaseApp.
 
 Costruire e installare nella propria utenza:
@@ -423,6 +428,30 @@ mypy src/plico
 # avvio
 plico            # oppure: python -m plico.app
 ```
+
+### Tradurre Plico
+
+Le stringhe visibili sono **in italiano** nel codice, quindi Plico funziona in
+italiano anche senza alcun catalogo: tradurre serve ad aggiungere una lingua.
+Il posto dove farlo è `src/plico/translations/plico_en.ts` (o un nuovo file
+accanto), con Qt Linguist o con un editor di testo.
+
+```bash
+# 1. riestrarre le stringhe dopo aver toccato il codice (167 messaggi)
+pylupdate6 src/plico -ts src/plico/translations/plico_en.ts
+
+# 2. compilare: lrelease non è nel venv, ma c'è nell'SDK
+flatpak run --command=lrelease org.kde.Sdk//6.11 \
+    src/plico/translations/plico_en.ts -qm /tmp/plico_en.qm
+
+# 3. provarla senza installare niente
+PLICO_TRANSLATIONS=/tmp plico
+```
+
+Il catalogo inglese oggi è **vuoto**: è il posto dove tradurre, non una
+traduzione fatta. Un test (`tests/test_i18n.py`) verifica che il catalogo
+salvato sia quello che le sorgenti producono, così nessuna stringa nuova
+resta fuori.
 
 ## Licenza
 

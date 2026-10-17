@@ -1453,6 +1453,18 @@ Scelte non ovvie (documentate anche nel README):
   PyPI. La firma è la parte del programma in cui «più o meno quella versione»
   non è una risposta accettabile.
 
+- **Le traduzioni si compilano nella build** (`lrelease`): il modulo `plico`
+  installa i `.ts` con il pacchetto e poi, con
+  `for ts in src/plico/translations/*.ts; do lrelease "$ts" -qm
+  /app/share/plico/translations/$(basename "$ts" .ts).qm; done`, produce i
+  `.qm` in `/app/share/plico/translations`. `lrelease` esiste **solo nell'SDK**
+  (in `org.kde.Sdk` c'è `/usr/bin/lrelease`, nella runtime no) e i `.qm` sono
+  gli unici file di cui l'applicazione ha bisogno a runtime: compilare qui
+  vuol dire anche non spedire il compilatore. Il `.ts` è invece la sorgente del
+  traduttore e sta nel repository (`src/plico/translations/plico_en.ts`), con
+  `[tool.setuptools.package-data]` che lo fa viaggiare anche con
+  `pip install .`.
+
 Costruire, provare, e verificare il manifest:
 
 ```bash
@@ -1551,8 +1563,15 @@ sostituita con la sorgente `git` del tag di rilascio.
   La densità è già letta a ogni richiesta di render — `devicePixelRatioF()` entra
   anche nella chiave della miniatura — mancava solo il segnale;
 - il resto dei "Tocchi KDE" è fatto (icone dal tema senza asset impacchettati,
-  `self.tr()` su tutto il testo visibile, `QSettings` per geometria/dock/zoom);
-  manca solo l'infrastruttura di traduzione vera (`.ts` + `lrelease`);
+  `self.tr()` su tutto il testo visibile, `QSettings` per geometria/dock/zoom):
+  compresa l'**infrastruttura di traduzione** — `src/plico/translations/*.ts`
+  estratti con `pylupdate6`, compilati da `lrelease` nella build Flatpak,
+  caricati da `i18n.install_translators()` in `app.py` e verificati da
+  `tests/test_i18n.py` (l'estrazione, il catalogo aggiornato, i nomi chiesti
+  per la lingua di sistema, il giro completo `.ts` → `.qm` → stringa
+  tradotta). Il catalogo inglese è **vuoto**: è il posto dove tradurre, non una
+  traduzione fatta; senza di esso l'applicazione resta in italiano, che è la
+  lingua delle stringhe nel codice;
 - nei test restano una quarantina di **messaggi di `assert` in italiano**
   (identificatori, docstring e nomi dei test sono in inglese): sono per chi
   sviluppa, non per l'utente, e vanno tradotti quando si ripassa quel file.
