@@ -69,7 +69,7 @@ plico/
 │       ├── sign.py           # dialoghi di firma e di verifica delle firme
 │       └── compress.py       # scelta del livello, format_size, task sul thread pool
 └── tests/
-    ├── test_model.py         # modello, comandi, salvataggio, parse_page_ranges (42)
+    ├── test_model.py         # modello, comandi, salvataggio, parse_page_ranges (45)
     ├── test_worker.py        # il worker di rendering in isolamento (11)
     ├── test_optimize.py      # i livelli di compressione e optimize_in_place (16)
     ├── test_redact.py        # rotazione e rimozione *vera* del testo (42)
@@ -79,10 +79,10 @@ plico/
     ├── test_ocr.py           # OCR: spazio pagina, strato invisibile, undo (12)
     ├── test_sign.py          # certificati, firma, verdetto, secondo salvataggio (26)
     ├── test_edit_text.py     # EditText e salvataggio: undo, redazioni, estrai, comprimi (21)
-    └── test_integration.py   # MainWindow vera, offscreen: 130 test end-to-end
+    └── test_integration.py   # MainWindow vera, offscreen: 137 test end-to-end
 ```
 
-Gate di qualità attuale: **356 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **366 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
 (23 file sorgente).
 
 ---
@@ -585,7 +585,12 @@ thread sbagliata.
 **Nell'interfaccia si chiama «Cancella zona»** (*Modifica → Cancella zona*,
 `Ctrl+Shift+X`, anche nella barra degli strumenti); la ricerca per parola è
 *Cancella parola…* (`Ctrl+Shift+F`, «Parola da eliminare in tutte le
-pagine»). Il nome è cambiato due volte, entrambe su segnalazione dell'utente:
+pagine») e la selezione col mouse è **«Cancella selezione»** (`Ctrl+Shift+L`,
+`QAction` checkable accanto a «Cancella zona», icona `edit-select-all`). Sono
+tre strumenti mutuamente esclusivi — `MainWindow._on_selection_toggled()`,
+`_on_redaction_toggled()` e `_on_text_mode_toggled()` spengono gli altri due —
+perché il trascinamento deve avere un solo significato. Il nome è cambiato due
+volte, entrambe su segnalazione dell'utente:
 
 1. «Redazione» / «Redigi testo»: in italiano corrente *redigere un testo*
    vuol dire **scriverlo**, quindi «Redigi testo» si leggeva come «Scrivi
@@ -622,8 +627,36 @@ esiste.
   volta, e `MainWindow._redact_text()` avvolge l'intera ricerca in una
   `beginMacro`/`endMacro`: un solo `Ctrl+Z` disfa tutto;
 - la vista **non tocca il modello**: `PageView` emette `redaction_added` /
-  `redaction_removed` e `MainWindow` spinge il comando sullo stack, esattamente
-  come per il drag & drop delle miniature.
+  `redaction_removed` / `selection_made` e `MainWindow` spinge il comando
+  sullo stack, esattamente come per il drag & drop delle miniature.
+
+**La selezione col mouse segue le parole, non il rettangolo.** Con
+`Ctrl+Shift+L` si trascina su una frase e a sparire è ogni parola che il
+rettangolo tocca, per intero: un segno a metà parola non nasconde niente (il
+resto della parola resterebbe leggibile e copiabile), quindi la parola è
+l'unità minima.
+
+- `DocumentModel.words_on(index)` restituisce le parole della pagina in spazio
+  pagina come `RedactionRect`: quelle del content stream
+  (`page.get_text("words")`, che risponde nello spazio **non ruotato** —
+  verificato con `/Rotate 0` e `90`) più quelle dello strato OCR
+  (`item.ocr_words`). Il rettangolo del trascinamento è già in quello spazio,
+  perché `_to_page()` passa da `page_matrix()`;
+- `words_under()` filtra per **intersezione** e scarta quelle già coperte da un
+  segno (`DocumentModel.unmarked()` → `_not_already_marked()`): selezionare due
+  volte la stessa frase non crea due comandi sovrapposti, e ciò che si vede
+  selezionato è esattamente ciò che verrà cancellato;
+- ogni parola toccata diventa un `AddRedaction` (quindi ha il suo rettangolo
+  stretto, non uno grande quanto il trascinamento), ma tutti dentro
+  `beginMacro`/`endMacro`: la selezione è **un gesto solo** e si disfa con un
+  solo `Ctrl+Z` (`MainWindow._add_selection()`);
+- trascinare dove non c'è testo non crea comandi: `text_edit_refused` porta a
+  «Nessuna parola nella selezione.» e lo stack resta com'era;
+- un **clic** su un segno lo toglie anche in questa modalità, come nella zona:
+  è la via di ritorno per una selezione sbagliata;
+- le parole sono in cache per canvas (`_Canvas.words`) e si invalidano in
+  `_on_page_changed()` (l'OCR aggiunge parole) e quando le canvas vengono
+  riusate dopo un salvataggio (il `PageItem` è un altro).
 
 Limiti da conoscere: `apply_redactions()` con i valori di default
 (`images=2`, `graphics=1`) elimina anche la **grafica vettoriale** che tocca il
@@ -1393,13 +1426,14 @@ sostituita con la sorgente `git` del tag di rilascio.
 
 **Debito tecnico noto:**
 
-- la redazione ha entrambe le strade e sono tutte e due fatte: si **disegna**
-  la zona che copre il segreto (*Modifica → Cancella zona*, `Ctrl+Shift+X`, un
-  rettangolo per volta, `AddRedaction`, annullabile) oppure si **cerca** la
-  parola (`Ctrl+Shift+F` → `DocumentModel.find_text()`, tutte le occorrenze in
-  tutte le pagine, un solo Annulla). Quello che manca è la sola comodità della
-  selezione col mouse — trascinare su una frase invece di disegnarci sopra un
-  rettangolo, e tenere più zone in sospeso prima di applicarle. I metadati
+- la redazione ha tutte e tre le strade e sono tutte fatte: si **disegna** la
+  zona che copre il segreto (*Modifica → Cancella zona*, `Ctrl+Shift+X`, un
+  rettangolo per volta, `AddRedaction`, annullabile), si **seleziona col mouse**
+  (*Cancella selezione*, `Ctrl+Shift+L`: ogni parola toccata diventa un segno
+  stretto, tutti in un solo Annulla) oppure si **cerca** la parola
+  (`Ctrl+Shift+F` → `DocumentModel.find_text()`, tutte le occorrenze in tutte
+  le pagine, un solo Annulla). Quello che manca è solo poter ritoccare una
+  zona già disegnata (si toglie con un clic e si ridisegna). I metadati
   non sono più un debito — `/Info`, XMP e allegati non sopravvivono alla
   ricostruzione (vedi §8) — mentre le **annotazioni** vengono copiate;
 - la compressione ha tre livelli fissi, applicati a tutto il documento: non si

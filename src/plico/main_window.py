@@ -162,6 +162,7 @@ class MainWindow(QMainWindow):
         # gesture, the window pushes the undoable command.
         self._page_view.redaction_added.connect(self._add_redaction)
         self._page_view.redaction_removed.connect(self._remove_redaction)
+        self._page_view.selection_made.connect(self._add_selection)
         self._page_view.text_edited.connect(self._on_text_edited)
         self._page_view.text_edit_refused.connect(self._status.setText)
         dock = QDockWidget(self.tr("Miniature"), self)
@@ -336,6 +337,24 @@ class MainWindow(QMainWindow):
         )
         edit_menu.addAction(self._redact_act)
 
+        self._select_act = self._act(
+            self.tr("Cancella &selezione"),
+            "edit-select-all",
+            "Ctrl+Shift+L",
+            self._on_selection_toggled,
+        )
+        # The other half of the redaction tool: the same marks, chosen by
+        # dragging over the words instead of drawing a box around them.
+        self._select_act.setCheckable(True)
+        self._select_act.setToolTip(
+            self.tr(
+                "Trascina sulle parole da eliminare: la selezione si allarga ai\n"
+                "confini delle parole, così nessuna resta tagliata a metà.\n"
+                "Un clic su una zona la ripristina. Diventa definitivo solo al salvataggio."
+            )
+        )
+        edit_menu.addAction(self._select_act)
+
         edit_menu.addAction(
             self._act(
                 self.tr("Cancella &parola…"),
@@ -439,6 +458,7 @@ class MainWindow(QMainWindow):
         toolbar.addSeparator()
         toolbar.addAction(self._text_act)
         toolbar.addAction(self._redact_act)
+        toolbar.addAction(self._select_act)
 
     # ------------------------------------------------------------------ #
     #  File operations
@@ -561,6 +581,8 @@ class MainWindow(QMainWindow):
         # mark (or the next click edit) a page the user has not even looked at.
         self._redact_act.setChecked(False)
         self._on_redaction_toggled(False)
+        self._select_act.setChecked(False)
+        self._on_selection_toggled(False)
         self._text_act.setChecked(False)
         self._page_view.set_text_mode(False)
         self._refresh_form_panel(0)
@@ -605,6 +627,8 @@ class MainWindow(QMainWindow):
         self._page_view.clear()
         self._redact_act.setChecked(False)
         self._on_redaction_toggled(False)
+        self._select_act.setChecked(False)
+        self._on_selection_toggled(False)
         self._text_act.setChecked(False)
         self._page_view.set_text_mode(False)
         self._undo_stack.clear()
@@ -1339,10 +1363,36 @@ class MainWindow(QMainWindow):
         if active and self._text_act.isChecked():
             self._text_act.setChecked(False)
             self._page_view.set_text_mode(False)
+        if active and self._select_act.isChecked():
+            self._select_act.setChecked(False)
+            self._page_view.set_selection_mode(False)
         self._page_view.set_redaction_mode(active)
         if active:
             self._status.setText(
                 self.tr("Cancella zona: trascina un rettangolo sul contenuto da eliminare; un clic su una zona la ripristina.")
+            )
+        else:
+            self._status.setText(self.tr("Pronto"))
+
+    def _on_selection_toggled(self, active: bool) -> None:
+        """Enter or leave the tool that redacts the words you drag over."""
+        if active and not self._doc_model.sources:
+            self._select_act.setChecked(False)
+            QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
+            return
+        if active and self._text_act.isChecked():
+            self._text_act.setChecked(False)
+            self._page_view.set_text_mode(False)
+        if active and self._redact_act.isChecked():
+            self._redact_act.setChecked(False)
+            self._page_view.set_redaction_mode(False)
+        self._page_view.set_selection_mode(active)
+        if active:
+            self._status.setText(
+                self.tr(
+                    "Cancella selezione: trascina sulle parole da eliminare; le zone "
+                    "restano modificabili finché non salvi. Un clic su una zona la ripristina."
+                )
             )
         else:
             self._status.setText(self.tr("Pronto"))
@@ -1352,6 +1402,9 @@ class MainWindow(QMainWindow):
         if self._redact_act.isChecked():
             self._redact_act.setChecked(False)
             self._on_redaction_toggled(False)
+        if self._select_act.isChecked():
+            self._select_act.setChecked(False)
+            self._on_selection_toggled(False)
         if self._text_act.isChecked():
             self._text_act.setChecked(False)
             self._on_text_mode_toggled(False)
@@ -1369,6 +1422,9 @@ class MainWindow(QMainWindow):
         if active and self._redact_act.isChecked():
             self._redact_act.setChecked(False)
             self._page_view.set_redaction_mode(False)
+        if active and self._select_act.isChecked():
+            self._select_act.setChecked(False)
+            self._page_view.set_selection_mode(False)
         self._page_view.set_text_mode(active)
         if active:
             self._status.setText(
@@ -1389,6 +1445,28 @@ class MainWindow(QMainWindow):
     def _add_redaction(self, index: int, rect: RedactionRect) -> None:
         """A rectangle was drawn on page *index*."""
         self._undo_stack.push(AddRedaction(self._doc_model, index, rect))
+
+    def _add_selection(self, index: int, words: list[RedactionRect]) -> None:
+        """Words were selected on page *index*: mark them all, as ONE step.
+
+        The selection is one gesture, so it is one Ctrl+Z. Undoing it word by
+        word would be worse than not undoing it at all.
+        """
+        if not words:
+            return
+        self._undo_stack.beginMacro(
+            self.tr("Cancella la selezione su pagina {0}").format(index + 1)
+        )
+        try:
+            for rect in words:
+                self._undo_stack.push(AddRedaction(self._doc_model, index, rect))
+        finally:
+            self._undo_stack.endMacro()
+        self._status.setText(
+            self.tr("Cancellate {0} parole sulla pagina {1}.").format(len(words), index + 1)
+            if len(words) != 1
+            else self.tr("Cancellata una parola sulla pagina {0}.").format(index + 1)
+        )
 
     def _remove_redaction(self, index: int, rect: RedactionRect) -> None:
         """An existing mark was clicked away."""

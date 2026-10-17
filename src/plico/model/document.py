@@ -343,6 +343,29 @@ class DocumentModel(QObject):
                 doc.close()
         return found
 
+    def words_on(self, index: int) -> list[RedactionRect]:
+        """Every word of a page, in page space, the OCR layer included.
+
+        The words come from the SOURCE, because that is what a redaction
+        deletes: a correction the user has typed is not in the file yet. The
+        words read by the OCR are added because that layer is written before
+        the redactions at save time, so it too is text a mark takes away.
+        """
+        item = self.pages[index]
+        width, height = item.unrotated_size
+        source = self.sources[item.source_id]
+        with open_for_reading(source, self.passwords.get(source)) as doc:
+            # Bound to a local on purpose: reading from a temporary page would
+            # let the page be collected with the words still pointing at it.
+            page = doc[item.source_index]
+            boxes = [word[:4] for word in page.get_text("words")]
+        boxes.extend(word.rect for word in item.ocr_words)
+        return [RedactionRect.from_corners(*box).clamped_to(width, height) for box in boxes]
+
+    def unmarked(self, index: int, rects: list[RedactionRect]) -> list[RedactionRect]:
+        """The rectangles an existing redaction on the page does not cover."""
+        return _not_already_marked(self.pages[index], rects)
+
     def text_span_at(self, index: int, x: float, y: float) -> TextSpan | None:
         """The span of the SOURCE page under the page-space point (*x*, *y*).
 

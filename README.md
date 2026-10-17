@@ -32,9 +32,10 @@ comprimerli.
   `Ctrl+W` (*File → Chiudi*) chiude il documento lasciando aperta la finestra
 - **Salva compresso** a tre livelli, con il guadagno mostrato a fine lavoro —
   e il livello "leggera" è senza perdita
-- **Cancellazione vera** (in inglese *redaction*): si trascina un rettangolo sui dati da eliminare e al
-  salvataggio il testo viene **rimosso**, non coperto — quel che resta non è
-  più copiabile né ricercabile
+- **Cancellazione vera** (in inglese *redaction*): si disegna una zona sui dati
+  da eliminare, oppure si trascina sulle parole, e al salvataggio il testo
+  viene **rimosso**, non coperto — quel che resta non è più copiabile né
+  ricercabile
 - **Compilare i form AcroForm**: il dock «Modulo» mostra i campi della pagina
   in vista — testo, anche multiriga, caselle e tendine — e i valori finiscono
   nel file al salvataggio, con undo/redo
@@ -173,8 +174,15 @@ strumenti — lascerebbe il segreto copiabile e ricercabile.
 le pagine e marca ogni occorrenza in un colpo solo, come un unico passo di
 undo.
 
-Due cose da sapere: si cancella quello che si disegna o quello che si cerca —
-la zona non si seleziona col mouse, si traccia sopra il contenuto — e
+`Ctrl+Shift+L` (*Modifica → Cancella selezione*) è la terza strada, quella che
+si aspetta chi ha usato un editor: si trascina sulle parole da eliminare e
+vengono marcate **per intero**, una per una, con un segno stretto quanto la
+parola. Il trascinamento è un gesto solo, quindi un `Ctrl+Z` disfa tutta la
+selezione; trascinare dove non c'è testo non lascia niente; un clic su un segno
+lo toglie, come nella zona. Funziona anche sulle parole lette dall'OCR.
+
+Tre cose da sapere: le parole si prendono **intere** (un segno a metà parola
+non nasconderebbe niente), l'unità minima è la parola e non la lettera, e
 `apply_redactions()` elimina anche la grafica vettoriale che tocca il
 rettangolo, quindi un bordo o una tabella a cavallo del segno possono sparire.
 I metadati del PDF, invece, non sono un rischio: il file di uscita è

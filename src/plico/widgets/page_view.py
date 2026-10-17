@@ -11,7 +11,16 @@ Key design:
 from collections import OrderedDict
 from dataclasses import dataclass
 
-from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import (
+    QCoreApplication,
+    QEvent,
+    QPointF,
+    QRectF,
+    QSize,
+    Qt,
+    QTimer,
+    Signal,
+)
 from PySide6.QtGui import (
     QBrush,
     QColor,
@@ -236,6 +245,8 @@ class _PageLabel(QLabel):
         self._paint_text_edits(painter)
         if self._view.redaction_mode():
             self._paint_redactions(painter)
+        elif self._view.selection_mode():
+            self._paint_selection(painter)
         painter.end()
 
     def _page_transform(self) -> QTransform:
@@ -333,6 +344,26 @@ class _PageLabel(QLabel):
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(QRectF(self._drag_from, self._drag_to).normalized())
 
+    def _paint_selection(self, painter: QPainter) -> None:
+        """Light up the words the drag is covering.
+
+        The highlight is the point of the tool: it shows WHICH words will go,
+        and the answer is whole words, not the rectangle the mouse traced.
+        The marks already made are painted afterwards, on top.
+        """
+        canvas = self.canvas
+        assert canvas is not None
+        if self._drag_from is not None and self._drag_to is not None:
+            area = QRectF(self._drag_from, self._drag_to).normalized()
+            top_left = self._to_page(area.topLeft())
+            bottom_right = self._to_page(area.bottomRight())
+            words = self._view.words_under(canvas, *top_left, *bottom_right)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(REDACTION_FILL))
+            for rect in words:
+                painter.drawRect(self._to_pixels(rect))
+        self._paint_redactions(painter)
+
     def _paint_fields(self, painter: QPainter) -> None:
         """Draw this page's form fields, each with the value it will hold.
 
@@ -416,7 +447,7 @@ class _PageLabel(QLabel):
                     canvas, *self._to_page(event.position()), event.position()
                 )
             return
-        if not self._view.redaction_mode():
+        if not (self._view.redaction_mode() or self._view.selection_mode()):
             self._select_field_under(event.position())
             super().mousePressEvent(event)
             return
@@ -437,22 +468,27 @@ class _PageLabel(QLabel):
             return
         start = self._drag_from
         end = event.position()
-        self._drag_from = None
-        self._drag_to = None
+        self.forget_drag()
         self.update()
+        canvas = self.canvas
+        assert canvas is not None
         if (end - start).manhattanLength() < CLICK_SLOP:
             # A click rather than a drag: take back the mark under the cursor,
             # if there is one. Topmost first, so the visible one wins.
-            canvas = self.canvas
-            assert canvas is not None
             for rect in reversed(canvas.item.redactions):
                 if self._to_pixels(rect).contains(end):
                     self._view.forget_redaction(canvas, rect)
                     break
             return
-        canvas = self.canvas
-        assert canvas is not None
+        if self._view.selection_mode():
+            self._view.commit_selection(canvas, *self._to_page(start), *self._to_page(end))
+            return
         self._view.commit_redaction(canvas, *self._to_page(start), *self._to_page(end))
+
+    def forget_drag(self) -> None:
+        """Drop the rectangle being dragged, if any (a tool was left)."""
+        self._drag_from = None
+        self._drag_to = None
 
 
 @dataclass
@@ -468,6 +504,10 @@ class _Canvas:
     height_pt: float = 0.0  # page height in points (post-rotation)
     y_px: int = 0           # layout offset, computed by _relayout()
     height_px: int = 0      # laid-out height, computed by _relayout()
+    # Words of the source page, read once when a selection first asks for
+    # them: the sources are read-only until a save, and a mouse move must not
+    # reopen a file.
+    words: list[RedactionRect] | None = None
 
 
 # --- PageView ----------------------------------------------------------- #
@@ -479,6 +519,10 @@ class PageView(QScrollArea):
     # model: it reports the gesture and MainWindow pushes an undoable command.
     redaction_added = Signal(int, object)
     redaction_removed = Signal(int, object)
+    # (page index, list of RedactionRect): the words a selection covered. One
+    # signal for the whole selection, because the window makes it ONE undo
+    # step: words are what the user picked, not the rectangle they dragged.
+    selection_made = Signal(int, object)
     # (page index, field name): a click landed on a form field drawn on the
     # page. The view fills nothing — it only says where the user pointed.
     field_clicked = Signal(int, str)
@@ -506,6 +550,7 @@ class PageView(QScrollArea):
         self._pending_scroll: int | None = None
         self._fit_mode = False
         self._redaction_mode = False
+        self._selection_mode = False
         self._text_mode = False
         # The editor open over a span, and which span of which page it edits.
         self._editor: _SpanEditor | None = None
@@ -567,12 +612,17 @@ class PageView(QScrollArea):
         self._anchor_on(first_page)
 
     def _on_page_changed(self, row: int) -> None:
-        """A page changed in place (rotation, redaction): re-measure, repaint."""
+        """A page changed in place (rotation, redaction, OCR): re-measure, repaint."""
         self.refresh_geometry()
         # A redaction changes no size, so setFixedSize() leaves the label
         # exactly as it was and nothing would repaint without this nudge.
         if 0 <= row < len(self._canvases):
-            self._canvases[row].label.update()
+            canvas = self._canvases[row]
+            # The OCR layer is text as well, and it lives on the item rather
+            # than in the file: a list of words read before it was recognised
+            # would leave that page impossible to select.
+            canvas.words = None
+            canvas.label.update()
 
     @staticmethod
     def _identity(item: PageItem) -> tuple[int, int]:
@@ -612,10 +662,10 @@ class PageView(QScrollArea):
         return h_pt, w_pt
 
     def _tool_cursor(self) -> Qt.CursorShape:
+        if self._text_mode or self._selection_mode:
+            return Qt.CursorShape.IBeamCursor
         if self._redaction_mode:
             return Qt.CursorShape.CrossCursor
-        if self._text_mode:
-            return Qt.CursorShape.IBeamCursor
         return Qt.CursorShape.ArrowCursor
 
     # ------------------------------------------------------------------ #
@@ -674,6 +724,10 @@ class PageView(QScrollArea):
                 label.canvas = canvas
             else:
                 canvas.item = item
+                # Same page identity, but a different PageItem: after a save
+                # the session reads the file it has just written, and the
+                # words read from the old one describe a page that is gone.
+                canvas.words = None
             canvas.index = index
             canvas.width_pt, canvas.height_pt = self._oriented_size(item)
             self._layout.addWidget(canvas.label)
@@ -942,6 +996,74 @@ class PageView(QScrollArea):
         if rect.width < 1.0 or rect.height < 1.0:
             return
         self.redaction_added.emit(canvas.index, rect)
+
+    # ------------------------------------------------------------------ #
+    #  Selecting text to redact
+    # ------------------------------------------------------------------ #
+
+    def selection_mode(self) -> bool:
+        """Whether a drag on a page selects the words it covers."""
+        return self._selection_mode
+
+    def set_selection_mode(self, active: bool) -> None:
+        """Turn the selection tool on or off, for every page at once."""
+        self._selection_mode = bool(active)
+        cursor = self._tool_cursor()
+        for c in self._canvases:
+            c.label.setCursor(cursor)
+            c.label.forget_drag()
+            c.label.update()
+
+    def page_words(self, canvas: _Canvas) -> list[RedactionRect]:
+        """The words of *canvas*, read once and kept on it.
+
+        The source is read-only until a save, so the words cannot change
+        while the document is open, and a mouse move must not reopen a file
+        to draw the highlight. A canvas is rebuilt with its page, which is
+        what discards the cache.
+        """
+        if canvas.words is None and self._model is not None:
+            words: list[RedactionRect] = self._model.words_on(canvas.index)
+            canvas.words = words
+        return canvas.words or []
+
+    def words_under(
+        self, canvas: _Canvas, x0: float, y0: float, x1: float, y1: float
+    ) -> list[RedactionRect]:
+        """The words a page-space rectangle covers, as redaction rectangles.
+
+        A redaction that follows whole words is a better redaction than the
+        rectangle that was dragged: covering half a line would leave the rest
+        of it readable, and a word caught by the edge would be cut in two.
+        """
+        width, height = canvas.item.unrotated_size
+        rect = RedactionRect.from_corners(x0, y0, x1, y1).clamped_to(width, height)
+        if rect.width < 1.0 or rect.height < 1.0:
+            return []
+        covered = [
+            word
+            for word in self.page_words(canvas)
+            if word.x0 < rect.x1 and rect.x0 < word.x1 and word.y0 < rect.y1 and rect.y0 < word.y1
+        ]
+        if self._model is None:
+            return covered
+        # A word already marked would only add a second rectangle on the same
+        # spot: one more undo step for a mark that changes nothing.
+        fresh: list[RedactionRect] = self._model.unmarked(canvas.index, covered)
+        return fresh
+
+    def commit_selection(
+        self, canvas: _Canvas, x0: float, y0: float, x1: float, y1: float
+    ) -> None:
+        """A selection was dragged on *canvas*: report the words it covered."""
+        words = self.words_under(canvas, x0, y0, x1, y1)
+        if words:
+            self.selection_made.emit(canvas.index, words)
+            return
+        # An empty selection is not an error, but silence would look like one.
+        self.text_edit_refused.emit(
+            QCoreApplication.translate("PageView", "Nessuna parola nella selezione.")
+        )
 
     def forget_redaction(self, canvas: _Canvas, rect: RedactionRect) -> None:
         """Ask for *rect* to be taken back off *canvas*."""

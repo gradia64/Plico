@@ -513,3 +513,61 @@ def test_two_merges_undo_in_reverse_order(mixed_model, mixed_pdf, qapp, tmp_path
     assert mixed_model.sources == [mixed_pdf, first, second]
     assert mixed_model.page_count == 5
     assert [item.source_id for item in mixed_model.pages] == [0, 0, 0, 1, 2]
+
+
+# --- words on a page, for the selection tool -------------------------------
+
+def test_words_on_answers_in_page_space(tmp_path, qapp):
+    """Rotation is the view's business: the words come back unrotated."""
+    path = tmp_path / "words.pdf"
+    doc = pymupdf.open()
+    page = doc.new_page(width=595, height=842)
+    page.insert_text((100, 100), "SEGRETO", fontsize=20)
+    doc.save(str(path))
+    doc.close()
+
+    m = DocumentModel()
+    m.open(str(path))
+    straight = m.words_on(0)
+    m.pages[0].rotation = 90
+    assert m.words_on(0) == straight, "ruotare la pagina non sposta le parole"
+    assert [w for w in straight], "nessuna parola trovata"
+    box = straight[0].as_tuple()
+    assert box[0] < box[2] and box[1] < box[3]
+    assert box[2] <= m.pages[0].unrotated_size[0]
+
+
+def test_words_on_includes_the_recognised_text(tmp_path, qapp):
+    """A scanned page has no words of its own until OCR puts them there."""
+    path = tmp_path / "scan.pdf"
+    doc = pymupdf.open()
+    doc.new_page(width=595, height=842)
+    doc.save(str(path))
+    doc.close()
+
+    m = DocumentModel()
+    m.open(str(path))
+    assert m.words_on(0) == []
+
+    from plico.model.ocr import OcrWord
+
+    m.pages[0].ocr_words = [OcrWord("FATTURA", (80.0, 90.0, 200.0, 110.0))]
+    words = m.words_on(0)
+    assert [w.as_tuple() for w in words] == [(80.0, 90.0, 200.0, 110.0)]
+
+
+def test_unmarked_leaves_out_what_is_already_marked(tmp_path, qapp):
+    path = tmp_path / "marks.pdf"
+    doc = pymupdf.open()
+    page = doc.new_page(width=595, height=842)
+    page.insert_text((100, 100), "ALFA BETA", fontsize=20)
+    doc.save(str(path))
+    doc.close()
+
+    m = DocumentModel()
+    m.open(str(path))
+    words = m.words_on(0)
+    assert len(words) == 2
+
+    m.pages[0].redactions = [words[0]]
+    assert m.unmarked(0, words) == [words[1]]

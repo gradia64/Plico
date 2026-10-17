@@ -1662,6 +1662,154 @@ def test_the_drag_also_holds_with_a_rotated_page(qapp, tmp_path, monkeypatch, wi
 
 
 # --------------------------------------------------------------------- #
+#  Redazione per selezione: le parole che il trascinamento tocca
+# --------------------------------------------------------------------- #
+
+def test_selecting_words_redacts_exactly_them(qapp, tmp_path, windows):
+    """The selection follows the words, not the rectangle the mouse traced."""
+    pdf = str(tmp_path / "doc.pdf")
+    _pdf_da_redigere(pdf)
+    mw = windows()
+    _open(mw, pdf)
+
+    mw._select_act.trigger()
+    canvas = mw._page_view._canvases[0]
+    start, end = _pixel_for(canvas, pdf, "SEGRETO")
+    # From a little inside the word to a little before its end: the mark must
+    # still cover the whole word, and only that one.
+    _drag(canvas.label, (start[0] + 2, start[1] + 2), (end[0] - 6, end[1] - 2))
+    _pump(0.1)
+
+    redactions = mw._doc_model.pages[0].redactions
+    assert len(redactions) == 1, redactions
+    with pymupdf.open(pdf) as doc:
+        word = doc[0].search_for("SEGRETO")[0]
+    mark = redactions[0]
+    assert mark.x0 <= word.x0 and mark.x1 >= word.x1, "la parola non e` coperta per intero"
+    assert mw._undo_stack.count() == 1
+    assert mw._undo_stack.undoText() == "Cancella la selezione su pagina 1"
+
+
+def test_a_selection_over_two_words_is_one_undo_step(qapp, tmp_path, windows):
+    pdf = str(tmp_path / "doc.pdf")
+    _pdf_da_redigere(pdf)
+    mw = windows()
+    _open(mw, pdf)
+
+    mw._select_act.trigger()
+    canvas = mw._page_view._canvases[0]
+    start, _ = _pixel_for(canvas, pdf, "SEGRETO")
+    _, end = _pixel_for(canvas, pdf, "PUBBLICO")
+    # One drag from the first line to the last covers both words, and the
+    # blank page between them must not become a mark of its own.
+    _drag(canvas.label, start, end)
+    _pump(0.1)
+
+    assert len(mw._doc_model.pages[0].redactions) == 2
+    assert mw._undo_stack.count() == 1, "la selezione e` un gesto solo"
+
+    mw._undo_stack.undo()
+    assert mw._doc_model.pages[0].redactions == []
+
+
+def test_selecting_blank_space_says_so_and_marks_nothing(qapp, tmp_path, windows):
+    pdf = str(tmp_path / "doc.pdf")
+    _pdf_da_redigere(pdf)
+    mw = windows()
+    _open(mw, pdf)
+
+    mw._select_act.trigger()
+    canvas = mw._page_view._canvases[0]
+    _, above = _pixel_for(canvas, pdf, "SEGRETO")
+    below, _ = _pixel_for(canvas, pdf, "PUBBLICO")
+    middle = (above[1] + below[1]) // 2
+    _drag(canvas.label, (40, middle - 10), (140, middle + 10))
+    _pump(0.1)
+
+    assert mw._doc_model.pages[0].redactions == []
+    assert mw._undo_stack.count() == 0
+    assert "Nessuna parola" in mw._status.text(), mw._status.text()
+
+
+def test_a_click_on_a_mark_removes_it_while_selecting(qapp, tmp_path, windows):
+    """Clicking a mark is the way back in both halves of the tool."""
+    pdf = str(tmp_path / "doc.pdf")
+    _pdf_da_redigere(pdf)
+    mw = windows()
+    _open(mw, pdf)
+
+    mw._select_act.trigger()
+    canvas = mw._page_view._canvases[0]
+    start, end = _pixel_for(canvas, pdf, "SEGRETO")
+    _drag(canvas.label, start, end)
+    assert len(mw._doc_model.pages[0].redactions) == 1
+
+    middle = ((start[0] + end[0]) // 2, (start[1] + end[1]) // 2)
+    _drag(canvas.label, middle, middle)
+    _pump(0.1)
+
+    assert mw._doc_model.pages[0].redactions == []
+
+
+def test_the_three_tools_never_stay_on_together(qapp, tmp_path, windows):
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=1)
+    mw = windows()
+    _open(mw, pdf)
+    view = mw._page_view
+
+    mw._select_act.trigger()
+    assert view.selection_mode()
+
+    mw._redact_act.trigger()
+    assert not view.selection_mode(), "la zona non deve convivere con la selezione"
+    assert view.redaction_mode()
+
+    mw._text_act.trigger()
+    assert not view.redaction_mode(), "il testo non deve convivere con la zona"
+
+    mw._select_act.trigger()
+    assert not view.text_mode(), "la selezione non deve convivere con il testo"
+    assert view.selection_mode()
+
+
+def test_the_selection_tool_is_in_the_edit_menu(qapp, windows):
+    mw = windows()
+    entries = {
+        action.text().replace("&", ""): action
+        for action in mw.menuBar().actions()[1].menu().actions()
+    }
+    assert "Cancella selezione" in entries, sorted(entries)
+    assert entries["Cancella selezione"].isCheckable()
+    assert entries["Cancella selezione"].shortcut().toString() == "Ctrl+Shift+L"
+
+
+def test_the_selected_words_really_disappear_from_the_file(
+    qapp, tmp_path, monkeypatch, windows
+):
+    pdf = str(tmp_path / "doc.pdf")
+    out = str(tmp_path / "out.pdf")
+    _pdf_da_redigere(pdf)
+    mw = windows()
+    _open(mw, pdf)
+
+    mw._select_act.trigger()
+    canvas = mw._page_view._canvases[0]
+    start, end = _pixel_for(canvas, pdf, "SEGRETO")
+    _drag(canvas.label, start, end)
+
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    mw._save_file_as()
+    _pump()
+
+    with pymupdf.open(out) as doc:
+        text = doc[0].get_text()
+    assert "SEGRETO" not in text, "la selezione non ha portato via il testo"
+    assert "PUBBLICO" in text, "la selezione ha portato via anche il resto"
+
+
+# --------------------------------------------------------------------- #
 #  AcroForm form: the panel, the click on the page and the save
 # --------------------------------------------------------------------- #
 
