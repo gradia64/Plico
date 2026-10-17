@@ -11,14 +11,31 @@ Key design:
 from collections import OrderedDict
 from dataclasses import dataclass
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QBrush, QColor, QPainter, QPen, QPixmap
+from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QFont,
+    QFontMetricsF,
+    QPainter,
+    QPen,
+    QPixmap,
+    QTransform,
+)
 from PySide6.QtGui import QPalette as QPaletteColor
-from PySide6.QtWidgets import QLabel, QScrollArea, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QLabel,
+    QLineEdit,
+    QScrollArea,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..model.document import PageItem
 from ..model.forms import CHECKBOX, UNCHECKED, Field
 from ..model.redact import RedactionRect, map_point, map_rect
+from ..model.textedit import TextEdit, TextSpan
 from ..rendering.worker import RenderRequest
 
 # --- constants ----------------------------------------------------------- #
@@ -45,6 +62,89 @@ FIELD_SELECTED_WASH = QColor(230, 145, 40, 40)
 FIELD_SELECTED_BORDER = QColor(214, 138, 48)
 FIELD_TEXT = QColor(20, 20, 20)
 
+# Text editing: an edited span is outlined while the tool is on, so the user
+# can find what was changed; the replacement itself is always painted.
+TEXT_EDIT_BORDER = QColor(46, 140, 87, 170)
+TEXT_EDIT_REFUSED = "border: 2px solid #d63030;"
+# The preview font is laid out at this pixel size and then scaled by the
+# painter: QFont sizes are integers, and a 10.5 pt span at 150% would round.
+_PREVIEW_PX = 100
+
+# get_text("dict") span flags, for the preview font.
+_ITALIC = 1 << 1
+_SERIF = 1 << 2
+_MONO = 1 << 3
+_BOLD = 1 << 4
+
+
+def _preview_font(span: TextSpan) -> QFont:
+    """A Qt font that looks like *span*'s: its family when installed, else the style.
+
+    "LiberationSerif-Bold" names the family "Liberation Serif"; when Qt does
+    not have it, the style hint picks a serif, sans or monospaced stand-in
+    instead of whatever the default happens to be.
+    """
+    name = span.font.split("+")[-1].split("-")[0]
+    family = "".join(
+        f" {c}" if c.isupper() and i and not name[i - 1].isupper() else c
+        for i, c in enumerate(name)
+    )
+    font = QFont(family)
+    if span.flags & _MONO:
+        font.setStyleHint(QFont.StyleHint.TypeWriter)
+    elif span.flags & _SERIF:
+        font.setStyleHint(QFont.StyleHint.Serif)
+    else:
+        font.setStyleHint(QFont.StyleHint.SansSerif)
+    font.setBold(bool(span.flags & _BOLD))
+    font.setItalic(bool(span.flags & _ITALIC))
+    font.setPixelSize(_PREVIEW_PX)
+    return font
+
+
+def _span_color(span: TextSpan) -> QColor:
+    c = span.color
+    return QColor((c >> 16) & 255, (c >> 8) & 255, c & 255)
+
+
+class _SpanEditor(QLineEdit):
+    """The line edit that floats over a span while the user corrects it.
+
+    Enter confirms and Esc cancels. Esc has to be claimed from the window:
+    the window binds Esc to "leave the tool", and a window shortcut wins over
+    the focused widget unless the widget accepts the ShortcutOverride first.
+    Losing the focus to another widget of the window confirms, like leaving
+    a form field; losing it because the whole window was left does not, so
+    switching to another program for a second does not close the editor.
+    """
+
+    committed = Signal()
+    cancelled = Signal()
+    focus_left = Signal()
+
+    def event(self, event) -> bool:
+        if event.type() == QEvent.Type.ShortcutOverride and event.key() == Qt.Key.Key_Escape:
+            event.accept()
+            return True
+        return super().event(event)
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Escape:
+            self.cancelled.emit()
+            return
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.committed.emit()
+            return
+        super().keyPressEvent(event)
+
+    def focusOutEvent(self, event) -> None:
+        super().focusOutEvent(event)
+        if event.reason() not in (
+            Qt.FocusReason.ActiveWindowFocusReason,
+            Qt.FocusReason.PopupFocusReason,
+        ):
+            self.focus_left.emit()
+
 
 # --- per-page canvas ----------------------------------------------------- #
 
@@ -68,6 +168,11 @@ class _PageLabel(QLabel):
         self.canvas: _Canvas | None = None
         self._drag_from: QPointF | None = None
         self._drag_to: QPointF | None = None
+        # Background colour behind each edited span, sampled from the render
+        # it was painted over. Keyed by the render too: a new pixmap (zoom,
+        # rotation) may sample differently, and toImage() is too costly to
+        # run on every repaint.
+        self._backgrounds: dict[tuple[TextSpan, tuple | None], QColor] = {}
 
     # -- coordinates ---------------------------------------------------- #
 
@@ -117,9 +222,93 @@ class _PageLabel(QLabel):
         # filled in. Redactions only while the tool is on, so that a page
         # carrying marks still reads as a page.
         self._paint_fields(painter)
+        # Text edits are always painted: the page must read the way it will
+        # be saved, tool or no tool.
+        self._paint_text_edits(painter)
         if self._view.redaction_mode():
             self._paint_redactions(painter)
         painter.end()
+
+    def _page_transform(self) -> QTransform:
+        """Page space → widget pixels, user and base rotation included.
+
+        With this on the painter, a span is drawn with its own page-space
+        numbers -- baseline, size, box -- and comes out turned and scaled
+        exactly like the render under it.
+        """
+        canvas = self.canvas
+        assert canvas is not None
+        a, b, c, d, e, f = canvas.item.view_matrix()
+        s = self._scale()
+        return QTransform(a * s, b * s, c * s, d * s, e * s, f * s)
+
+    def _background(self, span: TextSpan) -> QColor:
+        """The page colour around *span*, sampled at a corner of its box.
+
+        A box corner sits above the ascenders or left of the first glyph, so
+        it shows what the text was printed on: white paper, a shaded table
+        cell, a coloured banner.
+        """
+        canvas = self.canvas
+        assert canvas is not None
+        key = (span, canvas.current_key)
+        cached = self._backgrounds.get(key)
+        if cached is not None:
+            return cached
+        colour = QColor("white")
+        pixmap = self.pixmap()
+        if not pixmap.isNull():
+            image = pixmap.toImage()
+            ratio = pixmap.devicePixelRatio()
+            corner = self._rect_pixels(span.bbox).topLeft() + QPointF(1.0, 1.0)
+            x, y = int(corner.x() * ratio), int(corner.y() * ratio)
+            if 0 <= x < image.width() and 0 <= y < image.height():
+                colour = image.pixelColor(x, y)
+        self._backgrounds[key] = colour
+        return colour
+
+    def _paint_text_edits(self, painter: QPainter) -> None:
+        """Paint each replacement over the text it replaces.
+
+        A preview, not the file: the font is Qt's closest match and the save
+        decides the exact one. What it does guarantee is the place, the size,
+        the colour and the fact that the old words are no longer visible.
+        """
+        canvas = self.canvas
+        assert canvas is not None
+        if not canvas.item.text_edits:
+            return
+        painter.save()
+        painter.setTransform(self._page_transform())
+        outline = self._view.text_mode()
+        for edit in canvas.item.text_edits:
+            self._paint_text_edit(painter, edit, outline)
+        painter.restore()
+
+    def _paint_text_edit(self, painter: QPainter, edit: TextEdit, outline: bool) -> None:
+        span = edit.span
+        x0, y0, x1, y1 = span.bbox
+        box = QRectF(x0, y0, x1 - x0, y1 - y0)
+        painter.fillRect(box, self._background(span))
+        if edit.new_text:
+            font = _preview_font(span)
+            unit = span.size / _PREVIEW_PX
+            needed = QFontMetricsF(font).horizontalAdvance(edit.new_text) * unit
+            available = span.width + span.room
+            fit = min(1.0, available / needed) if needed > 0 else 1.0
+            painter.save()
+            painter.translate(span.origin[0], span.origin[1])
+            painter.scale(unit * fit, unit * fit)
+            painter.setFont(font)
+            painter.setPen(QPen(_span_color(span)))
+            painter.drawText(QPointF(0.0, 0.0), edit.new_text)
+            painter.restore()
+        if outline:
+            pen = QPen(TEXT_EDIT_BORDER, 0)  # cosmetic: one pixel at any zoom
+            pen.setStyle(Qt.PenStyle.DashLine)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(box)
 
     def _paint_redactions(self, painter: QPainter) -> None:
         canvas = self.canvas
@@ -211,6 +400,11 @@ class _PageLabel(QLabel):
         if event.button() != Qt.MouseButton.LeftButton:
             super().mousePressEvent(event)
             return
+        if self._view.text_mode():
+            canvas = self.canvas
+            if canvas is not None:
+                self._view.begin_text_edit(canvas, *self._to_page(event.position()))
+            return
         if not self._view.redaction_mode():
             self._select_field_under(event.position())
             super().mousePressEvent(event)
@@ -277,6 +471,11 @@ class PageView(QScrollArea):
     # (page index, field name): a click landed on a form field drawn on the
     # page. The view fills nothing — it only says where the user pointed.
     field_clicked = Signal(int, str)
+    # (page index, TextSpan, new text): the user confirmed a correction that
+    # check_text_edit() accepted. The window turns it into an EditText.
+    text_edited = Signal(int, object, str)
+    # A correction the save could not write, with the reason for the user.
+    text_edit_refused = Signal(str)
 
     def __init__(self, worker, model=None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -295,6 +494,10 @@ class PageView(QScrollArea):
         self._pending_scroll: int | None = None
         self._fit_mode = False
         self._redaction_mode = False
+        self._text_mode = False
+        # The editor open over a span, and which span of which page it edits.
+        self._editor: _SpanEditor | None = None
+        self._editing: tuple[_Canvas, TextSpan] | None = None
         # The (page index, field name) the form panel is editing, so the field
         # can be picked out on the page. None when nothing is selected.
         self._selected_field: tuple[int, str] | None = None
@@ -335,6 +538,9 @@ class PageView(QScrollArea):
         """The page list changed shape (open/delete/reorder): rebuild."""
         if self._model is None:
             return
+        # The page list changed shape: the editor's page index may now point
+        # elsewhere, and its label may be about to go.
+        self._close_text_editor()
         first_page = self._first_visible_page()
         self._items = list(self._model.pages)
         # No size list to copy: each item carries its own oriented size.
@@ -387,9 +593,11 @@ class PageView(QScrollArea):
             return w_pt, h_pt
         return h_pt, w_pt
 
-    def _redaction_cursor(self) -> Qt.CursorShape:
+    def _tool_cursor(self) -> Qt.CursorShape:
         if self._redaction_mode:
             return Qt.CursorShape.CrossCursor
+        if self._text_mode:
+            return Qt.CursorShape.IBeamCursor
         return Qt.CursorShape.ArrowCursor
 
     # ------------------------------------------------------------------ #
@@ -418,7 +626,7 @@ class PageView(QScrollArea):
         label.setAutoFillBackground(True)
         label.setText("Caricamento…")
         label.setStyleSheet("background-color: #f0f0f0;")
-        label.setCursor(self._redaction_cursor())
+        label.setCursor(self._tool_cursor())
         return label
 
     def _rebuild_canvases(self) -> None:
@@ -539,6 +747,10 @@ class PageView(QScrollArea):
             c.y_px = y_px
             c.height_px = h_px
             y_px += h_px + spacing
+
+        # The editor is a child of its page, so scrolling moves it for free;
+        # a new size or zoom has to move it explicitly.
+        self._place_text_editor()
 
         # Request visible renders
         self._apply_pending_scroll()
@@ -694,7 +906,7 @@ class PageView(QScrollArea):
     def set_redaction_mode(self, active: bool) -> None:
         """Turn the redaction tool on or off, for every page at once."""
         self._redaction_mode = bool(active)
-        cursor = self._redaction_cursor()
+        cursor = self._tool_cursor()
         for c in self._canvases:
             c.label.setCursor(cursor)
             # The marks are painted only while the tool is on, so leaving it
@@ -716,6 +928,132 @@ class PageView(QScrollArea):
     def forget_redaction(self, canvas: _Canvas, rect: RedactionRect) -> None:
         """Ask for *rect* to be taken back off *canvas*."""
         self.redaction_removed.emit(canvas.index, rect)
+
+    # ------------------------------------------------------------------ #
+    #  Text editing
+    # ------------------------------------------------------------------ #
+
+    def text_mode(self) -> bool:
+        """Whether a click on a page opens the text editor."""
+        return self._text_mode
+
+    def set_text_mode(self, active: bool) -> None:
+        """Turn the text tool on or off. Leaving it confirms an open edit."""
+        if not active:
+            self._commit_text_edit(keep_open=False)
+        self._text_mode = bool(active)
+        cursor = self._tool_cursor()
+        for c in self._canvases:
+            c.label.setCursor(cursor)
+            # The outline of edited spans is drawn only while the tool is on.
+            c.label.update()
+
+    def text_editor(self) -> QLineEdit | None:
+        """The editor currently open over a span, if any."""
+        return self._editor
+
+    def begin_text_edit(self, canvas: _Canvas, x: float, y: float) -> None:
+        """Open the editor over the span under the page-space point (*x*, *y*).
+
+        A click is also how the user leaves the span being edited, so an open
+        editor is confirmed first (a QLabel takes no focus, so the editor
+        would never hear about the click otherwise). A click on nothing just
+        does that.
+        """
+        self._commit_text_edit(keep_open=False)
+        if self._model is None:
+            return
+        try:
+            span = self._model.text_span_at(canvas.index, x, y)
+        # The source can be gone or unreadable: no span, no editor -- never
+        # a traceback out of a mouse click.
+        except Exception:  # noqa: BLE001
+            span = None
+        if span is None:
+            return
+        editor = _SpanEditor(canvas.label)
+        editor.setText(canvas.item.text_of(span))
+        editor.committed.connect(self._commit_text_edit)
+        editor.cancelled.connect(self._close_text_editor)
+        editor.focus_left.connect(self._commit_on_focus_left)
+        self._editor = editor
+        self._editing = (canvas, span)
+        self._place_text_editor()
+        editor.show()
+        editor.setFocus(Qt.FocusReason.MouseFocusReason)
+        editor.selectAll()
+
+    def _place_text_editor(self) -> None:
+        """Lay the editor over its span: same place, a usable size.
+
+        Always horizontal, whatever the rotation: on a page turned a quarter
+        the span runs up the screen, and a line edit cannot. It then sits at
+        the span's corner, across it -- for the few seconds of typing that is
+        better than refusing the page.
+        """
+        if self._editor is None or self._editing is None:
+            return
+        canvas, span = self._editing
+        area = canvas.label._rect_pixels(span.bbox)
+        scale = canvas.scale
+        height = max(20, int((span.bbox[3] - span.bbox[1]) * scale) + 8)
+        width = max(120, int((span.width + span.room) * scale) + 16)
+        width = min(width, max(120, canvas.label.width()))
+        x = int(min(max(0.0, area.left() - 4), max(0, canvas.label.width() - width)))
+        y = int(min(max(0.0, area.top() - 4), max(0, canvas.label.height() - height)))
+        font = self._editor.font()
+        font.setPixelSize(max(10, min(int(span.size * scale * 0.85), 48)))
+        self._editor.setFont(font)
+        self._editor.setGeometry(x, y, width, height)
+
+    def _commit_on_focus_left(self) -> None:
+        self._commit_text_edit(keep_open=False)
+
+    def _commit_text_edit(self, keep_open: bool = True) -> None:
+        """Confirm the open edit: check it as the save would, then report it.
+
+        A refusal is said in the window's status bar and on the editor
+        itself. With *keep_open* (Enter) the editor stays, with the text the
+        user typed, so it can be shortened; when the editor is being left
+        anyway (a click elsewhere, the tool switched off) the edit is dropped
+        -- a correction that cannot be saved must not look as if it were.
+        """
+        editor, editing = self._editor, self._editing
+        if editor is None or editing is None or self._model is None:
+            return
+        canvas, span = editing
+        text = editor.text()
+        if text == canvas.item.text_of(span):
+            self._close_text_editor()
+            return
+        try:
+            self._model.check_text_edit(canvas.index, span, text)
+        except Exception as error:  # noqa: BLE001 -- a refusal, whatever the cause
+            message = str(error) if isinstance(error, ValueError) else (
+                self.tr("Impossibile verificare la modifica: {0}").format(error)
+            )
+            self.text_edit_refused.emit(message)
+            if keep_open:
+                editor.setStyleSheet(TEXT_EDIT_REFUSED)
+                editor.setToolTip(message)
+                return
+            self._close_text_editor()
+            return
+        index = canvas.index
+        self._close_text_editor()
+        self.text_edited.emit(index, span, text)
+
+    def _close_text_editor(self) -> None:
+        """Drop the editor without reporting anything."""
+        editor = self._editor
+        if editor is None:
+            return
+        # Cleared first: hiding the editor moves the focus, and the focus-out
+        # it causes must find nothing left to confirm.
+        self._editor = None
+        self._editing = None
+        editor.hide()
+        editor.deleteLater()
 
     # ------------------------------------------------------------------ #
     #  Selection / navigation helpers
@@ -768,6 +1106,7 @@ class PageView(QScrollArea):
             self._scroll_to(self._canvases[index])
 
     def clear(self) -> None:
+        self._close_text_editor()
         for c in self._canvases:
             self._layout.removeWidget(c.label)
             c.label.deleteLater()

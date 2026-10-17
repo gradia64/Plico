@@ -13,7 +13,7 @@ from unittest import mock
 import pymupdf
 import pytest
 from PySide6.QtCore import QEvent, QPointF, QSettings, Qt, QThreadPool
-from PySide6.QtGui import QAction, QCloseEvent, QIcon, QImage, QMouseEvent, QPixmap
+from PySide6.QtGui import QAction, QCloseEvent, QIcon, QImage, QKeyEvent, QMouseEvent, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -2345,3 +2345,238 @@ def test_merging_an_encrypted_file_can_be_cancelled(windows, tmp_path, monkeypat
     assert mw._doc_model.page_count == 1
     assert mw._undo_stack.count() == 0, "un'unione annullata non e` un passo di undo"
     assert not mw.is_modified()
+
+
+# --------------------------------------------------------------------- #
+#  Text editing: a mode, an editor over the span, a command on Enter
+# --------------------------------------------------------------------- #
+
+
+def _text_tool_on(mw: MainWindow) -> None:
+    """Turn the tool on the way the menu does: trigger() checks and emits."""
+    mw._text_act.trigger()
+    assert mw._page_view.text_mode()
+
+
+def _click_word(mw: MainWindow, pdf: str, word: str, page: int = 0) -> None:
+    canvas = mw._page_view._canvases[page]
+    (x0, y0), (x1, y1) = _pixel_for(canvas, pdf, word)
+    centre = ((x0 + x1) // 2, (y0 + y1) // 2)
+    canvas.label.mousePressEvent(_event(QEvent.Type.MouseButtonPress, centre))
+
+
+def _press(widget, key: Qt.Key) -> None:
+    widget.keyPressEvent(QKeyEvent(QEvent.Type.KeyPress, key, Qt.KeyboardModifier.NoModifier))
+
+
+def _editing(mw: MainWindow, tmp_path, pages: int = 1) -> str:
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=pages)
+    _open(mw, pdf)
+    _text_tool_on(mw)
+    return pdf
+
+
+def test_text_tool_is_a_mode_in_the_edit_menu(windows):
+    mw = windows()
+    entries = {
+        action.text().replace("&", ""): action
+        for action in mw.menuBar().actions()[1].menu().actions()
+    }
+    action = entries["Modifica testo"]
+    assert action.isCheckable()
+    assert action.shortcut().toString() == "Ctrl+Shift+T"
+
+
+def test_text_tool_and_redaction_exclude_each_other(windows, tmp_path):
+    mw = windows()
+    _editing(mw, tmp_path)
+
+    mw._redact_act.trigger()
+    assert mw._page_view.redaction_mode() and not mw._page_view.text_mode()
+    assert not mw._text_act.isChecked()
+
+    mw._text_act.trigger()
+    assert mw._page_view.text_mode() and not mw._page_view.redaction_mode()
+    assert not mw._redact_act.isChecked()
+
+
+def test_text_tool_without_a_document_warns(windows, monkeypatch):
+    mw = windows()
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox, "warning", staticmethod(lambda *a, **k: warnings.append(a[2]))
+    )
+    mw._text_act.trigger()
+    assert warnings and not mw._text_act.isChecked()
+
+
+def test_a_click_on_a_line_opens_the_editor_with_its_text(windows, tmp_path):
+    mw = windows()
+    pdf = _editing(mw, tmp_path)
+
+    _click_word(mw, pdf, "Pagina 1")
+
+    editor = mw._page_view.text_editor()
+    assert editor is not None and editor.isVisibleTo(mw._page_view._canvases[0].label)
+    assert editor.text() == "Pagina 1"
+
+
+def test_a_click_on_nothing_opens_nothing(windows, tmp_path):
+    mw = windows()
+    _editing(mw, tmp_path)
+    label = mw._page_view._canvases[0].label
+    label.mousePressEvent(_event(QEvent.Type.MouseButtonPress, (300, 500)))
+    assert mw._page_view.text_editor() is None
+
+
+def test_enter_confirms_one_command_and_the_save_writes_it(windows, tmp_path):
+    mw = windows()
+    pdf = _editing(mw, tmp_path)
+    _click_word(mw, pdf, "Pagina 1")
+    editor = mw._page_view.text_editor()
+    editor.setText("Pagina uno")
+
+    _press(editor, Qt.Key.Key_Return)
+
+    assert mw._page_view.text_editor() is None
+    assert mw._undo_stack.count() == 1
+    assert [e.new_text for e in mw._doc_model.pages[0].text_edits] == ["Pagina uno"]
+    assert mw.is_modified()
+
+    out = str(tmp_path / "out.pdf")
+    save_as(mw._doc_model, out)
+    with pymupdf.open(out) as doc:
+        text = doc[0].get_text()
+    assert "Pagina uno" in text and "Pagina 1" not in text
+
+
+def test_escape_cancels_and_leaves_the_tool_on(windows, tmp_path):
+    """Esc belongs to the editor while it is open, not to the window's shortcut."""
+    mw = windows()
+    pdf = _editing(mw, tmp_path)
+    _click_word(mw, pdf, "Pagina 1")
+    editor = mw._page_view.text_editor()
+    editor.setText("Pagina uno")
+
+    override = QKeyEvent(QEvent.Type.ShortcutOverride, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier)
+    assert editor.event(override) and override.isAccepted(), "Esc must not reach the window"
+    _press(editor, Qt.Key.Key_Escape)
+
+    assert mw._page_view.text_editor() is None
+    assert mw._undo_stack.count() == 0
+    assert mw._page_view.text_mode()
+
+
+def test_a_refused_edit_keeps_the_editor_and_says_why(windows, tmp_path):
+    mw = windows()
+    pdf = _editing(mw, tmp_path)
+    _click_word(mw, pdf, "Pagina 1")
+    editor = mw._page_view.text_editor()
+    too_long = "Pagina " + "molto " * 60
+    editor.setText(too_long)
+
+    _press(editor, Qt.Key.Key_Return)
+
+    assert mw._page_view.text_editor() is editor, "the typed text must not be lost"
+    assert editor.text() == too_long
+    assert "non ci sta" in mw._status.text()
+    assert mw._undo_stack.count() == 0
+
+
+def test_a_click_elsewhere_confirms_the_open_edit(windows, tmp_path):
+    mw = windows()
+    pdf = _editing(mw, tmp_path)
+    _click_word(mw, pdf, "Pagina 1")
+    mw._page_view.text_editor().setText("Pagina uno")
+
+    label = mw._page_view._canvases[0].label
+    label.mousePressEvent(_event(QEvent.Type.MouseButtonPress, (300, 500)))
+
+    assert mw._page_view.text_editor() is None
+    assert mw._undo_stack.count() == 1
+
+
+def test_leaving_the_tool_confirms_the_open_edit(windows, tmp_path):
+    mw = windows()
+    pdf = _editing(mw, tmp_path)
+    _click_word(mw, pdf, "Pagina 1")
+    mw._page_view.text_editor().setText("Pagina uno")
+
+    mw._leave_tools()
+
+    assert not mw._page_view.text_mode()
+    assert mw._undo_stack.count() == 1
+
+
+def test_the_editor_reopens_on_the_edited_text(windows, tmp_path):
+    """A second click on the same line edits the correction, not the original."""
+    mw = windows()
+    pdf = _editing(mw, tmp_path)
+    _click_word(mw, pdf, "Pagina 1")
+    mw._page_view.text_editor().setText("Pagina uno")
+    _press(mw._page_view.text_editor(), Qt.Key.Key_Return)
+
+    _click_word(mw, pdf, "Pagina 1")
+
+    assert mw._page_view.text_editor().text() == "Pagina uno"
+
+
+def test_the_preview_paints_the_correction_and_undo_takes_it_away(windows, tmp_path):
+    mw = windows()
+    mw.resize(1000, 700)
+    mw.show()
+    _editing(mw, tmp_path)
+    _pump()
+    label = mw._page_view._canvases[0].label
+    # The outline is only drawn while the tool is on: compare without it.
+    mw._leave_tools()
+    before = label.grab().toImage()
+
+    # Straight to the window's slot, as the editor would after Enter.
+    span = mw._doc_model.text_span_at(0, 80, 65)
+    assert span is not None
+    mw._on_text_edited(0, span, "Pagina uno")
+    _pump(0.2)
+    after = label.grab().toImage()
+    assert after != before, "the correction must be visible before saving"
+
+    mw._undo_stack.undo()
+    _pump(0.2)
+    assert label.grab().toImage() == before
+
+
+def test_a_rotated_page_edits_the_span_under_the_click(windows, tmp_path):
+    mw = windows()
+    pdf = _editing(mw, tmp_path)
+    mw._thumb_bar.set_current_row(0)
+    mw._rotate_cw_clicked()
+    _pump()
+
+    _click_word(mw, pdf, "Pagina 1")
+
+    editor = mw._page_view.text_editor()
+    assert editor is not None and editor.text() == "Pagina 1"
+
+
+def test_a_structural_change_closes_the_editor(windows, tmp_path):
+    mw = windows()
+    pdf = _editing(mw, tmp_path, pages=2)
+    _click_word(mw, pdf, "Pagina 1")
+    mw._page_view.text_editor().setText("Pagina uno")
+
+    mw._undo_stack.push(DeletePage(mw._doc_model, 1))
+
+    assert mw._page_view.text_editor() is None
+    assert mw._doc_model.pages[0].text_edits == [], "nothing confirmed, nothing recorded"
+
+
+def test_opening_another_document_turns_the_text_tool_off(windows, tmp_path):
+    mw = windows()
+    _editing(mw, tmp_path)
+    other = str(tmp_path / "other.pdf")
+    _make_pdf(other, pages=1)
+
+    _open(mw, other)
+
+    assert not mw._page_view.text_mode() and not mw._text_act.isChecked()

@@ -26,7 +26,7 @@ from .redact import (
     rotation_matrix,
     unrotated_size,
 )
-from .textedit import TextEdit, TextSpan, span_at
+from .textedit import FontChoice, TextEdit, TextSpan, check_edit, span_at
 
 
 class PasswordRequired(Exception):
@@ -352,6 +352,19 @@ class DocumentModel(QObject):
             # habit costs nothing and keeps one rule for every page access.
             page = doc[item.source_index]
             return span_at(page, x, y)
+
+    def check_text_edit(self, index: int, span: TextSpan, new_text: str) -> FontChoice:
+        """Whether *new_text* can replace *span* on page *index*, as the save would.
+
+        Asked on the source page: the save writes into a copy of it, which
+        carries the same fonts, so the answer is the one the save will get.
+        Raises :class:`ValueError` with a message for the user.
+        """
+        item = self.pages[index]
+        source = self.sources[item.source_id]
+        with open_for_reading(source, self.passwords.get(source)) as doc:
+            page = doc[item.source_index]
+            return check_edit(page, span, new_text)
 
     @property
     def page_count(self) -> int:

@@ -31,6 +31,10 @@ comprimerli.
 - **Compilare i form AcroForm**: il dock «Modulo» mostra i campi della pagina
   in vista — testo, anche multiriga, caselle e tendine — e i valori finiscono
   nel file al salvataggio, con undo/redo
+- **Modifica minima del testo**: un clic su una riga la apre in un editor
+  sulla pagina; il testo vecchio viene tolto dal file e quello nuovo scritto
+  nello stesso punto, con lo stesso corpo, colore e — quando è installato — lo
+  stesso font
 
 ### Requisito di accettazione
 
@@ -154,6 +158,22 @@ elimina anche la grafica vettoriale che tocca il rettangolo, quindi un bordo o
 una tabella a cavallo del segno possono sparire. I metadati del PDF, invece,
 non sono un rischio: il file di uscita è ricostruito dalle sole pagine, quindi
 `/Info`, l'XMP e gli allegati non ci arrivano mai.
+
+### Modifica del testo: una riga alla volta
+
+`Ctrl+Shift+T` (*Modifica → Modifica testo*) attiva lo strumento: un clic su
+una riga apre un piccolo editor sopra di essa, **Invio** conferma, **Esc**
+annulla. La correzione si vede subito sulla pagina ed è un comando come gli
+altri (`Ctrl+Z`); nel file entra solo al salvataggio, dove il testo vecchio
+viene **rimosso** dal content stream — non coperto — e quello nuovo scritto
+nello stesso punto. Sfondo, bordi delle tabelle e testo accanto restano.
+
+È una modifica *minima*, e lo dice: un testo che non ci sta nello spazio
+libero (fino al bordo della cella o alla parola successiva) viene
+rimpicciolito fino all'80% e oltre rifiutato, con il motivo nella barra di
+stato. Non si modificano il testo verticale e i font Type3. Il font è quello
+del documento quando si può riusare, altrimenti lo stesso installato sul
+sistema, altrimenti un sosia (serif, sans o monospazio) con lo stesso stile.
 
 ### Form: compilare il PDF, non solo leggerlo
 

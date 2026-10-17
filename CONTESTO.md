@@ -54,7 +54,7 @@ plico/
 │   ├── rendering/
 │   │   └── worker.py         # RenderWorker: unico proprietario degli handle PyMuPDF
 │   └── widgets/
-│       ├── page_view.py      # QScrollArea: rendering, zoom, HiDPI, redazione, campi
+│       ├── page_view.py      # QScrollArea: rendering, zoom, HiDPI, redazione, campi, testo
 │       ├── thumbnail_bar.py  # QListView + modello + cache, caricamento lazy
 │       ├── form_panel.py     # dock «Modulo»: un editor per ogni campo della pagina
 │       └── compress.py       # scelta del livello, format_size, task sul thread pool
@@ -69,7 +69,7 @@ plico/
     └── test_integration.py   # MainWindow vera, offscreen: 94 test end-to-end
 ```
 
-Gate di qualità attuale: **268 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **283 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
 (18 file sorgente).
 
 ---
@@ -645,8 +645,8 @@ decide, esattamente come per la redazione.
 
 ### Modifica minima del testo (`model/textedit.py`)
 
-**Stato:** modello, comando e salvataggio ci sono; **manca l'interfaccia**
-(anteprima nella vista ed editor sulla pagina). Nasce da un prototipo
+**Stato:** completa, dal modello all'interfaccia (*Modifica → Modifica
+testo*, `Ctrl+Shift+T`). Nasce da un prototipo
 provato su PDF veri (LibreOffice con tabella e cella colorata, un PDF
 commerciale con testo bianco su sfondo, un PDF con font Type3).
 
@@ -730,11 +730,46 @@ modifica che al salvataggio non si può più scrivere (per esempio il font di
 sistema è stato disinstallato) fa fallire il salvataggio con il messaggio di
 `check_edit`.
 
-**Prossimi passi**: l'anteprima nella vista, che dipinge sopra il render come
-`_paint_redactions` (riquadro col colore di sfondo e testo nuovo); poi
-l'editor sulla pagina, in una modalità esplicita come la Redazione, figlio
-della `_PageLabel`, disattivato sulle pagine ruotate di 90°/270°, che chiama
-`text_span_at()` al doppio clic e `check_edit()` alla conferma.
+**Nell'interfaccia (`widgets/page_view.py`, `main_window.py`):**
+
+- **Una modalità, come la Redazione, e mai insieme a lei**: un clic su una
+  pagina apre l'editor *oppure* inizia un segno. `_on_text_mode_toggled` e
+  `_on_redaction_toggled` spengono l'altra; Esc (`_leave_tools`) le spegne
+  entrambe; aprire un altro documento le spegne.
+- **Un clic, non un doppio clic**: dentro una modalità esplicita il doppio
+  clic non serve. `_PageLabel.mousePressEvent` converte il punto in spazio
+  pagina e chiama `PageView.begin_text_edit()`, che chiede lo span a
+  `DocumentModel.text_span_at()` (sorgente, anche cifrata).
+- **L'editor (`_SpanEditor`) è figlio della `_PageLabel`**: scorre con la
+  pagina senza calcoli; un ridimensionamento o uno zoom lo riposizionano
+  (`_place_text_editor()` in `_relayout()`); un cambio di struttura del
+  documento (elimina, sposta, unisci, undo di questi) lo chiude **senza**
+  confermare, perché il suo indice di pagina può non valere più. È sempre
+  orizzontale: sulle pagine ruotate di un quarto si appoggia all'angolo dello
+  span invece di essere disattivato.
+- **Invio conferma, Esc annulla.** Esc va *reclamato*: la finestra lo usa
+  come scorciatoia per uscire dallo strumento, e una scorciatoia di finestra
+  vince sul widget a fuoco finché il widget non accetta lo
+  `ShortcutOverride` (`_SpanEditor.event`). Un clic altrove o l'uscita dallo
+  strumento confermano (la `QLabel` non prende il fuoco, quindi il clic va
+  gestito a mano in `begin_text_edit`); perdere il fuoco perché si è passati a
+  un'altra finestra **no**.
+- **La verifica è alla conferma**, con `DocumentModel.check_text_edit()`: lo
+  stesso giudizio del salvataggio, sulla pagina sorgente. Con Invio un
+  rifiuto lascia l'editor aperto **con il testo digitato**, bordo rosso e il
+  motivo nella barra di stato (`text_edit_refused`); quando l'editor si
+  chiude comunque (clic altrove, strumento spento) la modifica rifiutata
+  viene scartata, perché non deve sembrare accettata.
+- **L'anteprima si dipinge sempre** (`_paint_text_edits`), non solo nella
+  modalità: la pagina deve leggersi come verrà salvata. Il pittore usa
+  `view_matrix()` come trasformazione, quindi baseline, corpo e riquadro si
+  disegnano con i loro numeri in spazio pagina e ruotano con il render. Lo
+  sfondo è il colore del render a un angolo del riquadro (sopra gli
+  ascendenti), messo in cache per span e per render perché `toImage()` costa;
+  il font è quello di Qt più vicino (`_preview_font`: la famiglia dal nome
+  PostScript, altrimenti lo stile dai flag). È un'anteprima: il font esatto
+  lo decide il salvataggio. Nella modalità, gli span modificati hanno un
+  contorno tratteggiato.
 
 ---
 
@@ -1077,9 +1112,8 @@ sostituita con la sorgente `git` del tag di rilascio.
    leptonica e tesseract dai sorgenti nel manifest **senza poterli provare in
    locale**: si fa quando c'è una ragione per farlo, non prima;
 4. **modifica minima del testo** — la parte difficile, ma è il vero
-   differenziale rispetto a PDF Arranger e simili. **Modello, comando e
-   salvataggio ci sono** (`model/textedit.py`, `EditText`, vedi §8); manca
-   l'interfaccia.
+   differenziale rispetto a PDF Arranger e simili. ✅ **fatta**, vedi §8:
+   *Modifica → Modifica testo* (`Ctrl+Shift+T`), una riga alla volta.
 
 **Debito tecnico noto:**
 

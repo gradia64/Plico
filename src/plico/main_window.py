@@ -29,6 +29,7 @@ from .model import (
     CompressionResult,
     DeletePage,
     DocumentModel,
+    EditText,
     MovePage,
     PageItem,
     PasswordRequired,
@@ -36,6 +37,7 @@ from .model import (
     RemoveRedaction,
     RotatePage,
     SetFieldValue,
+    TextSpan,
     extract_pages,
     parse_page_ranges,
     save_as,
@@ -128,6 +130,8 @@ class MainWindow(QMainWindow):
         # gesture, the window pushes the undoable command.
         self._page_view.redaction_added.connect(self._add_redaction)
         self._page_view.redaction_removed.connect(self._remove_redaction)
+        self._page_view.text_edited.connect(self._on_text_edited)
+        self._page_view.text_edit_refused.connect(self._status.setText)
         dock = QDockWidget(self.tr("Miniature"), self)
         dock.setObjectName("thumbnail_dock")
         dock.setWidget(self._thumb_bar)
@@ -273,12 +277,29 @@ class MainWindow(QMainWindow):
             )
         )
 
+        edit_menu.addSeparator()
+
+        self._text_act = self._act(
+            self.tr("&Modifica testo"), "insert-text", "Ctrl+Shift+T", self._on_text_mode_toggled
+        )
+        # A mode like Redazione, and never on at the same time: a click on a
+        # page either opens the editor or starts a mark, not both.
+        self._text_act.setCheckable(True)
+        self._text_act.setToolTip(
+            self.tr(
+                "Clic su una riga per correggerla: Invio conferma, Esc annulla.\n"
+                "Il testo nuovo entra nel file solo al salvataggio."
+            )
+        )
+        edit_menu.addAction(self._text_act)
+
         # Esc leaves the tool whatever has focus. It sets the check state
         # directly: setChecked() does not emit `triggered`, so the mode is
-        # turned off explicitly instead of through the menu slot.
+        # turned off explicitly instead of through the menu slot. (An open
+        # text editor claims Esc for itself first: there it cancels the edit.)
         self._escape_act = QAction(self)
         self._escape_act.setShortcut(QKeySequence(Qt.Key.Key_Escape))
-        self._escape_act.triggered.connect(self._leave_redaction)
+        self._escape_act.triggered.connect(self._leave_tools)
         self.addAction(self._escape_act)
 
         view_menu = menubar.addMenu(self.tr("&Visualizza"))
@@ -448,10 +469,12 @@ class MainWindow(QMainWindow):
         # clears the selection, and the bar would otherwise restore the
         # previous document's row.)
         self._thumb_bar.set_current_row(0)
-        # Never carry the redaction tool over into another document: the next
-        # drag would mark a page the user has not even looked at.
+        # Never carry a tool over into another document: the next drag would
+        # mark (or the next click edit) a page the user has not even looked at.
         self._redact_act.setChecked(False)
         self._on_redaction_toggled(False)
+        self._text_act.setChecked(False)
+        self._page_view.set_text_mode(False)
         self._refresh_form_panel(0)
         self._save_target = path
         self._update_title()
@@ -926,6 +949,9 @@ class MainWindow(QMainWindow):
             self._redact_act.setChecked(False)
             QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
             return
+        if active and self._text_act.isChecked():
+            self._text_act.setChecked(False)
+            self._page_view.set_text_mode(False)
         self._page_view.set_redaction_mode(active)
         if active:
             self._status.setText(
@@ -934,11 +960,41 @@ class MainWindow(QMainWindow):
         else:
             self._status.setText(self.tr("Pronto"))
 
-    def _leave_redaction(self) -> None:
-        """Esc: leave the tool, leaving the marks where they are."""
+    def _leave_tools(self) -> None:
+        """Esc: leave whichever tool is on, leaving its work where it is."""
         if self._redact_act.isChecked():
             self._redact_act.setChecked(False)
             self._on_redaction_toggled(False)
+        if self._text_act.isChecked():
+            self._text_act.setChecked(False)
+            self._on_text_mode_toggled(False)
+
+    # ------------------------------------------------------------------ #
+    #  Text editing (undo commands)
+    # ------------------------------------------------------------------ #
+
+    def _on_text_mode_toggled(self, active: bool) -> None:
+        """Enter or leave the text tool."""
+        if active and not self._doc_model.sources:
+            self._text_act.setChecked(False)
+            QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
+            return
+        if active and self._redact_act.isChecked():
+            self._redact_act.setChecked(False)
+            self._page_view.set_redaction_mode(False)
+        self._page_view.set_text_mode(active)
+        if active:
+            self._status.setText(
+                self.tr("Modifica testo: clic su una riga per correggerla; Invio conferma, Esc annulla.")
+            )
+        else:
+            self._status.setText(self.tr("Pronto"))
+
+    def _on_text_edited(self, index: int, span: TextSpan, text: str) -> None:
+        """A correction was confirmed in the editor (and already checked)."""
+        if not (0 <= index < self._doc_model.page_count):
+            return
+        self._undo_stack.push(EditText(self._doc_model, index, span, text))
 
     def _add_redaction(self, index: int, rect: RedactionRect) -> None:
         """A rectangle was drawn on page *index*."""
