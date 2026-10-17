@@ -25,7 +25,7 @@ comprimerli.
   salvate, e chiudere o aprire un altro file chiede prima di perderle
 - **Salva compresso** a tre livelli, con il guadagno mostrato a fine lavoro —
   e il livello "leggera" è senza perdita
-- **Redazione vera**: si trascina un rettangolo sui dati da eliminare e al
+- **Oscuramento vero** (in inglese *redaction*): si trascina un rettangolo sui dati da eliminare e al
   salvataggio il testo viene **rimosso**, non coperto — quel che resta non è
   più copiabile né ricercabile
 - **Compilare i form AcroForm**: il dock «Modulo» mostra i campi della pagina
@@ -136,9 +136,9 @@ il lavoro sulle immagini (un JPEG da 3,4 MB su 3 pagine resta al 100% con
 La compressione gira in un thread separato, quindi la finestra resta reattiva
 anche sui file grandi.
 
-### Redazione: il testo se ne va davvero
+### Oscuramento: il testo se ne va davvero
 
-`Ctrl+Shift+X` attiva lo strumento: si trascina un rettangolo sui dati da
+`Ctrl+Shift+X` (*Modifica → Oscuramento*) attiva lo strumento: si trascina un rettangolo sui dati da
 eliminare, un clic secco su una zona la annulla, `Esc` esce. Le zone restano
 **modificabili finché non salvi** — sono comandi undo come gli altri (`Ctrl+Z`)
 e l'anteprima scura sulla pagina mostra esattamente dove finiranno.
@@ -148,11 +148,11 @@ ricadono nella zona: nel file non restano né il testo né l'immagine sotto il
 rettangolo. Un rettangolo nero disegnato sopra — quello che fanno parecchi
 strumenti — lascerebbe il segreto copiabile e ricercabile.
 
-`Ctrl+Shift+F` (*Modifica → Redigi testo…*) cerca invece una parola in **tutte**
+`Ctrl+Shift+F` (*Modifica → Oscura parola…*) cerca invece una parola in **tutte**
 le pagine e marca ogni occorrenza in un colpo solo, come un unico passo di
 undo.
 
-Due cose da sapere: si redige quello che si disegna o quello che si cerca
+Due cose da sapere: si oscura quello che si disegna o quello che si cerca
 (mancano la selezione di testo e la selezione di area), e `apply_redactions()`
 elimina anche la grafica vettoriale che tocca il rettangolo, quindi un bordo o
 una tabella a cavallo del segno possono sparire. I metadati del PDF, invece,
@@ -162,8 +162,11 @@ non sono un rischio: il file di uscita è ricostruito dalle sole pagine, quindi
 ### Modifica del testo: una riga alla volta
 
 `Ctrl+Shift+T` (*Modifica → Modifica testo*) attiva lo strumento: un clic su
-una riga apre un piccolo editor sopra di essa, **Invio** conferma, **Esc**
-annulla. La correzione si vede subito sulla pagina ed è un comando come gli
+una riga **già presente** nel PDF apre un piccolo editor sopra di essa,
+**Invio** conferma, **Esc** annulla. Un clic dove non c'è testo, o su una
+pagina che è solo un'immagine (una scansione), lo dice accanto al puntatore.
+Lo strumento corregge il testo che c'è: non aggiunge testo nuovo in un punto
+vuoto. La correzione si vede subito sulla pagina ed è un comando come gli
 altri (`Ctrl+Z`); nel file entra solo al salvataggio, dove il testo vecchio
 viene **rimosso** dal content stream — non coperto — e quello nuovo scritto
 nello stesso punto. Sfondo, bordi delle tabelle e testo accanto restano.

@@ -1473,9 +1473,9 @@ def test_redaction_is_a_mode_in_the_edit_menu(windows):
         action.text().replace("&", ""): action
         for action in mw.menuBar().actions()[1].menu().actions()
     }
-    assert "Redazione" in entries, sorted(entries)
-    assert entries["Redazione"].isCheckable(), "e` una modalita`, non un comando secco"
-    assert entries["Redazione"].shortcut().toString() == "Ctrl+Shift+X"
+    assert "Oscuramento" in entries, sorted(entries)
+    assert entries["Oscuramento"].isCheckable(), "e` una modalita`, non un comando secco"
+    assert entries["Oscuramento"].shortcut().toString() == "Ctrl+Shift+X"
 
 
 def test_redaction_without_a_document_warns(qapp, monkeypatch, windows):
@@ -1562,7 +1562,7 @@ def test_dragging_on_the_page_creates_a_redaction(qapp, tmp_path, windows):
     assert 0.0 <= rect.x0 < rect.x1 <= width
     assert 0.0 <= rect.y0 < rect.y1 <= height
     assert mw._undo_stack.count() == 1
-    assert mw._undo_stack.undoText() == "Redazione su pagina 1"
+    assert mw._undo_stack.undoText() == "Oscuramento su pagina 1"
 
 
 def test_undoing_the_command_removes_the_redaction(qapp, tmp_path, windows):
@@ -1601,7 +1601,7 @@ def test_a_click_on_a_mark_removes_it(qapp, tmp_path, windows):
     _pump(0.1)
 
     assert mw._doc_model.pages[0].redactions == []
-    assert mw._undo_stack.undoText() == "Annulla redazione su pagina 1"
+    assert mw._undo_stack.undoText() == "Annulla oscuramento su pagina 1"
 
 
 def test_from_the_drag_to_the_file_the_text_disappears(qapp, tmp_path, monkeypatch, windows):
@@ -1878,7 +1878,7 @@ def test_the_redact_text_entry_is_in_the_edit_menu(windows) -> None:
     modifica = next(a.menu() for a in mw.menuBar().actions() if "Modifica" in a.text())
     assert modifica is not None
     action = next(
-        a for a in modifica.actions() if a.text().replace("&", "") == "Redigi testo…"
+        a for a in modifica.actions() if a.text().replace("&", "") == "Oscura parola…"
     )
     assert action.shortcut().toString() == "Ctrl+Shift+F"
 
@@ -1895,7 +1895,7 @@ def test_redact_text_marks_every_occurrence_in_one_step(
     _search(mw, monkeypatch, "Pagina")
 
     assert mw._undo_stack.count() == 1, "una macro, non un comando per pagina"
-    assert mw._undo_stack.undoText() == "Redigi «Pagina»"
+    assert mw._undo_stack.undoText() == "Oscura «Pagina»"
     assert sum(len(item.redactions) for item in mw._doc_model.pages) == 3
     assert mw._redact_act.isChecked(), "le tacche vanno mostrate, non solo messe"
 
@@ -2422,12 +2422,65 @@ def test_a_click_on_a_line_opens_the_editor_with_its_text(windows, tmp_path):
     assert editor.text() == "Pagina 1"
 
 
-def test_a_click_on_nothing_opens_nothing(windows, tmp_path):
+def test_a_click_on_nothing_opens_nothing_and_says_why(windows, tmp_path):
+    """The first version stayed silent here, and the tool looked broken."""
     mw = windows()
     _editing(mw, tmp_path)
     label = mw._page_view._canvases[0].label
     label.mousePressEvent(_event(QEvent.Type.MouseButtonPress, (300, 500)))
     assert mw._page_view.text_editor() is None
+    assert "Qui non c'è testo" in mw._status.text()
+
+
+def test_a_page_without_text_says_it_is_an_image(windows, tmp_path):
+    """A scan is a picture of words: clicking it must not just do nothing."""
+    pdf = str(tmp_path / "scansione.pdf")
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.draw_rect(pymupdf.Rect(60, 60, 500, 300), fill=(0.8, 0.8, 0.8))
+    doc.save(pdf)
+    doc.close()
+    mw = windows()
+    _open(mw, pdf)
+    _text_tool_on(mw)
+
+    label = mw._page_view._canvases[0].label
+    label.mousePressEvent(_event(QEvent.Type.MouseButtonPress, (100, 100)))
+
+    assert mw._page_view.text_editor() is None
+    assert "non contiene testo modificabile" in mw._status.text()
+
+
+def test_a_click_just_beside_a_line_still_opens_it(windows, tmp_path):
+    """A span's box is tight around the glyphs: a near miss must still count."""
+    mw = windows()
+    pdf = _editing(mw, tmp_path)
+    canvas = mw._page_view._canvases[0]
+    (x0, y0), (_x1, y1) = _pixel_for(canvas, pdf, "Pagina 1")
+    near = (x0 - max(1, int(canvas.scale * 2)), (y0 + y1) // 2)
+
+    canvas.label.mousePressEvent(_event(QEvent.Type.MouseButtonPress, near))
+
+    editor = mw._page_view.text_editor()
+    assert editor is not None and editor.text() == "Pagina 1"
+
+
+def test_vertical_text_is_refused_at_the_click(windows, tmp_path):
+    """No point typing a correction that can never be saved."""
+    pdf = str(tmp_path / "verticale.pdf")
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((300, 400), "Verticale", fontsize=24, rotate=90)
+    doc.save(pdf)
+    doc.close()
+    mw = windows()
+    _open(mw, pdf)
+    _text_tool_on(mw)
+
+    _click_word(mw, pdf, "Verticale")
+
+    assert mw._page_view.text_editor() is None
+    assert "orizzontale" in mw._status.text()
 
 
 def test_enter_confirms_one_command_and_the_save_writes_it(windows, tmp_path):

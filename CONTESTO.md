@@ -69,7 +69,7 @@ plico/
     └── test_integration.py   # MainWindow vera, offscreen: 94 test end-to-end
 ```
 
-Gate di qualità attuale: **283 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **288 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
 (18 file sorgente).
 
 ---
@@ -557,6 +557,14 @@ thread sbagliata.
 
 ### Redazione vera (`model/redact.py`)
 
+**Nell'interfaccia si chiama «Oscuramento»** (*Modifica → Oscuramento*,
+`Ctrl+Shift+X`; la ricerca per parola è *Oscura parola…*, `Ctrl+Shift+F`), e
+non «Redazione» / «Redigi testo» come all'inizio. In italiano corrente
+*redigere un testo* vuol dire **scriverlo**: «Redigi testo» si leggeva come
+«Scrivi testo», cioè l'opposto di quello che fa, ed è stato segnalato
+dall'utente. Nel codice e in questo documento resta *redaction*/redazione,
+il termine tecnico; nei testi per l'utente si scrive *oscurare*.
+
 La differenza fra una redazione e un rettangolo nero: **il testo se ne va**.
 `add_redact_annot()` + `apply_redactions()` riscrivono i content stream e
 tolgono davvero le parole; un rettangolo disegnato sopra lascerebbe il
@@ -724,7 +732,7 @@ corretto.
 - Vale per `save_as`, `extract_pages` e `save_compressed`, e per il
   salvataggio sopra il file aperto.
 
-**Limiti noti:** `find_text()` (Redigi testo) cerca nelle sorgenti, quindi
+**Limiti noti:** `find_text()` (Oscura parola) cerca nelle sorgenti, quindi
 trova le parole *vecchie* di uno span modificato e non quelle nuove. Una
 modifica che al salvataggio non si può più scrivere (per esempio il font di
 sistema è stato disinstallato) fa fallire il salvataggio con il messaggio di
@@ -740,6 +748,18 @@ sistema è stato disinstallato) fa fallire il salvataggio con il messaggio di
   clic non serve. `_PageLabel.mousePressEvent` converte il punto in spazio
   pagina e chiama `PageView.begin_text_edit()`, che chiede lo span a
   `DocumentModel.text_span_at()` (sorgente, anche cifrata).
+- **Un clic che non apre l'editor lo dice**, con un tooltip accanto al
+  puntatore e nella barra di stato (`_notify`): «Qui non c'è testo» se la
+  pagina ha testo altrove, «non contiene testo modificabile» se non ne ha
+  (`DocumentModel.page_has_text`: una scansione), e il motivo di
+  `check_text_edit()` per uno span che non si potrà mai salvare (verticale,
+  Type3) — controllato **al clic**, non dopo che l'utente ha scritto. La prima
+  versione restava muta, e all'utente lo strumento sembrava rotto
+  («se faccio Modifica testo non succede nulla»).
+- **Tolleranza di `HIT_TOLERANCE = 3` punti** in `span_at`: il riquadro di
+  uno span stringe i glifi, quindi un clic fra due righe o appena prima della
+  prima lettera non trovava niente. Vince lo span che contiene il punto,
+  altrimenti il più vicino entro la tolleranza.
 - **L'editor (`_SpanEditor`) è figlio della `_PageLabel`**: scorre con la
   pagina senza calcoli; un ridimensionamento o uno zoom lo riposizionano
   (`_place_text_editor()` in `_relayout()`); un cambio di struttura del

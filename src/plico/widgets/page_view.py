@@ -11,7 +11,7 @@ Key design:
 from collections import OrderedDict
 from dataclasses import dataclass
 
-from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QBrush,
     QColor,
@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QScrollArea,
     QSizePolicy,
+    QToolTip,
     QVBoxLayout,
     QWidget,
 )
@@ -403,7 +404,8 @@ class _PageLabel(QLabel):
         if self._view.text_mode():
             canvas = self.canvas
             if canvas is not None:
-                self._view.begin_text_edit(canvas, *self._to_page(event.position()))
+                where = self.mapToGlobal(event.position().toPoint())
+                self._view.begin_text_edit(canvas, *self._to_page(event.position()), where)
             return
         if not self._view.redaction_mode():
             self._select_field_under(event.position())
@@ -474,7 +476,8 @@ class PageView(QScrollArea):
     # (page index, TextSpan, new text): the user confirmed a correction that
     # check_text_edit() accepted. The window turns it into an EditText.
     text_edited = Signal(int, object, str)
-    # A correction the save could not write, with the reason for the user.
+    # Why the text tool did nothing: a correction the save could not write,
+    # or a click that found no editable text. Shown in the status bar.
     text_edit_refused = Signal(str)
 
     def __init__(self, worker, model=None, parent: QWidget | None = None) -> None:
@@ -952,24 +955,48 @@ class PageView(QScrollArea):
         """The editor currently open over a span, if any."""
         return self._editor
 
-    def begin_text_edit(self, canvas: _Canvas, x: float, y: float) -> None:
+    def begin_text_edit(
+        self, canvas: _Canvas, x: float, y: float, where: QPoint | None = None
+    ) -> None:
         """Open the editor over the span under the page-space point (*x*, *y*).
 
         A click is also how the user leaves the span being edited, so an open
         editor is confirmed first (a QLabel takes no focus, so the editor
-        would never hear about the click otherwise). A click on nothing just
-        does that.
+        would never hear about the click otherwise).
+
+        A click that cannot open the editor SAYS why, next to the pointer
+        (*where*, in global coordinates) and in the status bar. The first
+        version stayed silent, and "Modifica testo does nothing" was all the
+        user could conclude.
         """
         self._commit_text_edit(keep_open=False)
         if self._model is None:
             return
+        index = canvas.index
         try:
-            span = self._model.text_span_at(canvas.index, x, y)
-        # The source can be gone or unreadable: no span, no editor -- never
-        # a traceback out of a mouse click.
-        except Exception:  # noqa: BLE001
-            span = None
-        if span is None:
+            span = self._model.text_span_at(index, x, y)
+            if span is None:
+                if self._model.page_has_text(index):
+                    reason = self.tr(
+                        "Qui non c'è testo: clicca sopra una riga del documento."
+                    )
+                else:
+                    reason = self.tr(
+                        "Questa pagina non contiene testo modificabile: "
+                        "probabilmente è un'immagine, come una scansione."
+                    )
+                self._notify(reason, where)
+                return
+            # Refuse at once what can never be edited (vertical text, Type3),
+            # instead of letting the user type a correction first.
+            self._model.check_text_edit(index, span, span.text)
+        except ValueError as error:
+            self._notify(str(error), where)
+            return
+        # The source can be gone or unreadable: say so -- never a traceback
+        # out of a mouse click.
+        except Exception as error:  # noqa: BLE001
+            self._notify(self.tr("Impossibile leggere il testo: {0}").format(error), where)
             return
         editor = _SpanEditor(canvas.label)
         editor.setText(canvas.item.text_of(span))
@@ -982,6 +1009,12 @@ class PageView(QScrollArea):
         editor.show()
         editor.setFocus(Qt.FocusReason.MouseFocusReason)
         editor.selectAll()
+
+    def _notify(self, message: str, where: QPoint | None) -> None:
+        """Tell the user why the text tool did nothing: by the pointer, and in the status bar."""
+        self.text_edit_refused.emit(message)
+        if where is not None:
+            QToolTip.showText(where, message, self)
 
     def _place_text_editor(self) -> None:
         """Lay the editor over its span: same place, a usable size.

@@ -353,6 +353,18 @@ class DocumentModel(QObject):
             page = doc[item.source_index]
             return span_at(page, x, y)
 
+    def page_has_text(self, index: int) -> bool:
+        """Whether the source page of *index* carries any text at all.
+
+        Tells "you clicked beside the text" from "there is no text here to
+        edit": a scanned page is a picture of words, and saying so beats
+        letting every click do nothing.
+        """
+        item = self.pages[index]
+        source = self.sources[item.source_id]
+        with open_for_reading(source, self.passwords.get(source)) as doc:
+            return bool(doc[item.source_index].get_text().strip())
+
     def check_text_edit(self, index: int, span: TextSpan, new_text: str) -> FontChoice:
         """Whether *new_text* can replace *span* on page *index*, as the save would.
 

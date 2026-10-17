@@ -254,7 +254,7 @@ class MainWindow(QMainWindow):
         edit_menu.addSeparator()
 
         self._redact_act = self._act(
-            self.tr("&Redazione"), "edit-cut", "Ctrl+Shift+X", self._on_redaction_toggled
+            self.tr("&Oscuramento"), "edit-cut", "Ctrl+Shift+X", self._on_redaction_toggled
         )
         # A mode, not a one-shot command: it stays on while the user works
         # through a page, and the marks it collects are only painted — they
@@ -263,14 +263,14 @@ class MainWindow(QMainWindow):
         self._redact_act.setToolTip(
             self.tr(
                 "Trascina sui dati da eliminare; un clic su una zona la annulla.\n"
-                "Le redazioni diventano definitive solo al salvataggio."
+                "Gli oscuramenti diventano definitivi solo al salvataggio."
             )
         )
         edit_menu.addAction(self._redact_act)
 
         edit_menu.addAction(
             self._act(
-                self.tr("Redigi te&sto…"),
+                self.tr("Oscura &parola…"),
                 "edit-find",
                 "Ctrl+Shift+F",
                 self._redact_text,
@@ -287,8 +287,9 @@ class MainWindow(QMainWindow):
         self._text_act.setCheckable(True)
         self._text_act.setToolTip(
             self.tr(
-                "Clic su una riga per correggerla: Invio conferma, Esc annulla.\n"
-                "Il testo nuovo entra nel file solo al salvataggio."
+                "Corregge il testo già presente nel PDF: clic su una riga,\n"
+                "Invio conferma, Esc annulla. Il testo nuovo entra nel file\n"
+                "solo al salvataggio."
             )
         )
         edit_menu.addAction(self._text_act)
@@ -955,7 +956,7 @@ class MainWindow(QMainWindow):
         self._page_view.set_redaction_mode(active)
         if active:
             self._status.setText(
-                self.tr("Redazione: trascina sui dati da eliminare; un clic su una zona la annulla.")
+                self.tr("Oscuramento: trascina sui dati da eliminare; un clic su una zona la annulla.")
             )
         else:
             self._status.setText(self.tr("Pronto"))
@@ -985,7 +986,10 @@ class MainWindow(QMainWindow):
         self._page_view.set_text_mode(active)
         if active:
             self._status.setText(
-                self.tr("Modifica testo: clic su una riga per correggerla; Invio conferma, Esc annulla.")
+                self.tr(
+                    "Modifica testo: clic su una riga del documento per correggerla; "
+                    "Invio conferma, Esc annulla."
+                )
             )
         else:
             self._status.setText(self.tr("Pronto"))
@@ -1015,8 +1019,8 @@ class MainWindow(QMainWindow):
             return
         text, ok = QInputDialog.getText(
             self,
-            self.tr("Redigi testo"),
-            self.tr("Testo da eliminare, in tutte le pagine:"),
+            self.tr("Oscura parola"),
+            self.tr("Parola o frase da oscurare in tutte le pagine:"),
         )
         if not ok or not text:
             return
@@ -1025,7 +1029,7 @@ class MainWindow(QMainWindow):
             self._status.setText(self.tr("Nessuna occorrenza di «{0}».").format(text))
             return
 
-        self._undo_stack.beginMacro(self.tr("Redigi «{0}»").format(text))
+        self._undo_stack.beginMacro(self.tr("Oscura «{0}»").format(text))
         try:
             for index, rects in occurrences.items():
                 for rect in rects:
@@ -1041,7 +1045,7 @@ class MainWindow(QMainWindow):
 
         count = sum(len(rects) for rects in occurrences.values())
         self._status.setText(
-            self.tr("Redatte {0} occorrenze di «{1}» su {2} pagine.").format(
+            self.tr("Oscurate {0} occorrenze di «{1}» su {2} pagine.").format(
                 count, text, len(occurrences)
             )
         )

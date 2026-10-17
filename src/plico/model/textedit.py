@@ -149,8 +149,19 @@ def _type3_fonts(page: pymupdf.Page) -> set[str]:
     return {_font_key(f[3]) for f in page.get_fonts() if f[2] == "Type3"}
 
 
+# How far outside a span's box a click still picks it, in points. A span's
+# box is tight around the glyphs, so the gap between two lines, or a click a
+# hair to the left of the first letter, would otherwise find nothing at all --
+# and "nothing happens" is what the user then sees.
+HIT_TOLERANCE = 3.0
+
+
 def span_at(page: pymupdf.Page, x: float, y: float) -> TextSpan | None:
-    """The span under the page-space point (*x*, *y*), or ``None``."""
+    """The span under the page-space point (*x*, *y*), or ``None``.
+
+    A span that contains the point wins; otherwise the nearest one within
+    :data:`HIT_TOLERANCE` points.
+    """
     blocks = page.get_text("dict")["blocks"]
     every = [
         span
@@ -159,29 +170,38 @@ def span_at(page: pymupdf.Page, x: float, y: float) -> TextSpan | None:
         for span in line["spans"]
         if span["text"].strip()
     ]
-    point = pymupdf.Point(x, y)
+    best: tuple[float, dict, dict] | None = None
     for block in blocks:
         for line in block.get("lines", ()):
             for span in line["spans"]:
-                rect = pymupdf.Rect(span["bbox"])
-                if not span["text"].strip() or not rect.contains(point):
+                if not span["text"].strip():
                     continue
-                font = span["font"]
-                return TextSpan(
-                    text=span["text"],
-                    bbox=(rect.x0, rect.y0, rect.x1, rect.y1),
-                    origin=(span["origin"][0], span["origin"][1]),
-                    font=font,
-                    size=span["size"],
-                    color=span["color"],
-                    flags=span["flags"],
-                    horizontal=tuple(line["dir"]) == (1.0, 0.0),
-                    # MuPDF names a Type3 span "Type3 (xref)" when the font
-                    # has no name of its own.
-                    type3=font.startswith("Type3") or _font_key(font) in _type3_fonts(page),
-                    room=_room(page, every, rect),
-                )
-    return None
+                rect = pymupdf.Rect(span["bbox"])
+                # Distance from the point to the box: 0 inside it.
+                dx = max(rect.x0 - x, 0.0, x - rect.x1)
+                dy = max(rect.y0 - y, 0.0, y - rect.y1)
+                distance = (dx * dx + dy * dy) ** 0.5
+                if distance <= HIT_TOLERANCE and (best is None or distance < best[0]):
+                    best = (distance, span, line)
+    if best is None:
+        return None
+    _, span, line = best
+    rect = pymupdf.Rect(span["bbox"])
+    font = span["font"]
+    return TextSpan(
+        text=span["text"],
+        bbox=(rect.x0, rect.y0, rect.x1, rect.y1),
+        origin=(span["origin"][0], span["origin"][1]),
+        font=font,
+        size=span["size"],
+        color=span["color"],
+        flags=span["flags"],
+        horizontal=tuple(line["dir"]) == (1.0, 0.0),
+        # MuPDF names a Type3 span "Type3 (xref)" when the font has no name
+        # of its own.
+        type3=font.startswith("Type3") or _font_key(font) in _type3_fonts(page),
+        room=_room(page, every, rect),
+    )
 
 
 def _embedded_font(page: pymupdf.Page, name: str) -> pymupdf.Font | None:

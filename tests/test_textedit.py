@@ -77,6 +77,28 @@ def test_span_at_on_an_empty_spot_is_none():
     assert span_at(page, 400, 600) is None
 
 
+def test_a_point_just_outside_the_box_still_finds_the_span():
+    doc = pymupdf.open()
+    page = doc.new_page()
+    _embedded(page, (72, 100), "Vicino")
+    box = _span(page, "Vicino").bbox
+
+    assert span_at(page, box[0] - textedit.HIT_TOLERANCE / 2, (box[1] + box[3]) / 2) is not None
+    assert span_at(page, box[0] - textedit.HIT_TOLERANCE * 3, (box[1] + box[3]) / 2) is None
+
+
+def test_the_nearest_span_wins_between_two_lines():
+    doc = pymupdf.open()
+    page = doc.new_page()
+    _embedded(page, (72, 100), "Sopra")
+    _embedded(page, (72, 106 + 16), "Sotto")
+    sopra, sotto = _span(page, "Sopra").bbox, _span(page, "Sotto").bbox
+    # In the gap, nearer the first box than the second.
+    assert sotto[1] - sopra[3] > 2.5, "no gap between the lines"
+    assert span_at(page, 80, sopra[3] + 1.0).text == "Sopra"
+    assert span_at(page, 80, sotto[1] - 1.0).text == "Sotto"
+
+
 def test_span_is_in_page_space_whatever_the_rotate():
     """Same rectangle with /Rotate 0 and 90: the space redactions live in (§4)."""
     rects = []
