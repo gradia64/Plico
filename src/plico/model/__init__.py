@@ -26,13 +26,16 @@ from .optimize import (
     LEVELS,
     LEVELS_BY_KEY,
     CompressionLevel,
+    CompressionOptions,
     CompressionResult,
     optimize_in_place,
 )
 from .redact import RedactionRect
 from .save import (
+    CompressionPreview,
     extract_pages,
     parse_page_ranges,
+    prepare_compressed,
     save_as,
     save_compressed,
     save_signed,
@@ -62,6 +65,8 @@ __all__ = [
     "AdjustRedaction",
     "AppendDocument",
     "CompressionLevel",
+    "CompressionOptions",
+    "CompressionPreview",
     "CompressionResult",
     "DeletePage",
     "DocumentModel",
@@ -94,6 +99,7 @@ __all__ = [
     "open_for_reading",
     "optimize_in_place",
     "parse_page_ranges",
+    "prepare_compressed",
     "read_fields",
     "read_identity",
     "read_signatures",

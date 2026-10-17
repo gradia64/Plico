@@ -4,6 +4,7 @@ import contextlib
 import os
 import tempfile
 from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from typing import TypeVar
 
 import pymupdf
@@ -11,7 +12,13 @@ import pymupdf
 from .document import DocumentModel, PageItem, open_for_reading
 from .forms import write_fields
 from .ocr import write_layer
-from .optimize import CompressionLevel, CompressionResult, Progress, optimize_in_place
+from .optimize import (
+    CompressionLevel,
+    CompressionOptions,
+    CompressionResult,
+    Progress,
+    optimize_in_place,
+)
 from .sign import SignatureRequest, sign_in_place
 from .textedit import apply_edit
 
@@ -206,6 +213,33 @@ def _write_pdf(
             src.close()
 
 
+def _write_temporary(model: DocumentModel, target: str, pages: list[int] | None) -> str:
+    """Materialise the document into a temporary next to *target*.
+
+    The caller owns the file that comes back: it either adopts it (see
+    :func:`_adopt`) or deletes it. Nothing is written to *target* here.
+    """
+    directory = os.path.dirname(target)
+    fd, tmp_path = tempfile.mkstemp(dir=directory, suffix=".pdf.tmp")
+    os.close(fd)
+    try:
+        _write_pdf(model, tmp_path, pages)
+    except BaseException:
+        # Never leave a half-written temp file behind.
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_path)
+        raise
+    return tmp_path
+
+
+def _adopt(tmp_path: str, target: str) -> None:
+    """Put the temporary in *target*'s place, keeping *target*'s permissions."""
+    # Keep the original file's permissions across the swap.
+    if os.path.exists(target):
+        os.chmod(tmp_path, os.stat(target).st_mode & 0o7777)
+    os.replace(tmp_path, target)
+
+
 def _write_atomically(
     model: DocumentModel,
     target: str,
@@ -232,16 +266,10 @@ def _write_atomically(
     temporary, so a failure leaves *target* untouched -- and its return value
     is passed back to the caller.
     """
-    directory = os.path.dirname(target)
-    fd, tmp_path = tempfile.mkstemp(dir=directory, suffix=".pdf.tmp")
-    os.close(fd)
+    tmp_path = _write_temporary(model, target, pages)
     try:
-        _write_pdf(model, tmp_path, pages)
         result = optimize(tmp_path) if optimize is not None else None
-        # Keep the original file's permissions across the swap.
-        if os.path.exists(target):
-            os.chmod(tmp_path, os.stat(target).st_mode & 0o7777)
-        os.replace(tmp_path, target)
+        _adopt(tmp_path, target)
         return result
     except BaseException:
         # Never leave a half-written temp file behind.
@@ -263,10 +291,59 @@ def save_as(model: DocumentModel, out_path: str) -> None:
     _write_atomically(model, os.path.abspath(out_path), None)
 
 
+@dataclass
+class CompressionPreview:
+    """A compressed file written, and waiting for a yes.
+
+    The work is already done -- the temporary next to the destination holds the
+    real result -- so the size the user is shown before deciding is the size
+    they would get, not an estimate of it. Whoever creates one must either
+    :meth:`keep` it or :meth:`drop` it: the file is real, and has to be cleaned
+    up one way or the other.
+    """
+
+    path: str
+    target: str
+    result: CompressionResult
+
+    def keep(self) -> None:
+        """Give the temporary *target*'s name, and with it its permissions."""
+        _adopt(self.path, self.target)
+
+    def drop(self) -> None:
+        """Throw the compressed file away, leaving *target* as it was."""
+        with contextlib.suppress(OSError):
+            os.unlink(self.path)
+
+
+def prepare_compressed(
+    model: DocumentModel,
+    out_path: str,
+    options: CompressionOptions | CompressionLevel,
+    progress: Progress | None = None,
+) -> CompressionPreview:
+    """Compress into a temporary, without touching *out_path*.
+
+    Splitting the work from the swap is what lets the window show the gain
+    before writing anything: the numbers come from the real result, and the
+    passes run once instead of twice.
+    """
+    assert model.sources, "No document open"
+    target = os.path.abspath(out_path)
+    tmp_path = _write_temporary(model, target, None)
+    try:
+        result = optimize_in_place(tmp_path, options, progress)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_path)
+        raise
+    return CompressionPreview(tmp_path, target, result)
+
+
 def save_compressed(
     model: DocumentModel,
     out_path: str,
-    level: CompressionLevel,
+    options: CompressionOptions | CompressionLevel,
     progress: Progress | None = None,
 ) -> CompressionResult:
     """Like :func:`save_as`, but compress the result before writing it.
@@ -276,17 +353,17 @@ def save_compressed(
     the one :func:`save_as` would have written, only smaller. The source PDFs
     are not touched even when *out_path* is one of them: the pass always goes
     through a temporary file.
+
+    A compression that gains nothing is not written at all: an already
+    optimised PDF is left exactly as it was, which is the promise this function
+    has always made.
     """
-    assert model.sources, "No document open"
-    result = _write_atomically(
-        model,
-        os.path.abspath(out_path),
-        None,
-        optimize=lambda path: optimize_in_place(path, level, progress),
-    )
-    # `optimize` is always given here, so there is always a result.
-    assert result is not None
-    return result
+    preview = prepare_compressed(model, out_path, options, progress)
+    if preview.result.shrank:
+        preview.keep()
+    else:
+        preview.drop()
+    return preview.result
 
 
 def save_signed(

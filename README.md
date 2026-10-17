@@ -30,8 +30,9 @@ comprimerli.
   `Ctrl+Shift+S` chiede dove; il titolo segna con `*` le modifiche non
   salvate, e chiudere o aprire un altro file chiede prima di perderle.
   `Ctrl+W` (*File → Chiudi*) chiude il documento lasciando aperta la finestra
-- **Salva compresso** a tre livelli, con il guadagno mostrato a fine lavoro —
-  e il livello "leggera" è senza perdita
+- **Salva compresso** a tre livelli, più «solo le immagini» e le pagine da
+  ricampionare: il guadagno è quello vero, misurato sul file già scritto (e il
+  livello "leggera" è senza perdita)
 - **Cancellazione vera** (in inglese *redaction*): si disegna una zona sui dati
   da eliminare, oppure si trascina sulle parole, e al salvataggio il testo
   viene **rimosso**, non coperto — quel che resta non è più copiabile né
@@ -87,7 +88,7 @@ plico/
         ├── form_panel.py      # dock «Modulo»: un editor per ogni campo
         ├── ocr.py             # dialogo lingue/pagine e task di riconoscimento
         ├── sign.py            # dialoghi di firma e di verifica delle firme
-        └── compress.py        # dialogo del livello, format_size, task
+        └── compress.py        # dialogo delle opzioni, format_size, task
 ```
 
 ### Concetto chiave
@@ -154,6 +155,21 @@ stream minuscoli, e fonderli vale, su un documento di testo, 188 KB → 12 KB
 (6%). Su una scansione invece la struttura non ha niente da dare, e conta solo
 il lavoro sulle immagini (un JPEG da 3,4 MB su 3 pagine resta al 100% con
 "leggera", scende al 52% con "media" e al 36% con "forte").
+
+Il livello dice *quanto*, non *cosa*: sotto la tendina ci sono due scelte in
+più. **«Solo le immagini»** salta la ricompattazione del file — serve su una
+scansione, dove il guadagno sta nelle immagini, mentre su un documento di solo
+testo non guadagna niente e il programma lo dice invece di scrivere una copia
+identica. **«Pagine da ricampionare»** lascia intatte le immagini delle altre
+pagine, utile quando in mezzo a scansioni pesanti ci sono pagine di testo. C'è
+un caso in cui non si guadagna nulla: se due pagine si dividono la stessa
+immagine, comprimerne una sola obbliga l'altra ad averne una copia per conto
+suo, e il file crescerebbe — allora non viene scritto niente, e il messaggio lo
+spiega.
+
+Il guadagno non è una stima: il file compresso viene scritto davvero (accanto
+alla destinazione) e solo dopo il programma dice quanto pesa, adottandolo solo
+se ha guadagnato.
 
 La compressione gira in un thread separato, quindi la finestra resta reattiva
 anche sui file grandi.

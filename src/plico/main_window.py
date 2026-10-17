@@ -36,7 +36,8 @@ from .model import (
     AddRedaction,
     AdjustRedaction,
     AppendDocument,
-    CompressionLevel,
+    CompressionOptions,
+    CompressionPreview,
     CompressionResult,
     DeletePage,
     DocumentModel,
@@ -138,6 +139,7 @@ class MainWindow(QMainWindow):
         self._compression_task: CompressionTask | None = None
         self._progress: QProgressDialog | None = None
         self._compression_path = ""
+        self._compression_options: CompressionOptions | None = None
         self._compression_overwritten: list[str] = []
 
         # --- central widget (PageView handles its own rendering) ---
@@ -1149,7 +1151,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
             return
 
-        choice = CompressionDialog(self)
+        choice = CompressionDialog(len(self._doc_model.pages), self)
         if choice.exec() != QDialog.DialogCode.Accepted:
             return
 
@@ -1161,7 +1163,7 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
-        self._start_compression(path, choice.level)
+        self._start_compression(path, choice.options)
 
     def _proposed_compressed_path(self) -> str:
         """``documento.pdf`` -> ``documento-compresso.pdf``."""
@@ -1173,12 +1175,13 @@ class MainWindow(QMainWindow):
             return str(os.path.expanduser("~"))
         return f"{stem}-compresso{extension or '.pdf'}"
 
-    def _start_compression(self, path: str, level: CompressionLevel) -> None:
+    def _start_compression(self, path: str, options: CompressionOptions) -> None:
         # Computed BEFORE writing: compressing over a source gives that file
         # a new inode, and afterwards the comparison would no longer
         # recognise the original.
         self._compression_overwritten = self._doc_model.sources_at(path)
         self._compression_path = path
+        self._compression_options = options
 
         progress = QProgressDialog(self)
         progress.setWindowTitle(self.tr("Salva compresso"))
@@ -1194,7 +1197,7 @@ class MainWindow(QMainWindow):
         progress.setValue(0)
         self._progress = progress
 
-        task = CompressionTask(self._doc_model, path, level)
+        task = CompressionTask(self._doc_model, path, options)
         task.signals.progress.connect(progress.setValue)
         task.signals.finished.connect(self._on_compression_finished)
         task.signals.failed.connect(self._on_compression_failed)
@@ -1202,9 +1205,29 @@ class MainWindow(QMainWindow):
         self._compression_task = task
         QThreadPool.globalInstance().start(task)
 
-    def _on_compression_finished(self, result: CompressionResult) -> None:
+    def _on_compression_finished(self, preview: CompressionPreview) -> None:
+        """The compressed file exists: show what it really gained, then keep it.
+
+        The work is already done when the question is asked, so the numbers are
+        the real ones; refusing throws the temporary away and leaves the
+        destination -- which may be one of the open sources -- exactly as it
+        was.
+        """
         self._close_progress()
-        path = self._compression_path
+        result = preview.result
+
+        if not result.shrank:
+            preview.drop()
+            self._status.setText(
+                self.tr("Nessuna compressione: {0}").format(preview.target)
+            )
+            QMessageBox.information(
+                self, self.tr("Salva compresso"), self._nothing_gained(result)
+            )
+            return
+
+        preview.keep()
+        path = preview.target
 
         # Same as _save_file: a compressed copy written over a source has
         # replaced it, and the model must follow the file it now describes.
@@ -1213,29 +1236,34 @@ class MainWindow(QMainWindow):
         else:
             self._status.setText(self.tr("Compresso: {0}").format(path))
 
-        if result.shrank:
-            QMessageBox.information(
-                self,
-                self.tr("Salva compresso"),
-                self.tr(
-                    "Scritto:\n{0}\n\nPrima: {1}\nDopo: {2}\nRisparmiato: {3} ({4}%)"
-                ).format(
-                    path,
-                    format_size(result.source_size),
-                    format_size(result.output_size),
-                    format_size(result.saved_bytes),
-                    result.percent_saved,
-                ),
+        QMessageBox.information(
+            self,
+            self.tr("Salva compresso"),
+            self.tr(
+                "Scritto:\n{0}\n\nPrima: {1}\nDopo: {2}\nRisparmiato: {3} ({4}%)"
+            ).format(
+                path,
+                format_size(result.source_size),
+                format_size(result.output_size),
+                format_size(result.saved_bytes),
+                result.percent_saved,
+            ),
+        )
+
+    def _nothing_gained(self, result: CompressionResult) -> str:
+        """Why nothing was gained, and the one thing still worth trying."""
+        text = self.tr(
+            "Questo file non aveva niente da guadagnare: e` rimasto di {0}."
+        ).format(format_size(result.source_size))
+        options = self._compression_options
+        if options is not None and options.image_pages is not None:
+            # Fewer pages can gain nothing even when those pages would get much
+            # smaller: the images left alone keep all their weight.
+            text += "\n\n" + self.tr(
+                "Il peso sta nelle immagini delle pagine che non hai scelto: "
+                "prova con tutte le pagine."
             )
-        else:
-            QMessageBox.information(
-                self,
-                self.tr("Salva compresso"),
-                self.tr(
-                    "Scritto:\n{0}\n\nQuesto file non aveva niente da guadagnare: "
-                    "e` rimasto di {1}."
-                ).format(path, format_size(result.source_size)),
-            )
+        return text
 
     def _on_compression_failed(self, message: str) -> None:
         self._close_progress()

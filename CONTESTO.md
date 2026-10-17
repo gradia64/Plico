@@ -58,7 +58,7 @@ plico/
 │   │   ├── images.py         # immagini → un PDF qualsiasi, che diventa una sorgente
 │   │   ├── ocr.py            # Tesseract: riconoscere, cercare i dati di lingua, strato invisibile
 │   │   ├── sign.py           # firma PAdES con pyHanko e rilettura delle firme
-│   │   └── optimize.py       # livelli di compressione, optimize_in_place  ← pikepdf
+│   │   └── optimize.py       # livelli e opzioni di compressione, optimize_in_place  ← pikepdf
 │   ├── rendering/
 │   │   └── worker.py         # RenderWorker: unico proprietario degli handle PyMuPDF
 │   └── widgets/
@@ -67,22 +67,22 @@ plico/
 │       ├── form_panel.py     # dock «Modulo»: un editor per ogni campo della pagina
 │       ├── ocr.py            # dialogo pagine/lingua e task di riconoscimento
 │       ├── sign.py           # dialoghi di firma e di verifica delle firme
-│       └── compress.py       # scelta del livello, format_size, task sul thread pool
+│       └── compress.py       # dialogo delle opzioni, format_size, task sul thread pool
 └── tests/
     ├── test_model.py         # modello, comandi, salvataggio, parse_page_ranges (45)
     ├── test_worker.py        # il worker di rendering in isolamento (11)
     ├── test_optimize.py      # i livelli di compressione e optimize_in_place (16)
-    ├── test_redact.py        # rotazione e rimozione *vera* del testo (42)
+    ├── test_redact.py        # rotazione e redazione vera, zone ritoccabili (47)
     ├── test_forms.py         # campi AcroForm: letti, scritti, riletti dal file (21)
     ├── test_textedit.py      # uno span sostituito: testo, sfondo, font, spazio (23)
     ├── test_images.py        # immagini → PDF: DPI, foto ridotte, EXIF, JPEG intatti (13)
     ├── test_ocr.py           # OCR: spazio pagina, strato invisibile, undo (12)
     ├── test_sign.py          # certificati, firma, verdetto, secondo salvataggio (26)
     ├── test_edit_text.py     # EditText e salvataggio: undo, redazioni, estrai, comprimi (21)
-    └── test_integration.py   # MainWindow vera, offscreen: 137 test end-to-end
+    └── test_integration.py   # MainWindow vera, offscreen: 144 test end-to-end
 ```
 
-Gate di qualità attuale: **366 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **378 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
 (23 file sorgente).
 
 ---
@@ -566,13 +566,48 @@ I tre livelli sono `light` (immagini intatte), `medium` (200 → 150 dpi,
 qualità 80) e `strong` (150 → 96 dpi, qualità 60) — `LEVELS` in
 `optimize.py`, l'unico posto dove cambiare i numeri.
 
-`optimize_in_place(path, level, progress)` adotta il risultato **solo se è
-più piccolo** (un PDF già ottimizzato non deve crescere) e sostituisce il
-file con `os.replace` conservandone i permessi. `save_compressed(model,
-out_path, level)` passa da `_write_atomically` come `save_as`: prima
-materializza il documento virtuale (quindi il file compresso rispetta
-eliminazioni, riordini e rotazioni), poi lo comprime, sempre su un
-temporaneo nella stessa directory. La sorgente non viene mai toccata.
+**Il livello dice *quanto*, non *cosa***: accanto sta `CompressionOptions`
+(`optimize.py`) con `level`, **`groom`** (ricompattare anche il file) e
+**`image_pages`** (le pagine di cui ricampionare le immagini; `None` = tutte).
+Le tre scelte le fa il dialogo (`widgets/compress.py`); le funzioni accettano
+sia le opzioni sia un livello nudo (`_as_options`), perché i test e i chiamanti
+vecchi dicevano solo il livello.
+
+**`groom=False` non è un livello più debole**: il ricampionamento delle
+immagini si fa comunque, il file non viene ricompattato. Ha senso su un PDF
+fatto di scansioni, dove il guadagno sta nelle immagini; su un documento di
+solo testo non guadagna niente, ed è giusto dirlo invece di scrivere una copia
+identica (la finestra lo racconta: «il peso sta nelle immagini delle pagine che
+non hai scelto»).
+
+**Il ricampionamento per pagina non esiste nell'API di PyMuPDF** —
+`rewrite_images()` non ha un elenco di pagine — e si ottiene ricostruendo il
+file a blocchi: le pagine scelte in un documento, `rewrite_images()` su quello,
+le altre in un secondo documento, e i due uniti con `insert_pdf` in ordine. Due
+conseguenze misurate:
+
+- **un'immagine condivisa da una pagina scelta e una no si sdoppia**: MuPDF la
+  tiene una volta sola, e ricampionarla per una pagina sola obbliga l'altra a
+  una copia per conto suo. Su due pagine che si dividono la stessa foto il file
+  *cresce*, quindi la compressione viene rifiutata — meglio di un file scritto
+  e più grande;
+- i content stream vengono riscritti, quindi `clean` gira comunque sul
+  risultato.
+
+`optimize_in_place(path, options, progress)` adotta il risultato **solo se è
+più piccolo** (un PDF già ottimizzato non deve crescere, e nessuno vuole un
+file compresso più grande dell'originale).
+
+**Il guadagno si mostra prima di scrivere**, e i numeri sono quelli veri
+(`save.py`): `prepare_compressed()` materializza il documento virtuale in un
+temporaneo (`_write_temporary`, quindi il file rispetta eliminazioni, riordini
+e rotazioni), lo comprime lì e restituisce un **`CompressionPreview`** — il
+file esiste, la destinazione non è ancora stata toccata. Chi lo riceve deve
+decidere: `preview.keep()` mette il temporaneo al posto della destinazione con
+i permessi di quella, `preview.drop()` lo cancella. `save_compressed()` è le
+due cose in fila, per chi non ha una finestra da mostrare: comprime, e adotta
+solo se ha guadagnato. La finestra invece comprime e poi racconta — le due
+passate girano **una volta sola** e il guadagno non è una stima.
 
 La compressione gira su `QThreadPool` con un `QRunnable`, non sul thread dei
 render: sono due lavori indipendenti e un PDF grande non deve congelare la
@@ -1466,9 +1501,12 @@ sostituita con la sorgente `git` del tag di rilascio.
   mouse (`AdjustRedaction`: gli angoli la ridimensionano, il centro la sposta).
   I metadati non sono più un debito — `/Info`, XMP e allegati non sopravvivono
   alla ricostruzione (vedi §8) — mentre le **annotazioni** vengono copiate;
-- la compressione ha tre livelli fissi, applicati a tutto il documento: non si
-  può ancora scegliere "solo le immagini" o escludere delle pagine, e il
-  guadagno si vede solo a lavoro finito (niente stima prima di partire);
+- la compressione si sceglie in tre modi — livello, «solo le immagini» e le
+  pagine di cui ricampionare le immagini (§8) — ma il **guadagno** si vede solo
+  a lavoro finito: una stima prima di partire richiederebbe di fare il lavoro,
+  che è esattamente quello che si vuole evitare. Il file compresso nasce su un
+  temporaneo e viene adottato solo se ha guadagnato, quindi il numero che si
+  legge è quello vero;
 - i form si compilano **dal pannello**, non scrivendo sulla pagina: il clic su
   un campo lo seleziona nel dock «Modulo», ma non si digita in-place. I
   radiobutton non sono modificabili; le firme si fanno da *File → Firma…* (non
@@ -1502,8 +1540,8 @@ sostituita con la sorgente `git` del tag di rilascio.
 **Con la firma, la roadmap lunga è finita**: le quattro voci dell'idea
 originale ci sono tutte e nessuna è un abbozzo — ognuna ha la sua sezione in
 §8 e i suoi test. Quello che resta è l'elenco del debito tecnico qui sopra:
-rifiniture (livelli di compressione flessibili, scrittura in-place nei form,
-infrastruttura `.ts`), non capacità mai esistite.
+rifiniture (scrittura in-place nei form, infrastruttura `.ts`), non capacità mai
+esistite.
 
 Delle dieci voci della review dell'ottobre 2026 non resta niente, e le
 decisioni sono scritte dove servono: in §5 e §6 (le API e il giro della

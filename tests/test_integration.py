@@ -27,10 +27,11 @@ from PySide6.QtWidgets import (
 
 import plico.main_window
 from plico.main_window import MainWindow
-from plico.model import LEVELS_BY_KEY
+from plico.model import LEVELS, LEVELS_BY_KEY, CompressionOptions, parse_page_ranges
 from plico.model.commands import DeletePage, RotatePage
 from plico.model.redact import RedactionRect, map_rect, rotation_matrix
 from plico.model.save import save_as
+from plico.widgets.compress import CompressionDialog
 from plico.widgets.thumbnail_bar import (
     THUMB_ZOOM,
     ThumbnailBar,
@@ -1170,17 +1171,32 @@ def _fragmented(path: str, pages: int = 20) -> None:
         doc.save(path, deflate=True)
 
 
-def _chosen_level(monkeypatch, key: str = "light", accepted: bool = True) -> None:
-    """Replaces the level dialog with an immediate answer."""
+def _chosen_level(
+    monkeypatch,
+    key: str = "light",
+    accepted: bool = True,
+    images_only: bool = False,
+    pages: str = "",
+) -> None:
+    """Replaces the options dialog with an immediate answer.
 
-    class _Dialogo:
-        def __init__(self, parent=None) -> None:
+    ``images_only`` and ``pages`` mirror the two adjustments the real dialog
+    can express on top of the level's preset.
+    """
+
+    class _Dialog:
+        def __init__(self, page_count: int, parent=None) -> None:
             self.level = LEVELS_BY_KEY[key]
+            self.options = CompressionOptions(
+                level=self.level,
+                groom=not images_only,
+                image_pages=tuple(parse_page_ranges(pages, page_count)) if pages else None,
+            )
 
         def exec(self) -> object:
             return QDialog.DialogCode.Accepted if accepted else QDialog.DialogCode.Rejected
 
-    monkeypatch.setattr(plico.main_window, "CompressionDialog", _Dialogo)
+    monkeypatch.setattr(plico.main_window, "CompressionDialog", _Dialog)
 
 
 def _wait_for_compression() -> None:
@@ -1409,6 +1425,143 @@ def test_a_failed_compression_arrives_as_a_message(qapp, tmp_path, monkeypatch, 
 
     assert errors and "Impossibile comprimere" in errors[0], errors
     assert mw._progress is None, "anche fallendo, il dialogo di avanzamento deve sparire"
+
+
+def _noisy_pdf(path: str, pages: int = 2, size: int = 900, shared: bool = False) -> None:
+    """Pages carrying one big photograph-like image each.
+
+    Real noise is what makes a scan heavy: a flat colour compresses to almost
+    nothing, so the resampling would have no effect to measure. With ``shared``
+    every page gets the same photograph, which MuPDF then stores once: that is
+    the case in which compressing a few pages has nothing to win.
+    """
+    photos: list[str] = []
+    for index in range(1 if shared else pages):
+        samples = os.urandom(size * size * 3)
+        image = QImage(samples, size, size, size * 3, QImage.Format.Format_RGB888)
+        jpeg = f"{path}.{index}.jpg"
+        assert image.save(jpeg, "JPEG", 95)
+        photos.append(jpeg)
+
+    with pymupdf.open() as doc:
+        for index in range(pages):
+            page = doc.new_page(width=595, height=842)
+            page.insert_image(page.rect, filename=photos[0] if shared else photos[index])
+        doc.save(path, deflate=True)
+
+    for jpeg in photos:
+        pathlib.Path(jpeg).unlink(missing_ok=True)
+
+
+def _image_bytes(path: str, page: int) -> int:
+    """What the first image of *page* actually costs inside the file."""
+    with pymupdf.open(path) as doc:
+        xref = doc[page].get_images(full=True)[0][0]
+        return len(doc.extract_image(xref)["image"])
+
+
+def _collected_information(monkeypatch) -> list[str]:
+    """Keeps the texts the window shows in a message box."""
+    messages: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "information",
+        staticmethod(lambda _p, _t, text, *a, **k: messages.append(text)),
+    )
+    return messages
+
+
+def test_resampling_can_be_limited_to_some_pages(qapp, tmp_path, monkeypatch, windows):
+    """Only the chosen pages change: the others keep the bytes they had."""
+    pdf = str(tmp_path / "scansione.pdf")
+    _noisy_pdf(pdf, pages=2)
+    out = str(tmp_path / "ridotta.pdf")
+
+    mw = windows()
+    _open(mw, pdf)
+    _collected_information(monkeypatch)
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
+    _chosen_level(monkeypatch, "strong", pages="1")
+
+    mw._compress_file()
+    _wait_for_compression()
+
+    assert os.path.exists(out)
+    assert _image_bytes(out, 0) < _image_bytes(pdf, 0) / 2, "la pagina scelta rimpicciolisce"
+    assert _image_bytes(out, 1) == _image_bytes(pdf, 1), "quella non scelta resta com'e`"
+
+
+def test_a_page_whose_image_is_shared_with_another_gains_nothing(
+    qapp, tmp_path, monkeypatch, windows
+):
+    """A shared photograph cannot be made smaller on one page only.
+
+    The two pages hold one image between them. Resampling it for page 1 alone
+    would give page 2 a copy of its own, and the file would come out bigger --
+    so nothing is written, and the message says what to try instead.
+    """
+    pdf = str(tmp_path / "foto.pdf")
+    _noisy_pdf(pdf, pages=2, shared=True)
+    out = str(tmp_path / "ridotta.pdf")
+
+    mw = windows()
+    _open(mw, pdf)
+    messages = _collected_information(monkeypatch)
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
+    _chosen_level(monkeypatch, "strong", pages="1")
+
+    mw._compress_file()
+    _wait_for_compression()
+
+    assert not os.path.exists(out), "un file che non guadagna non si scrive"
+    assert messages and "pagine che non hai scelto" in messages[0], messages
+    assert mw._doc_model.sources == [pdf], "la sorgente resta la sorgente"
+
+
+def test_skipping_the_structural_pass_is_reported_when_it_gains_nothing(
+    qapp, tmp_path, monkeypatch, windows
+):
+    """A text document has nothing to gain from resampling images."""
+    pdf = str(tmp_path / "testo.pdf")
+    _fragmented(pdf)
+    out = str(tmp_path / "testo-compresso.pdf")
+
+    mw = windows()
+    _open(mw, pdf)
+    messages = _collected_information(monkeypatch)
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
+    _chosen_level(monkeypatch, "light", images_only=True)
+
+    mw._compress_file()
+    _wait_for_compression()
+
+    assert not os.path.exists(out)
+    assert messages and "niente da guadagnare" in messages[0], messages
+
+
+def test_the_dialog_explains_each_choice(qapp):
+    """The real dialog: the preset, the two adjustments, and the refusals."""
+    dialog = CompressionDialog(20)
+    assert dialog.level.key == "medium", "il compromesso e` il predefinito"
+    assert dialog.options.groom is True
+    assert dialog.options.image_pages is None
+    assert dialog._ok.isEnabled()
+
+    dialog._pages.setText("3-5")
+    assert dialog.options.image_pages == (2, 3, 4)
+
+    dialog._pages.setText("99")
+    assert not dialog._ok.isEnabled(), "una pagina che non esiste non si accetta"
+
+    dialog._pages.setText("3-5")
+    dialog._images_only.setChecked(True)
+    assert dialog.options.groom is False
+    assert "ricompattato" in dialog._explanation.text()
+
+    dialog._choice.setCurrentIndex([level.key for level in LEVELS].index("light"))
+    assert not dialog._images_only.isChecked(), "senza immagini da toccare non ha senso"
+    assert not dialog._pages.isEnabled()
+    dialog.deleteLater()
 
 
 # --------------------------------------------------------------------- #
