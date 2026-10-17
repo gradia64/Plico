@@ -10,6 +10,7 @@ import pymupdf
 
 from .document import DocumentModel, PageItem, open_for_reading
 from .forms import write_fields
+from .ocr import write_layer
 from .optimize import CompressionLevel, CompressionResult, Progress, optimize_in_place
 from .textedit import apply_edit
 
@@ -108,6 +109,19 @@ def _fill_source_fields(doc: pymupdf.Document, values: dict[str, str]) -> None:
         write_fields(page, values)
 
 
+def _write_ocr(page: pymupdf.Page, item: PageItem) -> None:
+    """Write *item*'s OCR words onto *page* as an invisible text layer.
+
+    Runs BEFORE the redactions of the same page, and that order is the whole
+    point: the layer is real text in the content stream, so a redaction drawn
+    over a recognised word takes the word with it. The other way round would
+    leave the redacted word perfectly extractable -- invisible on screen, very
+    much not invisible to whoever copies it out, which is the worst possible
+    way to lose a redaction.
+    """
+    write_layer(page, item.ocr_words)
+
+
 def _write_pdf(
     model: DocumentModel, out_path: str, pages: list[int] | None = None
 ) -> None:
@@ -168,11 +182,14 @@ def _write_pdf(
                 raise ValueError("Il documento non contiene pagine da salvare.")
             # Text edits and redactions run on the built pages: out[] and items
             # are parallel, so each lands on the page built for its item. The
-            # edits go first, so a redaction over an edited span removes the
-            # new words too.
+            # order is the dependency order: the OCR layer is text a redaction
+            # must be able to delete, and an edit goes before the redaction
+            # that has to remove the NEW words, not the old ones.
             for index, item in enumerate(items):
-                if item.text_edits or item.redactions:
+                if item.ocr_words or item.text_edits or item.redactions:
                     page = out[index]
+                    if item.ocr_words:
+                        _write_ocr(page, item)
                     if item.text_edits:
                         _edit_text(page, item)
                     if item.redactions:

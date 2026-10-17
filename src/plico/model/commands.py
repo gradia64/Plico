@@ -13,6 +13,7 @@ from PySide6.QtCore import QCoreApplication
 from PySide6.QtGui import QUndoCommand
 
 from .document import DocumentModel, PageItem
+from .ocr import OcrWord
 from .redact import RedactionRect
 from .textedit import TextEdit, TextSpan
 
@@ -316,3 +317,40 @@ class EditText(QUndoCommand):
 
     def undo(self) -> None:
         self._install(self._before)
+
+
+class OcrPage(QUndoCommand):
+    """Record the words OCR read on the page at *index*.
+
+    Like a redaction or a text edit, nothing is written here: the words are
+    state of the virtual page, and ``save.py`` turns them into the invisible
+    text layer when the document is materialised. Recognising the page again
+    replaces the reading, and the command keeps the previous one, so undo goes
+    back to what the page read before -- including "nothing", which is also
+    what a page that was never read carries.
+    """
+
+    _ID = 0x4F43
+
+    def __init__(self, model: DocumentModel, index: int, words: list[OcrWord]) -> None:
+        label = QCoreApplication.translate("OcrPage", "Riconosci testo su pagina {0}")
+        super().__init__(label.format(index + 1))
+        self._model = model
+        self._index = index
+        self._words = list(words)
+        self._before: list[OcrWord] = []
+
+    def id(self) -> int:
+        return self._ID
+
+    def redo(self) -> None:
+        item = self._model.pages[self._index]
+        # Read on every redo, not in __init__: after an undo the page holds the
+        # older reading again, and that is the state redo must replace.
+        self._before = list(item.ocr_words)
+        item.ocr_words = list(self._words)
+        self._model.page_changed.emit(self._index)
+
+    def undo(self) -> None:
+        self._model.pages[self._index].ocr_words = list(self._before)
+        self._model.page_changed.emit(self._index)

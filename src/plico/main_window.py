@@ -4,7 +4,15 @@ import os
 import tempfile
 from collections.abc import Callable
 
-from PySide6.QtCore import Q_ARG, QMetaObject, QSettings, Qt, QThread, QThreadPool
+from PySide6.QtCore import (
+    Q_ARG,
+    QEventLoop,
+    QMetaObject,
+    QSettings,
+    Qt,
+    QThread,
+    QThreadPool,
+)
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QUndoStack, QWindow
 from PySide6.QtWidgets import (
     QApplication,
@@ -33,6 +41,8 @@ from .model import (
     DocumentModel,
     EditText,
     MovePage,
+    OcrPage,
+    OcrWord,
     PageItem,
     PasswordRequired,
     RedactionRect,
@@ -49,6 +59,7 @@ from .model import (
 from .rendering import RenderWorker
 from .widgets.compress import CompressionDialog, CompressionTask, format_size
 from .widgets.form_panel import FormPanel
+from .widgets.ocr import OcrDialog, OcrTask
 from .widgets.page_view import PageView
 from .widgets.thumbnail_bar import ThumbnailBar, ThumbnailCache
 
@@ -324,6 +335,19 @@ class MainWindow(QMainWindow):
             )
         )
         edit_menu.addAction(self._text_act)
+
+        edit_menu.addSeparator()
+
+        ocr_act = self._act(
+            self.tr("&Riconosci testo…"), "draw-text", "Ctrl+Shift+O", self._ocr_pages
+        )
+        ocr_act.setToolTip(
+            self.tr(
+                "Legge il testo delle pagine scansionate e lo rende selezionabile,\n"
+                "cercabile e cancellabile: resta invisibile e non si stampa."
+            )
+        )
+        edit_menu.addAction(ocr_act)
 
         # Esc leaves the tool whatever has focus. It sets the check state
         # directly: setChecked() does not emit `triggered`, so the mode is
@@ -1225,6 +1249,91 @@ class MainWindow(QMainWindow):
                 count, text, len(occurrences)
             )
         )
+
+    # ------------------------------------------------------------------ #
+    #  OCR (a scan is a picture of words: this makes the words real)
+    # ------------------------------------------------------------------ #
+
+    def _ocr_pages(self) -> None:
+        """Read the text of scanned pages, as ONE undoable step.
+
+        The run is one operation for the user, so it is one step in the stack,
+        and that means the window has to know when the last page is done. The
+        task therefore loops over the pages itself, and the wait here is a
+        local event loop rather than a blocked GUI thread: the progress dialog
+        keeps painting and Cancel keeps arriving while it runs.
+        """
+        if not self._doc_model.sources:
+            QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
+            return
+        dialog = OcrDialog(len(self._doc_model.pages), parent=self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        indices = dialog.pages
+        task = OcrTask(self._doc_model, indices, dialog.language)
+        progress = QProgressDialog(
+            self.tr("Riconoscimento del testo…"), self.tr("Annulla"), 0, len(indices), self
+        )
+        progress.setWindowTitle(self.tr("Riconosci testo"))
+        # Window-modal: the pages are being read from the sources, so the model
+        # must not be rearranged under the task.
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(500)
+        task.signals.progress.connect(lambda done, total: progress.setValue(done))
+        progress.canceled.connect(task.cancel)
+        loop = QEventLoop()
+        task.signals.finished.connect(loop.quit)
+        task.signals.failed.connect(loop.quit)
+        QThreadPool.globalInstance().start(task)
+        loop.exec()
+        # Read before closing: closing a QProgressDialog emits canceled(), and
+        # the connection above would report a finished run as an interrupted
+        # one.
+        cancelled = task.cancelled
+        progress.close()
+        if task.error is not None:
+            QMessageBox.warning(self, self.tr("Riconoscimento fallito"), task.error)
+            return
+        self._install_ocr(task.words, cancelled=cancelled)
+
+    def _install_ocr(self, words: dict[int, list[OcrWord]], cancelled: bool = False) -> None:
+        """Put what the task read into the stack, or say that there is nothing.
+
+        A page that came back empty is skipped: reading a born-digital page
+        must not mark the document modified, and an undo step that changes
+        nothing is noise in the menu.
+        """
+        found = {index: read for index, read in words.items() if read}
+        if not found:
+            self._status.setText(
+                self.tr("Riconoscimento interrotto: nessun testo letto.")
+                if cancelled
+                else self.tr("Nessun testo riconosciuto nelle pagine scelte.")
+            )
+            return
+        count = len(found)
+        # Singular and plural written out: "Riconosci testo su 1 pagine" is
+        # what the undo stack would otherwise read.
+        macro = self.tr("Riconosci testo su una pagina")
+        if count > 1:
+            macro = self.tr("Riconosci testo su {0} pagine").format(count)
+        self._undo_stack.beginMacro(macro)
+        try:
+            for index in sorted(found):
+                self._undo_stack.push(OcrPage(self._doc_model, index, found[index]))
+        finally:
+            self._undo_stack.endMacro()
+        message = self.tr("Riconosciuto testo su una pagina.")
+        if count > 1:
+            message = self.tr("Riconosciuto testo su {0} pagine.").format(count)
+        empty = len(words) - count
+        if empty == 1:
+            message += " " + self.tr("Una pagina senza testo.")
+        elif empty:
+            message += " " + self.tr("{0} pagine senza testo.").format(empty)
+        if cancelled:
+            message = self.tr("Riconoscimento interrotto. ") + message
+        self._status.setText(message)
 
     # ------------------------------------------------------------------ #
     #  Form fields (an AcroForm field is state of the virtual page too)

@@ -19,6 +19,7 @@ import pymupdf
 from PySide6.QtCore import QObject, Signal
 
 from .forms import Field, read_fields
+from .ocr import DEFAULT_DPI, OcrWord, recognise
 from .redact import (
     Matrix,
     RedactionRect,
@@ -106,6 +107,11 @@ class PageItem:
     # are captured from the source when the user picks them, so they stay
     # valid whatever else happens to the virtual page.
     text_edits: list[TextEdit] = field(default_factory=list)
+    # Words read on a scanned page by OCR, in PAGE space like everything else
+    # here. They are a reading of the picture, not content of the source: an
+    # empty list means "nothing was read", which is also what a page that was
+    # never OCR'd carries.
+    ocr_words: list[OcrWord] = field(default_factory=list)
 
     def edit_for(self, span: TextSpan) -> TextEdit | None:
         """The planned replacement of *span*, if there is one."""
@@ -352,6 +358,23 @@ class DocumentModel(QObject):
             # habit costs nothing and keeps one rule for every page access.
             page = doc[item.source_index]
             return span_at(page, x, y)
+
+    def ocr_page(self, index: int, language: str, dpi: int = DEFAULT_DPI) -> list[OcrWord]:
+        """Read the words of the SOURCE page of *index* with Tesseract.
+
+        A handle of its own, like :meth:`text_span_at`: this runs in the
+        thread pool while the worker may be rendering the same source, and a
+        handle shared between two threads is a crash waiting to be written. An
+        encrypted source opens with the password the model kept, which is also
+        why this cannot live in the widget.
+        """
+        item = self.pages[index]
+        source = self.sources[item.source_id]
+        with open_for_reading(source, self.passwords.get(source)) as doc:
+            # Bound to a local: the page keeps its document alive only as long
+            # as the page itself is referenced.
+            page = doc[item.source_index]
+            return recognise(page, language, dpi)
 
     def page_has_text(self, index: int) -> bool:
         """Whether the source page of *index* carries any text at all.

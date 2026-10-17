@@ -17,8 +17,12 @@
     <p>Funzioni disponibili in questa versione:</p>
     <ul>
       <li>Ruotare, eliminare e riordinare le pagine, anche con drag &amp; drop</li>
-      <li>Unire più PDF: le pagine vengono accodate senza copiarle</li>
+      <li>Unire più PDF, anche protetti da password: le pagine vengono accodate senza copiarle</li>
       <li>Estrarre un sottoinsieme di pagine in un nuovo file</li>
+      <li>Comprimere il documento al salvataggio, su tre livelli</li>
+      <li>Cancellare davvero un dato: il testo sparisce dal file, non viene coperto</li>
+      <li>Compilare i moduli AcroForm e correggere una riga di testo</li>
+      <li>Riconoscere con l'OCR il testo di una scansione e renderla cercabile</li>
       <li>Annullare e ripristinare ogni operazione</li>
       <li>Rendering asincrono e pigro: l'interfaccia non si blocca mai</li>
     </ul>
@@ -47,6 +51,9 @@
     <keyword>ruota</keyword>
     <keyword>unisci</keyword>
     <keyword>estrai</keyword>
+    <keyword>comprimi</keyword>
+    <keyword>OCR</keyword>
+    <keyword>scansione</keyword>
   </keywords>
 
   <developer id="io.github.gradia64">

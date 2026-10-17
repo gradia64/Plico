@@ -29,6 +29,11 @@ eliminare, riordinare, dividere (estrarre un sottoinsieme), comprimere in
 salvataggio, annulla/ripristina, rendering asincrono, cache, integrazione
 desktop KDE, packaging Flatpak. Versione `0.1.0`, licenza GPL-3.0-or-later.
 
+Della roadmap lunga (§12) sono già dentro anche le voci che non erano
+nell'MVP: compilazione dei form, redazione vera, modifica minima del testo e
+**OCR** (uno strato di testo invisibile sotto le scansioni). Restano la firma
+e le rifiniture, elencate in §12.
+
 ---
 
 ## 2. Com'è fatto il repository
@@ -820,6 +825,49 @@ sistema è stato disinstallato) fa fallire il salvataggio con il messaggio di
   lo decide il salvataggio. Nella modalità, gli span modificati hanno un
   contorno tratteggiato.
 
+### Testo riconosciuto — OCR (`model/ocr.py`)
+
+*Modifica → Riconosci testo…* (`Ctrl+Shift+O`) scrive **sotto** la scansione
+uno strato di testo **invisibile**: la pagina si vede come prima, ma il testo
+si può selezionare, cercare con Ctrl+F, copiare — e la redazione per parola
+(`Ctrl+Shift+F`) finalmente lo trova.
+
+- **Una capacità, non una modifica automatica.** Riconoscere costa (mezzo
+  secondo per pagina A4 a 300 dpi, misurato) e può sbagliare, quindi si
+  sceglie *cosa* e *in che lingua*: `OcrDialog` propone la pagina corrente, la
+  corrente e le successive, o tutto il documento, e la lingua fra quelle
+  installate — con italiano+inglese insieme quando ci sono entrambe, perché un
+  documento italiano è pieno di numeri e indirizzi e le due leggono meglio di
+  una sola.
+- **Nello spazio pagina, come tutto il resto.** `recognise()` mette a zero il
+  `/Rotate` per la durata della chiamata e lo rimette com'era, quindi i
+  rettangoli tornano in spazio pagina e si confrontano con `PageItem.redactions`
+  e con gli edit di testo senza convertire niente. `write_layer()` scrive in
+  spazio pagina anche su una pagina con `/Rotate` acceso (misurato); il font è
+  un Base-14, non incorporato, in `render_mode=3`: una scansione che diventa
+  cercabile non guadagna un byte.
+- **Non riscrive il testo che c'è già.** MuPDF restituisce anche le parole del
+  flusso vero, quindi una pagina metà testo e metà scansione si ritroverebbe il
+  testo scritto due volte — e poi letto, copiato e trovato due volte. Le parole
+  il cui centro cade dentro un rettangolo di `get_text("words")` si scartano.
+- **Nel thread pool, non nella coda dei render** (`OcrTask`, con
+  `QProgressDialog` annullabile), e al termine **un solo** `beginMacro`: un
+  comando `OcrPage` per pagina, così un Ctrl+Z disfa tutto il giro. Il
+  salvataggio scrive lo strato **prima** degli edit di testo e delle redazioni:
+  il primo cambia il testo sotto (uno strato vecchio resterebbe lì), il secondo
+  deve portarsi via anche lo strato OCR che cade dentro il rettangolo.
+- **Le lingue** stanno in `~/.local/share/plico/tessdata`, senza root, oppure
+  dove le mette la distribuzione; `$PLICO_TESSDATA` vince su tutto. Il Flatpak
+  impacchetta `eng` e `ita` in `/app/share/tessdata` (§11). Se manca la
+  libreria o il dato di lingua `unavailable_reason()` lo dice in chiaro,
+  invece di far fallire il lavoro a metà.
+- **Dove vivono le parole.** `PageItem.ocr_words` (lista di `OcrWord`: testo e
+  rettangolo in spazio pagina) è parte della pagina virtuale, quindi si annulla
+  con Ctrl+Z come tutto il resto e non si può perdere per strada;
+  `DocumentModel.ocr_page()` legge la sorgente in sola lettura — come
+  `find_text()` — e non tocca il modello. Chi le scrive sul PDF è solo
+  `save.py` (`_write_ocr`).
+
 ### Creare un PDF da immagini (`model/images.py`)
 
 *File → Crea da immagini…* (`Ctrl+Shift+N`) e *Unisci*, che accetta anche
@@ -1074,6 +1122,24 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
   `write_fields(page, {"nome": …})` sulla pagina già copiata restituisce `0` e
   non scrive niente. Per questo `save.py` scrive i valori **sulla sorgente in
   memoria** (`_fill_source_fields`) prima di copiare le pagine.
+- **`get_textpage_ocr()` vuole il `tessdata` esplicito.** Senza, non cerca da
+  solo: fallisce con `RuntimeError: No tessdata specified and Tesseract is not
+  installed`, anche quando la libreria c'è. E `tessdata=` non basta alla
+  libreria: PyMuPDF la carica con `ctypes`, quindi in una sandbox la `.so` deve
+  stare nel `LD_LIBRARY_PATH` (nel Flatpak: `/app/lib`, vedi §11).
+- **L'OCR legge lo spazio della pagina com'è adesso.** `get_textpage_ocr()`
+  lavora sulla pagina con il `/Rotate` in vigore, quindi i rettangoli escono
+  ruotati rispetto allo spazio pagina: `recognise()` azzera la rotazione per la
+  chiamata e la rimette nel `finally` (la pagina è quella del documento del
+  worker, non una copia — lasciarla ruotata cambierebbe il documento sotto i
+  piedi di chi la usa). `insert_text()`, invece, scrive **sempre** in spazio
+  pagina, anche con `/Rotate` acceso (misurato: `render_mode=3` finisce dove
+  deve), quindi lo strato invisibile non richiede conversioni.
+- **MuPDF restituisce anche le parole già presenti nel flusso.** Su una pagina
+  metà testo e metà scansione, `get_textpage_ocr()` include le parole del testo
+  vero: scriverle tutte significa averle due volte (lette due volte, copiate
+  due volte, trovate due volte). `recognise()` scarta quelle il cui centro cade
+  dentro un rettangolo di `get_text("words")`.
 
 ### Test
 
@@ -1138,6 +1204,18 @@ Scelte non ovvie (documentate anche nel README):
   `{"BASEAPP_REMOVE_WEBENGINE": "1", ...}`. Il README della BaseApp mostra la
   forma a lista, ma il parser e lo schema ufficiale vogliono l'oggetto. È
   l'unico errore vero che il controllo di conformità ha trovato.
+- **Tesseract si compila qui** (`leptonica 1.84.1`, `tesseract 5.4.1`, poi un
+  modulo `simple` che copia `eng.traineddata` e `ita.traineddata` di
+  `tessdata_fast` in `/app/share/tessdata`): su Flathub non esiste
+  un'estensione Tesseract e la runtime non lo porta, e senza la libreria
+  `get_textpage_ocr()` fallisce anche avendo i dati di lingua. Tre trappole
+  pagate: con CMake 4 un `cmake_minimum_required` vecchio **ferma** la
+  configurazione (`» Compatibility with CMake < 3.5 has been removed`,
+  risolto con `-DCMAKE_POLICY_VERSION_MINIMUM=3.5`), leptonica **rifiuta** di
+  essere configurata dentro l'albero dei sorgenti (quindi i due moduli hanno
+  `"builddir": true`, altrimenti `CMake generation is not possible within the
+  source directory`), e `-DCMAKE_INSTALL_LIBDIR=lib` serve perché PyMuPDF
+  carica `libtesseract.so` con `ctypes` e deve trovarla in `/app/lib`.
 
 Costruire, provare, e verificare il manifest:
 
@@ -1191,14 +1269,13 @@ sostituita con la sorgente `git` del tag di rilascio.
    fare e va per ultimo: una firma non sopravvive a nessuna modifica
    successiva;
 2. **redaction vera** — ✅ **fatta**, vedi §8;
-3. **OCR** integrato (Tesseract) — **rinviato, con le prove**: sulla macchina di
-   sviluppo c'è la libreria (`libtesseract5`) ma **non** il programma
-   `tesseract`, e `/usr/share/tesseract-ocr/5/tessdata` contiene solo
-   `configs`, `pdf.ttf` e `tessconfigs` — nessun dato di lingua (servirebbe
-   `sudo`, quindi una password); dentro la sandbox Flatpak mancano entrambi, e
-   su Flathub non esiste un'extension Tesseract. Servirebbe compilare
-   leptonica e tesseract dai sorgenti nel manifest **senza poterli provare in
-   locale**: si fa quando c'è una ragione per farlo, non prima;
+3. **OCR** integrato (Tesseract) — ✅ **fatto**, vedi §8:
+   *Modifica → Riconosci testo…* (`Ctrl+Shift+O`) scrive uno strato
+   invisibile, e il Flatpak compila Tesseract e impacchetta `eng`+`ita`
+   (§11). Il rinvio precedente non era pigrizia: senza il programma `tesseract`
+   né i dati di lingua sulla macchina di sviluppo, l'unico modo di provarlo era
+   costruirlo dentro il manifest — cosa che ora il manifest fa, e la prova gira
+   nella sandbox;
 4. **modifica minima del testo** — la parte difficile, ma è il vero
    differenziale rispetto a PDF Arranger e simili. ✅ **fatta**, vedi §8:
    *Modifica → Modifica testo* (`Ctrl+Shift+T`), una riga alla volta.

@@ -4,6 +4,7 @@ from .commands import (
     DeletePage,
     EditText,
     MovePage,
+    OcrPage,
     RemoveRedaction,
     RotatePage,
     SetFieldValue,
@@ -11,6 +12,15 @@ from .commands import (
 from .document import DocumentModel, PageItem, PasswordRequired, open_for_reading
 from .forms import Field, read_fields, write_fields
 from .images import IMAGE_SUFFIXES, images_to_pdf, is_image
+from .ocr import (
+    DEFAULT_DPI,
+    OcrWord,
+    default_language,
+    languages,
+    recognise,
+    user_tessdata_dir,
+    write_layer,
+)
 from .optimize import (
     LEVELS,
     LEVELS_BY_KEY,
@@ -23,6 +33,7 @@ from .save import extract_pages, parse_page_ranges, save_as, save_compressed
 from .textedit import FontChoice, TextEdit, TextSpan, apply_edit, check_edit, span_at
 
 __all__ = [
+    "DEFAULT_DPI",
     "IMAGE_SUFFIXES",
     "LEVELS",
     "LEVELS_BY_KEY",
@@ -36,6 +47,8 @@ __all__ = [
     "Field",
     "FontChoice",
     "MovePage",
+    "OcrPage",
+    "OcrWord",
     "PageItem",
     "PasswordRequired",
     "RedactionRect",
@@ -46,15 +59,20 @@ __all__ = [
     "TextSpan",
     "apply_edit",
     "check_edit",
+    "default_language",
     "extract_pages",
     "images_to_pdf",
     "is_image",
+    "languages",
     "open_for_reading",
     "optimize_in_place",
     "parse_page_ranges",
     "read_fields",
+    "recognise",
     "save_as",
     "save_compressed",
     "span_at",
+    "user_tessdata_dir",
     "write_fields",
+    "write_layer",
 ]

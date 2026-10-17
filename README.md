@@ -42,6 +42,10 @@ comprimerli.
   sulla pagina; il testo vecchio viene tolto dal file e quello nuovo scritto
   nello stesso punto, con lo stesso corpo, colore e — quando è installato — lo
   stesso font
+- **OCR** (*Modifica → Riconosci testo…*, `Ctrl+Shift+O`): una scansione
+  diventa **cercabile e selezionabile** senza cambiare aspetto — il testo
+  riconosciuto viene scritto sotto l'immagine, invisibile. Si sceglie quali
+  pagine e in che lingua, e ogni giro è un solo passo di undo
 
 ### Requisito di accettazione
 
@@ -64,6 +68,9 @@ plico/
     │   ├── commands.py        # QUndoCommand: RotatePage, DeletePage, AddRedaction, SetFieldValue…
     │   ├── redact.py          # rettangoli di redazione, matrici di rotazione
     │   ├── forms.py           # campi AcroForm: lettura, scrittura, svuotamento
+    │   ├── textedit.py        # modifica di una riga di testo: span, verifica, riscrittura
+    │   ├── ocr.py             # riconoscimento con Tesseract, strato invisibile, lingue
+    │   ├── images.py          # da immagini a PDF: A4, dpi, EXIF, JPEG intatti
     │   ├── save.py            # save_as(), save_compressed(), extract_pages()
     │   └── optimize.py        # livelli di compressione, optimize_in_place()
     ├── rendering/
@@ -72,6 +79,7 @@ plico/
         ├── page_view.py       # QScrollArea: rendering, fit-width, HiDPI, redazione, campi
         ├── thumbnail_bar.py   # QListView + modello + cache, caricamento lazy
         ├── form_panel.py      # dock «Modulo»: un editor per ogni campo
+        ├── ocr.py             # dialogo lingue/pagine e task di riconoscimento
         └── compress.py        # dialogo del livello, format_size, task
 ```
 
@@ -205,6 +213,33 @@ che aveva nella sorgente, che non è la stessa cosa di svuotarlo. I pulsanti
 radio non sono modificabili — PyMuPDF non li sa costruire e li rilegge male — e
 le firme appartengono alla tappa successiva.
 
+### OCR: rendere cercabile una scansione
+
+*Modifica → Riconosci testo…* (`Ctrl+Shift+O`) legge le pagine scelte con
+Tesseract e scrive sotto l'immagine uno **strato di testo invisibile**
+(modalità di render 3). La pagina si vede identica, ma il testo si può
+selezionare, copiare, cercare con `Ctrl+F` — e la *Cancella parola*
+(`Ctrl+Shift+F`) finalmente lo trova, cosa che su una scansione non marcata è
+impossibile.
+
+Il riconoscimento costa (circa mezzo secondo per pagina A4 a 300 dpi), per
+questo non è automatico: si dice quali pagine (la corrente, la corrente e le
+successive, o tutto il documento) e in che lingua, con italiano e inglese
+insieme come proposta. Gira nel thread pool con una barra di avanzamento
+annullabile, e ogni giro è **un solo** passo di undo: un `Ctrl+Z` toglie lo
+strato di tutte le pagine in una volta.
+
+Il font dello strato è uno dei Base-14 e non viene incorporato, quindi rendere
+cercabile una scansione non aggiunge un byte. Le parole che il PDF già contiene
+non vengono riscritte: una pagina metà testo e metà scansione non si ritrova il
+testo doppio.
+
+I dati di lingua (`*.traineddata`) si mettono in
+`~/.local/share/plico/tessdata/`, senza root; il Flatpak porta già `eng` e
+`ita`. La libreria Tesseract deve essere presente: nel Flatpak è compilata
+dentro (§ Flatpak), su una distribuzione è il pacchetto `tesseract` /
+`libtesseract`.
+
 ### Integrazione desktop (KDE)
 
 - **Icone dal tema** (`QIcon.fromTheme`: `document-open`, `document-save-as`,
@@ -222,8 +257,10 @@ le firme appartengono alla tappa successiva.
 
 - Python ≥ 3.11
 - PySide6 ≥ 6.7
-- PyMuPDF (pymupdf) ≥ 1.23
+- PyMuPDF (pymupdf) ≥ 1.24.3
 - pikepdf ≥ 9 (compressione mirata)
+- Tesseract (libreria, 4 o 5) e almeno un dato di lingua per l'OCR — il
+  Flatpak li porta entrambi
 
 ## Installazione
 

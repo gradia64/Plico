@@ -23,6 +23,75 @@
     "/app/cleanup-BaseApp.sh"
   ],
   "modules": [
+    {
+      "name": "leptonica",
+      "buildsystem": "cmake-ninja",
+      "config-opts": [
+        "-DBUILD_SHARED_LIBS=ON",
+        "-DCMAKE_INSTALL_LIBDIR=lib",
+        "-DENABLE_GIF=OFF",
+        "-DENABLE_WEBP=OFF",
+        "-DENABLE_OPENJPEG=OFF",
+        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+      ],
+      "cleanup": [
+        "/include",
+        "/lib/pkgconfig"
+      ],
+      "sources": [
+        {
+          "type": "archive",
+          "url": "https://github.com/DanBloomberg/leptonica/releases/download/1.84.1/leptonica-1.84.1.tar.gz",
+          "sha256": "2b3e1254b1cca381e77c819b59ca99774ff43530209b9aeb511e1d46588a64f6"
+        }
+      ],
+      "builddir": true
+    },
+    {
+      "name": "tesseract",
+      "buildsystem": "cmake-ninja",
+      "config-opts": [
+        "-DBUILD_SHARED_LIBS=ON",
+        "-DCMAKE_INSTALL_LIBDIR=lib",
+        "-DINSTALL_CONFIGS=ON",
+        "-DSW_BUILD=OFF",
+        "-DGRAPHICS_DISABLED=ON",
+        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+      ],
+      "cleanup": [
+        "/include",
+        "/lib/pkgconfig",
+        "/share/man"
+      ],
+      "sources": [
+        {
+          "type": "archive",
+          "url": "https://github.com/tesseract-ocr/tesseract/archive/refs/tags/5.4.1.tar.gz",
+          "sha256": "c4bc2a81c12a472f445b7c2fb4705a08bd643ef467f51ec84f0e148bd368051b"
+        }
+      ],
+      "builddir": true
+    },
+    {
+      "name": "tesseract-language-data",
+      "buildsystem": "simple",
+      "build-commands": [
+        "install -Dm644 eng.traineddata -t /app/share/tessdata/",
+        "install -Dm644 ita.traineddata -t /app/share/tessdata/"
+      ],
+      "sources": [
+        {
+          "type": "file",
+          "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/eng.traineddata",
+          "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
+        },
+        {
+          "type": "file",
+          "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd/ita.traineddata",
+          "sha256": "b8f89e1e785118dac4d51ae042c029a64edb5c3ee42ef73027a6d412748d8827"
+        }
+      ]
+    },
     "python3-pymupdf.json",
     "python3-pikepdf.json",
     {
