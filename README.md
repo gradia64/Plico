@@ -11,7 +11,13 @@ comprimerli.
 - **Ruotare, eliminare, riordinare** pagine (drag & drop nella barra miniature)
 - **Unire** un altro PDF: le sue pagine si aggiungono a quelle già aperte
   senza copiare nulla, perché ogni pagina virtuale sa a quale documento
-  sorgente appartiene
+  sorgente appartiene. Si può unire anche un'immagine (una ricevuta
+  fotografata in coda a un PDF)
+- **Creare un PDF da immagini** (*File → Crea da immagini…*, `Ctrl+Shift+N`):
+  foto e scansioni — PNG, JPEG, TIFF, BMP, GIF — diventano una pagina
+  ciascuna, nell'ordine scelto. Una scansione mantiene il suo formato reale
+  (un A4 a 300 dpi resta un A4), una foto da telefono viene ridotta a un A4
+  orientato come lei, e i JPEG entrano senza essere ricompressi
 - **Estrarre pagine** (dividere) in un nuovo file con una selezione tipo
   `1-3,5,8` — l'ordine digitato è conservato, quindi vale anche come riordino
 - **Undo/Redo** completo grazie a `QUndoStack`

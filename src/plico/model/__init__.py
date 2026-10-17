@@ -10,6 +10,7 @@ from .commands import (
 )
 from .document import DocumentModel, PageItem, PasswordRequired, open_for_reading
 from .forms import Field, read_fields, write_fields
+from .images import IMAGE_SUFFIXES, images_to_pdf, is_image
 from .optimize import (
     LEVELS,
     LEVELS_BY_KEY,
@@ -22,6 +23,7 @@ from .save import extract_pages, parse_page_ranges, save_as, save_compressed
 from .textedit import FontChoice, TextEdit, TextSpan, apply_edit, check_edit, span_at
 
 __all__ = [
+    "IMAGE_SUFFIXES",
     "LEVELS",
     "LEVELS_BY_KEY",
     "AddRedaction",
@@ -45,6 +47,8 @@ __all__ = [
     "apply_edit",
     "check_edit",
     "extract_pages",
+    "images_to_pdf",
+    "is_image",
     "open_for_reading",
     "optimize_in_place",
     "parse_page_ranges",

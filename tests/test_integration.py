@@ -527,6 +527,7 @@ def test_file_menu_exposes_every_expected_action(windows):
 
     expected = {
         "A&pri…",
+        "C&rea da immagini…",
         "&Salva",
         "Salva con &nome…",
         "&Unisci PDF…",
@@ -2786,3 +2787,144 @@ def test_a_closed_window_opens_the_next_document_normally(windows, tmp_path):
     assert mw._doc_model.page_count == 4
     assert mw.windowTitle() == "secondo.pdf[*]"
     assert _close_action(mw).isEnabled()
+
+
+# --------------------------------------------------------------------- #
+#  File → Crea da immagini, and images in Unisci
+# --------------------------------------------------------------------- #
+
+
+def _photo(path, width: int = 600, height: int = 400) -> str:
+    image = QImage(width, height, QImage.Format.Format_RGB32)
+    image.fill(Qt.GlobalColor.darkCyan)
+    image.setDotsPerMeterX(round(72 / 0.0254))
+    image.setDotsPerMeterY(round(72 / 0.0254))
+    assert image.save(str(path))
+    return str(path)
+
+
+def test_create_from_images_is_in_the_file_menu(windows):
+    mw = windows()
+    action = next(
+        a
+        for a in mw.menuBar().actions()[0].menu().actions()
+        if a.text() == "C&rea da immagini…"
+    )
+    assert action.shortcut().toString() == "Ctrl+Shift+N"
+
+
+def test_images_become_an_untitled_unsaved_document(windows, tmp_path):
+    mw = windows()
+    photos = [_photo(tmp_path / "uno.png"), _photo(tmp_path / "due.png", 400, 600)]
+
+    assert mw.create_from_images(photos)
+    _pump(0.3)
+
+    assert mw._doc_model.page_count == 2
+    assert mw.windowTitle() == "Senza titolo[*]"
+    assert mw.is_modified(), "nothing of it is on disk yet: closing must ask"
+    assert mw._close_act.isEnabled()
+    assert not mw._undo_stack.canUndo(), "creating is not an undo step"
+    assert "2 immagini" in mw._status.text()
+
+
+def test_saving_an_image_document_asks_where_next_to_the_first_image(
+    windows, tmp_path, monkeypatch
+):
+    mw = windows()
+    folder = tmp_path / "foto"
+    folder.mkdir()
+    photos = [_photo(folder / "vacanze.png"), _photo(folder / "mare.png")]
+    mw.create_from_images(photos)
+    proposals: list[str] = []
+    out = str(folder / "vacanze.pdf")
+
+    def save_dialog(parent, title, proposed, *args, **kwargs):
+        proposals.append(proposed)
+        return (out, "")
+
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(save_dialog))
+
+    assert mw._save_file()
+
+    assert proposals == [out], "Ctrl+S on a new document is a Save As, next to the images"
+    assert mw.windowTitle() == "vacanze.pdf[*]" and not mw.is_modified()
+    with pymupdf.open(out) as doc:
+        assert doc.page_count == 2
+
+
+def test_closing_an_image_document_asks_first(windows, tmp_path, monkeypatch):
+    mw = windows()
+    mw.create_from_images([_photo(tmp_path / "uno.png")])
+    questions = _answer(monkeypatch, QMessageBox.StandardButton.Cancel)
+
+    assert not mw._close_file()
+
+    assert len(questions) == 1 and "Senza titolo" in questions[0]
+
+
+def test_create_from_images_asks_before_replacing_unsaved_work(
+    windows, tmp_path, monkeypatch
+):
+    mw = windows()
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=3)
+    _open(mw, pdf)
+    mw._delete_page()
+    _answer(monkeypatch, QMessageBox.StandardButton.Cancel)
+
+    def never(*a, **k):
+        raise AssertionError("with Annulla the file dialog must not appear")
+
+    monkeypatch.setattr(QFileDialog, "getOpenFileNames", staticmethod(never))
+
+    mw._create_from_images_dialog()
+
+    assert mw._doc_model.page_count == 2
+
+
+def test_a_broken_image_is_reported_and_changes_nothing(windows, tmp_path, monkeypatch):
+    mw = windows()
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=2)
+    _open(mw, pdf)
+    fake = tmp_path / "finta.png"
+    fake.write_text("non sono un'immagine")
+    errors: list[str] = []
+    monkeypatch.setattr(QMessageBox, "critical", staticmethod(lambda *a, **k: errors.append(a[2])))
+
+    assert not mw.create_from_images([str(fake)])
+
+    assert errors and "finta.png" in errors[0]
+    assert mw._doc_model.page_count == 2 and mw.windowTitle() == "doc.pdf[*]"
+
+
+def test_an_image_can_be_merged_into_a_pdf_and_undone(windows, tmp_path):
+    mw = windows()
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=2)
+    _open(mw, pdf)
+
+    mw.merge_path(_photo(tmp_path / "ricevuta.png"))
+
+    assert mw._doc_model.page_count == 3
+    assert mw._undo_stack.undoText() == "Unisci «ricevuta.png»"
+    assert "ricevuta.png" in mw._status.text()
+    out = str(tmp_path / "out.pdf")
+    save_as(mw._doc_model, out)
+    with pymupdf.open(out) as doc:
+        assert doc.page_count == 3 and doc[2].get_images()
+
+    mw._undo_stack.undo()
+    assert mw._doc_model.page_count == 2
+
+
+def test_the_temporary_pdfs_are_removed_when_plico_stops(windows, tmp_path):
+    mw = windows()
+    mw.create_from_images([_photo(tmp_path / "uno.png")])
+    scratch = mw._scratch.name
+    assert os.listdir(scratch), "the converted PDF lives here while Plico runs"
+
+    mw.shutdown_worker()
+
+    assert not os.path.exists(scratch)

@@ -1,6 +1,7 @@
 """MainWindow — orchestrates model, worker, commands, and views."""
 
 import os
+import tempfile
 from collections.abc import Callable
 
 from PySide6.QtCore import Q_ARG, QMetaObject, QSettings, Qt, QThread, QThreadPool
@@ -23,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from .model import (
+    IMAGE_SUFFIXES,
     AddRedaction,
     AppendDocument,
     CompressionLevel,
@@ -39,6 +41,8 @@ from .model import (
     SetFieldValue,
     TextSpan,
     extract_pages,
+    images_to_pdf,
+    is_image,
     parse_page_ranges,
     save_as,
 )
@@ -73,8 +77,16 @@ class MainWindow(QMainWindow):
 
         # --- what "Salva" writes to, and what the undo stack cannot see ---
         # The file a plain Ctrl+S writes: the document opened, or the last
-        # "Salva con nome" target. None when nothing is open.
+        # "Salva con nome" target. None when nothing is open -- and for a
+        # document created from images, which has no file of its own yet.
         self._save_target: str | None = None
+        # Where "Salva con nome" proposes to write a document that has no file
+        # yet: next to the images it was made from.
+        self._save_suggestion: str | None = None
+        # The PDFs made from images live here until Plico exits: the worker
+        # renders from a path, so they must be real files. Created on first
+        # use, removed by shutdown_worker().
+        self._scratch: tempfile.TemporaryDirectory | None = None
         # --- render worker thread ---
         # The QThread is deliberately NOT parented to this window (or any
         # widget): Qt aborts the process if a QThread is destroyed while
@@ -194,6 +206,14 @@ class MainWindow(QMainWindow):
 
         file_menu.addAction(
             self._act(self.tr("A&pri…"), "document-open", "Ctrl+O", self._open_file)
+        )
+        file_menu.addAction(
+            self._act(
+                self.tr("C&rea da immagini…"),
+                "image-x-generic",
+                "Ctrl+Shift+N",
+                self._create_from_images_dialog,
+            )
         )
         file_menu.addAction(
             self._act(self.tr("&Salva"), "document-save", "Ctrl+S", self._save_file)
@@ -495,6 +515,7 @@ class MainWindow(QMainWindow):
         self._page_view.set_text_mode(False)
         self._refresh_form_panel(0)
         self._save_target = path
+        self._save_suggestion = None
         self._update_title()
         self._status.setText(self.tr("Aperto: {0}").format(path))
 
@@ -564,7 +585,9 @@ class MainWindow(QMainWindow):
             self,
             self.tr("Unisci PDF"),
             str(os.path.expanduser("~")),
-            self.tr("File PDF (*.pdf)"),
+            self.tr("PDF e immagini ({0});;File PDF (*.pdf);;Immagini ({1})").format(
+                "*.pdf " + self._image_patterns(), self._image_patterns()
+            ),
         )
         if not path:
             return
@@ -579,6 +602,15 @@ class MainWindow(QMainWindow):
         password here as well, and the render thread is told it before the
         first page of the merge can be asked for.
         """
+        label: str | None = None
+        if is_image(path):
+            # An image becomes a one-page PDF first, and that PDF is what gets
+            # merged: from then on it is a source like any other.
+            label = os.path.basename(path)
+            converted = self._images_to_scratch([path])
+            if converted is None:
+                return
+            path = converted
         password: str | None = None
         while True:
             try:
@@ -616,9 +648,11 @@ class MainWindow(QMainWindow):
             # requests for them would otherwise be answered by a locked
             # handle and leave the pages blank.
             self._unlock_worker(path, password)
-        self._push_merge(path, items)
+        self._push_merge(path, items, label)
 
-    def _push_merge(self, path: str, items: list[PageItem]) -> None:
+    def _push_merge(
+        self, path: str, items: list[PageItem], label: str | None = None
+    ) -> None:
         """Make *items* an undo step, then show what was appended.
 
         Pushing the command is what makes the merge undoable; the window used
@@ -628,14 +662,87 @@ class MainWindow(QMainWindow):
         """
         first_new = self._doc_model.page_count
         self._undo_stack.push(
-            AppendDocument(self._doc_model, len(self._doc_model.sources), path, items)
+            AppendDocument(
+                self._doc_model, len(self._doc_model.sources), path, items, label
+            )
         )
         self._update_title()
         self._page_view.ensure_page_visible(first_new)
         self._thumb_bar.set_current_row(first_new)
         self._status.setText(
-            self.tr("Unite {0} pagine da: {1}").format(len(items), path)
+            self.tr("Unite {0} pagine da: {1}").format(len(items), label or path)
         )
+
+    # ------------------------------------------------------------------ #
+    #  Create from images
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _image_patterns() -> str:
+        return " ".join(f"*{suffix}" for suffix in IMAGE_SUFFIXES)
+
+    def _create_from_images_dialog(self) -> None:
+        """File → Crea da immagini: pick the images, then build the document."""
+        # Asked before the file dialog, like "Apri": the question is about
+        # the document on screen.
+        if not self._confirm_discard():
+            return
+        paths, _ = QFileDialog.getOpenFileNames(
+            self,
+            self.tr("Crea PDF da immagini"),
+            str(os.path.expanduser("~")),
+            self.tr("Immagini ({0})").format(self._image_patterns()),
+        )
+        if paths:
+            self.create_from_images(paths)
+
+    def create_from_images(self, paths: list[str]) -> bool:
+        """Make a new document out of *paths*, one page per image, in that order.
+
+        The document has no file yet: it is "Senza titolo", modified from the
+        start, and Ctrl+S asks where to save it -- next to the first image.
+        Returns whether the document is now open.
+        """
+        converted = self._images_to_scratch(paths)
+        if converted is None:
+            return False
+        self.open_document(converted)
+        self._save_target = None
+        first = paths[0]
+        self._save_suggestion = os.path.join(
+            os.path.dirname(first), os.path.splitext(os.path.basename(first))[0] + ".pdf"
+        )
+        # Nothing of this exists on disk except a temporary: closing now
+        # would lose it, so the document starts out as unsaved.
+        self._undo_stack.resetClean()
+        self._update_title()
+        self._status.setText(
+            self.tr("Creato da {0} immagini, {1} pagine: salvalo con Ctrl+S per tenerlo.").format(
+                len(paths), self._doc_model.page_count
+            )
+        )
+        return True
+
+    def _images_to_scratch(self, paths: list[str]) -> str | None:
+        """Convert *paths* into one temporary PDF; None (and a message) on failure."""
+        if self._scratch is None:
+            self._scratch = tempfile.TemporaryDirectory(prefix="plico-")
+        stem = os.path.splitext(os.path.basename(paths[0]))[0] if paths else "immagini"
+        handle, target = tempfile.mkstemp(
+            dir=self._scratch.name, prefix=f"{stem}-", suffix=".pdf"
+        )
+        os.close(handle)
+        try:
+            images_to_pdf(paths, target)
+        except ValueError as error:
+            os.unlink(target)
+            QMessageBox.critical(
+                self,
+                self.tr("Errore"),
+                self.tr("Impossibile creare il PDF:\n{0}").format(error),
+            )
+            return None
+        return target
 
     def _save_file(self) -> bool:
         """Salva: write the document to the file it came from (Ctrl+S).
@@ -658,7 +765,7 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getSaveFileName(
             self,
             self.tr("Salva con nome"),
-            self._save_target or "",
+            self._save_target or self._save_suggestion or "",
             self.tr("File PDF (*.pdf)"),
         )
         if not path:
@@ -712,8 +819,11 @@ class MainWindow(QMainWindow):
 
         Only the name: Qt appends the application display name itself.
         """
-        if self._save_target is None or not self._doc_model.sources:
+        if not self._doc_model.sources:
             self.setWindowTitle("Plico")
+        elif self._save_target is None:
+            # A document made from images: there is no file name to show yet.
+            self.setWindowTitle(self.tr("Senza titolo") + "[*]")
         else:
             self.setWindowTitle(f"{os.path.basename(self._save_target)}[*]")
         self.setWindowModified(self.is_modified())
@@ -736,7 +846,7 @@ class MainWindow(QMainWindow):
         self._page_view.finish_text_edit()
         if not self.is_modified():
             return True
-        name = os.path.basename(self._save_target or "") or self.tr("documento")
+        name = os.path.basename(self._save_target or "") or self.tr("Senza titolo")
         choice = QMessageBox.question(
             self,
             self.tr("Modifiche non salvate"),
@@ -819,7 +929,9 @@ class MainWindow(QMainWindow):
 
     def _proposed_compressed_path(self) -> str:
         """``documento.pdf`` -> ``documento-compresso.pdf``."""
-        origin = self._doc_model.path or ""
+        # The file the document will be saved as, not the model's path: for a
+        # document made from images that is a temporary nobody should see.
+        origin = self._save_target or self._save_suggestion or ""
         stem, extension = os.path.splitext(origin)
         if not stem:
             return str(os.path.expanduser("~"))
@@ -1238,6 +1350,7 @@ class MainWindow(QMainWindow):
         # file: waiting for it keeps the process from exiting mid-write.
         QThreadPool.globalInstance().waitForDone()
         if not self._thread.isRunning():
+            self._remove_scratch()
             return
         QMetaObject.invokeMethod(
             self._worker, "shutdown", Qt.ConnectionType.BlockingQueuedConnection
@@ -1247,3 +1360,12 @@ class MainWindow(QMainWindow):
             # A render is wedged; do not let a running thread outlive us.
             self._thread.terminate()
             self._thread.wait(2000)
+        # Only now: the worker has closed its handles, so the temporaries
+        # it was reading can go.
+        self._remove_scratch()
+
+    def _remove_scratch(self) -> None:
+        """Delete the PDFs made from images, when Plico is done with them."""
+        if self._scratch is not None:
+            self._scratch.cleanup()
+            self._scratch = None

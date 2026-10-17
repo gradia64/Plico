@@ -100,10 +100,18 @@ class AppendDocument(QUndoCommand):
     """
 
     def __init__(
-        self, model: DocumentModel, source_id: int, path: str, items: list[PageItem]
+        self,
+        model: DocumentModel,
+        source_id: int,
+        path: str,
+        items: list[PageItem],
+        label: str | None = None,
     ) -> None:
+        # *label* is what the user picked when that is not *path*: an image
+        # merged through a temporary PDF should read «foto.jpg» in the Edit
+        # menu, not the name of the temporary.
         name = QCoreApplication.translate("AppendDocument", "Unisci «{0}»")
-        super().__init__(name.format(os.path.basename(path)))
+        super().__init__(name.format(label or os.path.basename(path)))
         self._model = model
         self._source_id = source_id
         self._path = path

@@ -50,6 +50,7 @@ plico/
 │   │   ├── forms.py          # campi AcroForm: lettura, scrittura, svuotamento
 │   │   ├── save.py           # save_as, save_compressed, extract_pages, parse_page_ranges
 │   │   ├── textedit.py       # modifica minima del testo: uno span, il suo aspetto
+│   │   ├── images.py         # immagini → un PDF qualsiasi, che diventa una sorgente
 │   │   └── optimize.py       # livelli di compressione, optimize_in_place  ← pikepdf
 │   ├── rendering/
 │   │   └── worker.py         # RenderWorker: unico proprietario degli handle PyMuPDF
@@ -65,12 +66,13 @@ plico/
     ├── test_redact.py        # rotazione e rimozione *vera* del testo
     ├── test_forms.py         # campi AcroForm: letti, scritti, riletti dal file
     ├── test_textedit.py      # uno span sostituito: testo, sfondo, font, spazio
+    ├── test_images.py        # immagini → PDF: DPI, foto ridotte, EXIF, JPEG intatti
     ├── test_edit_text.py     # EditText e salvataggio: undo, redazioni, estrai, comprimi
     └── test_integration.py   # MainWindow vera, offscreen: 94 test end-to-end
 ```
 
-Gate di qualità attuale: **297 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
-(18 file sorgente).
+Gate di qualità attuale: **318 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+(19 file sorgente).
 
 ---
 
@@ -817,6 +819,45 @@ sistema è stato disinstallato) fa fallire il salvataggio con il messaggio di
   PostScript, altrimenti lo stile dai flag). È un'anteprima: il font esatto
   lo decide il salvataggio. Nella modalità, gli span modificati hanno un
   contorno tratteggiato.
+
+### Creare un PDF da immagini (`model/images.py`)
+
+*File → Crea da immagini…* (`Ctrl+Shift+N`) e *Unisci*, che accetta anche
+immagini. Si crea da **immagini** e non da pagine bianche per scelta
+dell'utente: un documento vuoto non serve a niente senza uno strumento per
+scrivere in un punto vuoto, e chi scrive un testo lo esporta in PDF dal suo
+editor.
+
+- **Il modello non conosce le immagini, e resta così.** `images_to_pdf()`
+  scrive **un** PDF qualsiasi, che diventa una sorgente come le altre: da lì
+  ruotare, riordinare, unire e salvare non sanno che la pagina era una foto.
+- **Misurato su MuPDF 1.28**, ed è il motivo per cui il modulo è corto:
+  `convert_to_pdf()` rispetta la **risoluzione** (un A4 a 300 dpi esce
+  595 × 842 pt) e l'**orientamento EXIF** (una foto verticale resta
+  verticale); un **JPEG entra intatto**, stesso flusso `DCTDecode`, nessuna
+  ricompressione; un TIFF a più pagine dà una pagina per fotogramma. **WEBP
+  non è supportato** da questa build («Failed to open file … as type webp»),
+  quindi non è offerto. `IMAGE_SUFFIXES` è l'unico elenco dei formati.
+- **Le foto da telefono dicono 72 dpi**: 4000 px diventerebbero una pagina
+  di 1,4 m. Oltre 1,25 × il lato lungo di A4, `page_size_for()` riduce
+  l'immagine — mai ingrandita, mai deformata — dentro un A4 orientato come
+  lei, disegnandola con `show_pdf_page`: il flusso dell'immagine resta lo
+  stesso, cambia solo il posizionamento.
+- **I PDF intermedi sono file veri**, perché il worker apre le sorgenti per
+  percorso: stanno in una `TemporaryDirectory(prefix="plico-")` creata al
+  primo uso e cancellata da `shutdown_worker()` **dopo** che il worker ha
+  chiuso i suoi handle. Non vengono cancellati alla chiusura del documento:
+  costano poco e non c'è niente da guadagnare a rincorrerli.
+- **Un documento creato da immagini è «Senza titolo»**: `_save_target` è
+  `None`, quindi `Ctrl+S` diventa «Salva con nome», con la proposta
+  `_save_suggestion` accanto alla prima immagine e con il suo nome. È
+  **modificato dalla nascita** (`QUndoStack.resetClean()`): sul disco c'è solo
+  un temporaneo, e chiuderlo senza domanda lo perderebbe. Creare non è un
+  passo di annulla. Anche *Salva compresso* propone il nome da
+  `_save_target`/`_save_suggestion`, mai da `DocumentModel.path`, che qui
+  punta al temporaneo.
+- **Un'immagine unita** passa da `AppendDocument` con un `label`: nel menu
+  Modifica si legge «Unisci «ricevuta.png»», non il nome del temporaneo.
 
 ---
 
