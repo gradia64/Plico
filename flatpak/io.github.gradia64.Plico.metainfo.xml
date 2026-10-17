@@ -23,6 +23,7 @@
       <li>Cancellare davvero un dato: il testo sparisce dal file, non viene coperto</li>
       <li>Compilare i moduli AcroForm e correggere una riga di testo</li>
       <li>Riconoscere con l'OCR il testo di una scansione e renderla cercabile</li>
+      <li>Firmare il documento con una firma digitale PAdES e verificarne le firme</li>
       <li>Annullare e ripristinare ogni operazione</li>
       <li>Rendering asincrono e pigro: l'interfaccia non si blocca mai</li>
     </ul>
@@ -54,6 +55,8 @@
     <keyword>comprimi</keyword>
     <keyword>OCR</keyword>
     <keyword>scansione</keyword>
+    <keyword>firma</keyword>
+    <keyword>firmare</keyword>
   </keywords>
 
   <developer id="io.github.gradia64">

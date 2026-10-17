@@ -30,9 +30,9 @@ salvataggio, annulla/ripristina, rendering asincrono, cache, integrazione
 desktop KDE, packaging Flatpak. Versione `0.1.0`, licenza GPL-3.0-or-later.
 
 Della roadmap lunga (§12) sono già dentro anche le voci che non erano
-nell'MVP: compilazione dei form, redazione vera, modifica minima del testo e
-**OCR** (uno strato di testo invisibile sotto le scansioni). Restano la firma
-e le rifiniture, elencate in §12.
+nell'MVP: compilazione dei form, redazione vera, modifica minima del testo,
+**OCR** (uno strato di testo invisibile sotto le scansioni) e la **firma
+PAdES**. Restano le rifiniture, elencate in §12.
 
 ---
 
@@ -56,6 +56,8 @@ plico/
 │   │   ├── save.py           # save_as, save_compressed, extract_pages, parse_page_ranges
 │   │   ├── textedit.py       # modifica minima del testo: uno span, il suo aspetto
 │   │   ├── images.py         # immagini → un PDF qualsiasi, che diventa una sorgente
+│   │   ├── ocr.py            # Tesseract: riconoscere, cercare i dati di lingua, strato invisibile
+│   │   ├── sign.py           # firma PAdES con pyHanko e rilettura delle firme
 │   │   └── optimize.py       # livelli di compressione, optimize_in_place  ← pikepdf
 │   ├── rendering/
 │   │   └── worker.py         # RenderWorker: unico proprietario degli handle PyMuPDF
@@ -63,21 +65,25 @@ plico/
 │       ├── page_view.py      # QScrollArea: rendering, zoom, HiDPI, redazione, campi, testo
 │       ├── thumbnail_bar.py  # QListView + modello + cache, caricamento lazy
 │       ├── form_panel.py     # dock «Modulo»: un editor per ogni campo della pagina
+│       ├── ocr.py            # dialogo pagine/lingua e task di riconoscimento
+│       ├── sign.py           # dialoghi di firma e di verifica delle firme
 │       └── compress.py       # scelta del livello, format_size, task sul thread pool
 └── tests/
-    ├── test_model.py         # modello, comandi, salvataggio, parse_page_ranges
-    ├── test_worker.py        # il worker di rendering in isolamento
-    ├── test_optimize.py      # i livelli di compressione e optimize_in_place
-    ├── test_redact.py        # rotazione e rimozione *vera* del testo
-    ├── test_forms.py         # campi AcroForm: letti, scritti, riletti dal file
-    ├── test_textedit.py      # uno span sostituito: testo, sfondo, font, spazio
-    ├── test_images.py        # immagini → PDF: DPI, foto ridotte, EXIF, JPEG intatti
-    ├── test_edit_text.py     # EditText e salvataggio: undo, redazioni, estrai, comprimi
-    └── test_integration.py   # MainWindow vera, offscreen: 94 test end-to-end
+    ├── test_model.py         # modello, comandi, salvataggio, parse_page_ranges (42)
+    ├── test_worker.py        # il worker di rendering in isolamento (11)
+    ├── test_optimize.py      # i livelli di compressione e optimize_in_place (16)
+    ├── test_redact.py        # rotazione e rimozione *vera* del testo (42)
+    ├── test_forms.py         # campi AcroForm: letti, scritti, riletti dal file (21)
+    ├── test_textedit.py      # uno span sostituito: testo, sfondo, font, spazio (23)
+    ├── test_images.py        # immagini → PDF: DPI, foto ridotte, EXIF, JPEG intatti (13)
+    ├── test_ocr.py           # OCR: spazio pagina, strato invisibile, undo (12)
+    ├── test_sign.py          # certificati, firma, verdetto, secondo salvataggio (26)
+    ├── test_edit_text.py     # EditText e salvataggio: undo, redazioni, estrai, comprimi (21)
+    └── test_integration.py   # MainWindow vera, offscreen: 130 test end-to-end
 ```
 
-Gate di qualità attuale: **318 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
-(19 file sorgente).
+Gate di qualità attuale: **356 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+(23 file sorgente).
 
 ---
 
@@ -907,6 +913,59 @@ editor.
 - **Un'immagine unita** passa da `AppendDocument` con un `label`: nel menu
   Modifica si legge «Unisci «ricevuta.png»», non il nome del temporaneo.
 
+### Firma digitale (`model/sign.py`)
+
+Una firma non è una modifica della lista di pagine: è calcolata sui **byte** di
+un file. Questo modulo scrive quindi un file nuovo — come fa la compressione —
+e la finestra adotta il risultato. Firma e verifica sono di **pyHanko**, che
+costruisce il CMS, il `/ByteRange` e l'aggiornamento incrementale attorno a
+esso, ed è l'unica cosa nel processo che sa leggere ciò che ha prodotto.
+
+- **`save_signed(model, out_path, request)`** (`model/save.py`) è una riga:
+  `_write_atomically(..., optimize=lambda path: sign_in_place(path, request))`.
+  La firma gira **dentro il temporaneo**, prima di `chmod` e `os.replace`,
+  quindi una password sbagliata o un certificato illeggibile non toccano il
+  file di partenza. L'ordine conta: prima si materializza il documento (campi
+  compilati, testo riscritto, redazioni applicate, pagine ruotate), poi si
+  firma; il contrario coprirebbe una versione diversa da quella che si vede.
+- **`SignatureRequest`**: certificato PKCS#12 (`.p12`/`.pfx`), password, motivo,
+  luogo, `field_name` (predefinito `"Firma"`), pagina e rettangolo del timbro.
+  `Identity` è quello che si legge dal certificato *prima* di firmare
+  (`common_name`, `organization`, `country`, scadenza); `Signature` è quello
+  che si legge *dopo* (`intact`, `valid`, `trusted`, `covers_whole_file`,
+  `changed`, `error`, più la proprietà `ok` che è la sintesi).
+- **Il nome del campo si libera da solo**: `_free_field_name()` guarda i campi
+  firma già presenti e, se `"Firma"` è occupato, usa `"Firma 2"`, `"Firma 3"`…
+  Un campo non può contenere due firme (pyHanko rifiuta di riempirlo due
+  volte), e la finestra *promette* che una seconda firma si aggiunge alla prima:
+  senza questo, firmare un documento già firmato falliva.
+- **La firma è invisibile o stampata.** Il timbro è contenuto della pagina:
+  `stamp_text()` produce `Firmato da %(name)s`, la data e — solo se c'è — il
+  motivo; `stamp_box(width, height)` dà il rettangolo in basso a destra **in
+  coordinate PDF**, e su una pagina troppo piccola rimpicciolisce il riquadro
+  invece di farlo uscire dal bordo.
+- **La finestra adotta il file firmato** (`MainWindow._sign_file()`): dopo la
+  firma il documento è il file appena scritto. Continuare a lavorare sulla lista
+  di pagine che l'ha prodotto significherebbe perdere la firma al primo
+  salvataggio. Il titolo prende «— firmato», e `_signed_on_disk` (rinfrescato
+  all'apertura, alla chiusura e a ogni salvataggio) è quello che fa chiedere
+  conferma prima di un salvataggio che riscriverebbe il file senza firma.
+- **Non decide di chi fidarsi**: `read_signatures(path, roots=[...])` accetta i
+  certificati che l'utente ha scelto (PEM), e senza di essi una firma integra
+  resta «valida ma non attendibile». I percorsi scelti si ricordano in
+  `QSettings` sotto `firma/radici`.
+- **Verifica**: *File → Verifica le firme…* legge il file **su disco** (le
+  modifiche non salvate non sono nei byte) e distingue quattro casi: integra e
+  attendibile, integra ma di un certificato sconosciuto (ambra, non rosso),
+  integra ma su un documento modificato dopo la firma, e firma rotta o
+  certificato scaduto. `MainWindow._verify_signatures()` avvisa se ci sono
+  modifiche non salvate prima di dare un verdetto.
+- **`pyhanko` e `pyhanko_certvalidator` sono messi a tacere**:
+  `logging.getLogger("pyhanko").setLevel(logging.CRITICAL)` in testa al modulo.
+  Un certificato non attendibile — cioè il caso **normale** — e una modifica
+  dopo la firma sono eventi che la finestra racconta in una frase, non
+  traceback da stampare su stderr.
+
 ---
 
 ## 9. Ambiente di sviluppo
@@ -1166,6 +1225,42 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
   offscreen (800 px): asserire la dimensione in pixel è sbagliato, va
   confrontato il round-trip.
 
+### pyHanko / firma
+
+- **Il riquadro del timbro è in coordinate PDF (`/Rect`, origine in basso a
+  sinistra), ma `widget.rect` di MuPDF è in coordinate con l'origine in alto**:
+  lo stesso oggetto si legge `(359, 36, 559, 106)` in `stamp_box()` e
+  `Rect(359.0, 736.0, 559.0, 806.0)` rileggendolo (842 − 106 = 736). Sbagliarlo
+  mette il timbro in cima alla pagina, e l'errore si vede solo aprendo il file
+  in un altro lettore.
+- **Un campo firma non si riempie due volte.** Firmare un documento già firmato
+  è legittimo — e la finestra lo promette — ma riusare il nome `"Firma"` fa
+  fallire tutto con `SigningError: Signature field with name Firma appears to be
+  filled already`. Da qui `_free_field_name()`: il secondo campo diventa
+  `"Firma 2"` (trovato dalla sonda dentro il Flatpak, non dai test: serviva un
+  documento *già firmato* come sorgente).
+- **`SimpleSigner.load_pkcs12()` vuole un percorso**, non un `BytesIO`
+  (`TypeError: expected str, bytes or os.PathLike object, not BytesIO`), e con
+  la password sbagliata solleva `ValueError` **stampando anche un traceback su
+  stderr**. Perciò il firmatario si costruisce a mano da
+  `cryptography` → `asn1crypto` (`SimpleSigner(signing_cert=...,
+  signing_key=..., cert_registry=SimpleCertificateStore())`): gli argomenti
+  `cert_registry=None` e `other_certs=` non esistono, e la catena va registrata
+  nello store.
+- **Le radici fidate per `ValidationContext` devono essere certificati
+  `asn1crypto`** (`asn1crypto.x509.Certificate.load(der)`), non `cryptography`:
+  altrimenti `AttributeError: 'Name' object has no attribute 'hashable'` in
+  `_register_root`.
+- **`SigSeedSubFilter.PADES`** (non `ETSI_CADES_DETACHED`), il `SigFieldSpec`
+  va nel **costruttore** di `PdfSigner` (`new_field_spec=`), e `sign_pdf()`
+  restituisce il flusso di output. `TextBoxStyle` sta in
+  `pyhanko.pdf_utils.text`, `TextStampStyle` in `pyhanko.stamp`.
+- **La lettura di una firma modifica le classi di errore**: `intact`/`valid`/
+  `trusted` restano veri anche su un documento modificato dopo la firma, quello
+  che cambia è `covers_whole_file` (da `ENTIRE_FILE` a `ENTIRE_REVISION`),
+  `changed` e `ok`. Un documento toccato **non** rende falsa la firma: la rende
+  vecchia, e va detto così.
+
 ### Attenzione
 
 - `build/`, `build-dir/` e `.flatpak-builder/` (residui di `pip install` e
@@ -1216,6 +1311,18 @@ Scelte non ovvie (documentate anche nel README):
   `"builddir": true`, altrimenti `CMake generation is not possible within the
   source directory`), e `-DCMAKE_INSTALL_LIBDIR=lib` serve perché PyMuPDF
   carica `libtesseract.so` con `ctypes` e deve trovarla in `/app/lib`.
+- **pyHanko entra da wheel, in un modulo solo** (`python3-pyhanko.json`):
+  venti file fra `pyhanko`, `cryptography`, `asn1crypto`, `aiohttp`, `lxml` e
+  il resto delle dipendenze, tutti pure Python o con wheel `manylinux` per il
+  Python 3.13 della BaseApp, quindi una sola riga
+  `pip3 install --no-index --prefix=/app --no-deps *.whl`. Le wheel si
+  scaricano con `pip download --only-binary=:all: --python-version 3.13
+  --implementation cp --abi cp313 --abi abi3 --abi none --platform
+  manylinux_2_28_x86_64 --platform manylinux2014_x86_64` (`cffi` non ha un tag
+  `manylinux_2_28`: senza il secondo `--platform` la risoluzione fallisce con
+  `ResolutionImpossible`), e gli URL e gli `sha256` si prendono dall'API JSON di
+  PyPI. La firma è la parte del programma in cui «più o meno quella versione»
+  non è una risposta accettabile.
 
 Costruire, provare, e verificare il manifest:
 
@@ -1265,9 +1372,13 @@ sostituita con la sorgente `git` del tag di rilascio.
 
 **Roadmap lunga, dall'idea originale** (in ordine di difficoltà percepita):
 
-1. compilare **form** — ✅ **fatto**, vedi §8 — e **firmare**, che resta da
-   fare e va per ultimo: una firma non sopravvive a nessuna modifica
-   successiva;
+1. compilare **form** — ✅ **fatto**, vedi §8 — e **firmare** — ✅ **fatto**,
+   vedi §8: *File → Firma…* (`Ctrl+Shift+D`) produce una firma **PAdES** con un
+   certificato PKCS#12, invisibile o stampata in un riquadro, e *File → Verifica
+   le firme…* la rilegge dicendo chi ha firmato e se il documento è stato
+   toccato dopo. La ragione per cui andava per ultima resta vera ed è scritta
+   nel codice: una firma copre dei **byte**, quindi si firma il file appena
+   materializzato e la sessione adotta quello;
 2. **redaction vera** — ✅ **fatta**, vedi §8;
 3. **OCR** integrato (Tesseract) — ✅ **fatto**, vedi §8:
    *Modifica → Riconosci testo…* (`Ctrl+Shift+O`) scrive uno strato
@@ -1292,8 +1403,8 @@ sostituita con la sorgente `git` del tag di rilascio.
   guadagno si vede solo a lavoro finito (niente stima prima di partire);
 - i form si compilano **dal pannello**, non scrivendo sulla pagina: il clic su
   un campo lo seleziona nel dock «Modulo», ma non si digita in-place. I
-  radiobutton non sono modificabili e le firme non sono ancora gestite (vedi
-  §8);
+  radiobutton non sono modificabili; le firme si fanno da *File → Firma…* (non
+  dal pannello, perché non si compilano: si calcolano, vedi §8);
 - il cambio di monitor è gestito da `MainWindow`, non da `PageView`:
   `_watch_screen()` si connette una volta sola a `windowHandle().screenChanged`
   (dal `showEvent`, perché durante la costruzione `self.window()` è `None`) e
@@ -1314,6 +1425,13 @@ sostituita con la sorgente `git` del tag di rilascio.
 - **l'unione si annulla** — è il comando `AppendDocument` (§8), quindi Ctrl+Z
   la toglie come ogni altra modifica, e `MainWindow._merged_since_save` non
   esiste più.
+
+**Con la firma, la roadmap lunga è finita**: le quattro voci dell'idea
+originale ci sono tutte e nessuna è un abbozzo — ognuna ha la sua sezione in
+§8 e i suoi test. Quello che resta è l'elenco del debito tecnico qui sopra:
+rifiniture (selezione di testo e area per la redazione, livelli di compressione
+flessibili, scrittura in-place nei form, infrastruttura `.ts`), non capacità
+mai esistite.
 
 Delle dieci voci della review dell'ottobre 2026 non resta niente, e le
 decisioni sono scritte dove servono: in §5 e §6 (le API e il giro della

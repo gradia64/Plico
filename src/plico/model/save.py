@@ -12,6 +12,7 @@ from .document import DocumentModel, PageItem, open_for_reading
 from .forms import write_fields
 from .ocr import write_layer
 from .optimize import CompressionLevel, CompressionResult, Progress, optimize_in_place
+from .sign import SignatureRequest, sign_in_place
 from .textedit import apply_edit
 
 _T = TypeVar("_T")
@@ -283,9 +284,34 @@ def save_compressed(
         None,
         optimize=lambda path: optimize_in_place(path, level, progress),
     )
-    # `optimize` e` sempre fornito qui, quindi il risultato c'e` sempre.
+    # `optimize` is always given here, so there is always a result.
     assert result is not None
     return result
+
+
+def save_signed(
+    model: DocumentModel, out_path: str, request: SignatureRequest
+) -> None:
+    """Like :func:`save_as`, then sign the file that came out.
+
+    Signing is not something that happens to the page list: it is a signature
+    *over the bytes* of a file, so it can only be applied after the file
+    exists. It runs inside the temporary, before the swap, so a certificate
+    that turns out to be unusable leaves the previous file intact -- the same
+    guarantee every other write here has.
+
+    A signature is computed over everything that was written, which is why the
+    window drops the open document afterwards and adopts the signed file: the
+    page list it held described the unsigned version, and editing it further
+    would quietly break the signature.
+    """
+    assert model.sources, "No document open"
+    _write_atomically(
+        model,
+        os.path.abspath(out_path),
+        None,
+        optimize=lambda path: sign_in_place(path, request),
+    )
 
 
 def extract_pages(model: DocumentModel, out_path: str, indices: list[int]) -> None:

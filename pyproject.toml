@@ -10,10 +10,14 @@ dependencies = [
     # 1.24.3 is the release that renamed the module to `pymupdf`; the code
     # imports that name, and `fitz` survives only as a deprecated alias.
     "pymupdf>=1.24.3",
-    # Compressione mirata: qpdf via i suoi binding. `recompress_flate` e
-    # `ObjectStreamMode.generate` (le due opzioni che fanno il lavoro)
-    # esistono da pikepdf 9.
+    # Compression with a purpose: qpdf through its bindings. `recompress_flate`
+    # and `ObjectStreamMode.generate` (the two options that do the work) have
+    # existed since pikepdf 9.
     "pikepdf>=9.0",
+    # PAdES signatures: building the cryptographic signature and reading it
+    # back afterwards are both things one does not write by hand. pyHanko
+    # brings cryptography, asn1crypto and lxml with it.
+    "pyhanko>=0.37",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",

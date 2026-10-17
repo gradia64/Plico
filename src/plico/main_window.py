@@ -49,18 +49,22 @@ from .model import (
     RemoveRedaction,
     RotatePage,
     SetFieldValue,
+    SignatureRequest,
     TextSpan,
     extract_pages,
     images_to_pdf,
     is_image,
+    is_signed,
     parse_page_ranges,
     save_as,
+    save_signed,
 )
 from .rendering import RenderWorker
 from .widgets.compress import CompressionDialog, CompressionTask, format_size
 from .widgets.form_panel import FormPanel
 from .widgets.ocr import OcrDialog, OcrTask
 from .widgets.page_view import PageView
+from .widgets.sign import SignatureDialog, SignDialog
 from .widgets.thumbnail_bar import ThumbnailBar, ThumbnailCache
 
 
@@ -94,6 +98,11 @@ class MainWindow(QMainWindow):
         # Where "Salva con nome" proposes to write a document that has no file
         # yet: next to the images it was made from.
         self._save_suggestion: str | None = None
+        # Whether the file on disk carries a signature. Cached because the
+        # title is rebuilt on every change and reading a PDF is not free; it
+        # is refreshed exactly where the file on disk can change: open, save
+        # and sign.
+        self._signed_on_disk = False
         # The PDFs made from images live here until Plico exits: the worker
         # renders from a path, so they must be real files. Created on first
         # use, removed by shutdown_worker().
@@ -259,6 +268,23 @@ class MainWindow(QMainWindow):
                 "archive-insert",
                 "Ctrl+Shift+C",
                 self._compress_file,
+            )
+        )
+        file_menu.addSeparator()
+        file_menu.addAction(
+            self._act(
+                self.tr("&Firma…"),
+                "application-pgp-signature",
+                "Ctrl+Shift+D",
+                self._sign_file,
+            )
+        )
+        file_menu.addAction(
+            self._act(
+                self.tr("&Verifica le firme…"),
+                "dialog-password",
+                "",
+                self._verify_signatures,
             )
         )
         file_menu.addSeparator()
@@ -540,6 +566,7 @@ class MainWindow(QMainWindow):
         self._refresh_form_panel(0)
         self._save_target = path
         self._save_suggestion = None
+        self._signed_on_disk = is_signed(path, password or "")
         self._update_title()
         self._status.setText(self.tr("Aperto: {0}").format(path))
 
@@ -588,6 +615,7 @@ class MainWindow(QMainWindow):
         self._current_page_index = 0
         self._refresh_form_panel()
         self._save_target = None
+        self._signed_on_disk = False
         self._update_title()
         self._status.setText(self.tr("Documento chiuso."))
 
@@ -798,6 +826,26 @@ class MainWindow(QMainWindow):
 
     def _save_to(self, path: str) -> bool:
         """Write the whole document to *path*; it becomes the "Salva" target."""
+        # A plain save writes a fresh file: the signature of the file it
+        # replaces would not be in it. Say so before doing it, because losing
+        # a signature is not something an undo can bring back.
+        if (
+            self._signed_on_disk
+            and self._save_target is not None
+            and os.path.abspath(path) == os.path.abspath(self._save_target)
+        ):
+            choice = QMessageBox.question(
+                self,
+                self.tr("Il documento è firmato"),
+                self.tr(
+                    "Salvare «{0}» così com'è toglie la firma: il file nuovo non "
+                    "è firmato.\n\nContinuare?"
+                ).format(os.path.basename(path)),
+                QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if choice != QMessageBox.StandardButton.Save:
+                return False
         # Computed BEFORE writing: os.replace() gives the target a new inode,
         # and afterwards it would no longer match the source it replaced.
         overwritten = self._doc_model.sources_at(path)
@@ -825,6 +873,8 @@ class MainWindow(QMainWindow):
         history survives; only the meaning of "unsaved" moves to this point.
         """
         self._save_target = path
+        # Every write here materialises the page list; none of them signs.
+        self._signed_on_disk = False
         self._undo_stack.setClean()
         self._update_title()
 
@@ -849,7 +899,13 @@ class MainWindow(QMainWindow):
             # A document made from images: there is no file name to show yet.
             self.setWindowTitle(self.tr("Senza titolo") + "[*]")
         else:
-            self.setWindowTitle(f"{os.path.basename(self._save_target)}[*]")
+            name = os.path.basename(self._save_target)
+            if self._signed_on_disk:
+                # The signature is a property of the file on disk, so it is
+                # named here: a title that does not say it would let the user
+                # believe the version on screen is the signed one.
+                name += self.tr(" — firmato")
+            self.setWindowTitle(f"{name}[*]")
         self.setWindowModified(self.is_modified())
         # Every open, close and save passes through here, so "Chiudi" is
         # enabled exactly while there is a document to close.
@@ -921,6 +977,136 @@ class MainWindow(QMainWindow):
                 "possono più annullare."
             ).format(path)
         )
+
+    # ------------------------------------------------------------------ #
+    #  Signatures
+    # ------------------------------------------------------------------ #
+
+    def _sign_file(self) -> None:
+        """File → Firma: write the page list, then sign the file that came out.
+
+        The signature is computed over the saved bytes, so it cannot be
+        applied to the page list on screen: a document is signed by signing a
+        *file*. What is written is the materialised document -- deletions,
+        rotations, redactions and form values included -- and the window then
+        adopts the signed file, because continuing to edit the page list
+        would silently invalidate what was just signed.
+        """
+        if not self._doc_model.sources:
+            QMessageBox.warning(
+                self, self.tr("Attenzione"), self.tr("Nessun documento aperto.")
+            )
+            return
+        if self._signed_on_disk:
+            choice = QMessageBox.question(
+                self,
+                self.tr("Documento già firmato"),
+                self.tr(
+                    "«{0}» è già firmato.\n\nUna seconda firma si aggiunge alla "
+                    "prima, non la sostituisce: vuoi continuare?"
+                ).format(os.path.basename(self._save_target or "")),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if choice != QMessageBox.StandardButton.Yes:
+                return
+
+        sizes = [item.unrotated_size for item in self._doc_model.pages]
+        dialog = SignDialog(sizes, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        request: SignatureRequest = dialog.request()
+
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            self.tr("Salva e firma"),
+            self._proposed_signed_path(),
+            self.tr("File PDF (*.pdf)"),
+        )
+        if not path:
+            return
+        try:
+            save_signed(self._doc_model, path, request)
+        # MuPDF, pyHanko and the filesystem all have their own exception types
+        # here; what the user needs is the reason, not the class.
+        except Exception as error:  # noqa: BLE001
+            QMessageBox.critical(
+                self, self.tr("Errore"), self.tr("Impossibile firmare:\n{0}").format(error)
+            )
+            return
+
+        # The signed file IS the document now: the pages on screen describe
+        # the unsigned version, and any later save would drop the signature.
+        overwritten = self._doc_model.sources_at(path)
+        for source in overwritten:
+            self._worker.evict_requested.emit(source)
+        if not self.open_path(path):
+            return
+        self._signed_on_disk = True
+        self._update_title()
+        self._status.setText(self.tr("Documento firmato: {0}").format(path))
+
+    def _proposed_signed_path(self) -> str:
+        """``documento.pdf`` -> ``documento-firmato.pdf``."""
+        origin = self._save_target or self._save_suggestion or ""
+        stem, extension = os.path.splitext(origin)
+        if not stem:
+            return ""
+        return f"{stem}-firmato{extension or '.pdf'}"
+
+    def _verify_signatures(self) -> None:
+        """File → Verifica le firme: read what the file on disk carries.
+
+        What is verified is the file, not the page list: a signature covers
+        bytes, and unsaved changes are not in those bytes. Asking first is the
+        difference between a verdict the user can trust and one about a
+        document they are not looking at.
+        """
+        if not self._doc_model.sources:
+            QMessageBox.warning(
+                self, self.tr("Attenzione"), self.tr("Nessun documento aperto.")
+            )
+            return
+        path = self._save_target
+        if not path:
+            QMessageBox.warning(
+                self,
+                self.tr("Attenzione"),
+                self.tr("Questo documento non ha ancora un file: salvalo prima di verificarlo."),
+            )
+            return
+        if self.is_modified():
+            choice = QMessageBox.question(
+                self,
+                self.tr("Modifiche non salvate"),
+                self.tr(
+                    "Il file «{0}» non contiene ancora le modifiche non salvate.\n\n"
+                    "Verificare lo stesso la copia che sta su disco?"
+                ).format(os.path.basename(path)),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if choice != QMessageBox.StandardButton.Yes:
+                return
+        roots = self._signed_roots()
+        dialog = SignatureDialog(
+            path,
+            roots,
+            password=self._doc_model.passwords.get(path, ""),
+            parent=self,
+        )
+        dialog.exec()
+        if dialog.roots != roots:
+            self._settings().setValue("firma/radici", dialog.roots)
+
+    def _signed_roots(self) -> list[str]:
+        """The PEM certificates the user decided to trust, as far as they exist."""
+        stored = self._settings().value("firma/radici", [])
+        if isinstance(stored, str):
+            stored = [stored]
+        if not isinstance(stored, list):
+            return []
+        return [path for path in stored if isinstance(path, str) and os.path.exists(path)]
 
     # ------------------------------------------------------------------ #
     #  Compression

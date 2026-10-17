@@ -46,6 +46,10 @@ comprimerli.
   diventa **cercabile e selezionabile** senza cambiare aspetto — il testo
   riconosciuto viene scritto sotto l'immagine, invisibile. Si sceglie quali
   pagine e in che lingua, e ogni giro è un solo passo di undo
+- **Firmare** (*File → Firma…*, `Ctrl+Shift+D`): una firma **PAdES** con il
+  proprio certificato, invisibile o stampata in un riquadro sulla pagina, e
+  *File → Verifica le firme…* per rileggere chi ha firmato e se il documento è
+  stato toccato dopo
 
 ### Requisito di accettazione
 
@@ -70,6 +74,7 @@ plico/
     │   ├── forms.py           # campi AcroForm: lettura, scrittura, svuotamento
     │   ├── textedit.py        # modifica di una riga di testo: span, verifica, riscrittura
     │   ├── ocr.py             # riconoscimento con Tesseract, strato invisibile, lingue
+    │   ├── sign.py            # firma PAdES con pyHanko e rilettura delle firme
     │   ├── images.py          # da immagini a PDF: A4, dpi, EXIF, JPEG intatti
     │   ├── save.py            # save_as(), save_compressed(), extract_pages()
     │   └── optimize.py        # livelli di compressione, optimize_in_place()
@@ -80,6 +85,7 @@ plico/
         ├── thumbnail_bar.py   # QListView + modello + cache, caricamento lazy
         ├── form_panel.py      # dock «Modulo»: un editor per ogni campo
         ├── ocr.py             # dialogo lingue/pagine e task di riconoscimento
+        ├── sign.py            # dialoghi di firma e di verifica delle firme
         └── compress.py        # dialogo del livello, format_size, task
 ```
 
@@ -240,6 +246,39 @@ I dati di lingua (`*.traineddata`) si mettono in
 dentro (§ Flatpak), su una distribuzione è il pacchetto `tesseract` /
 `libtesseract`.
 
+### Firma: un PDF firmato, non un timbro
+
+*File → Firma…* (`Ctrl+Shift+D`) firma il documento con un certificato
+PKCS#12 (`.p12` / `.pfx`) e produce una firma **PAdES** — il profilo di firma
+PDF che i lettori europei riconoscono. Si sceglie se la firma resta invisibile
+o se compare in un riquadro in basso a destra con nome, data e motivo: il
+riquadro è contenuto della pagina, quindi non si può togliere senza rompere la
+firma.
+
+Tre cose che questa implementazione fa e una che non fa:
+
+- **La firma è l'ultimo byte del file.** Prima si materializza il documento
+  (con tutti i campi compilati, il testo riscritto, le redazioni applicate, le
+  pagine ruotate), poi si firma. L'ordine inverso produrrebbe una firma che
+  copre una versione del documento diversa da quella che l'utente vede.
+- **Firmare adotta il file firmato.** Dopo `Firma…` la sessione punta al nuovo
+  file, perché continuare a lavorare sulla lista di pagine che l'ha generato
+  significherebbe perdere la firma al primo salvataggio successivo.
+- **Salvare sopra un file firmato chiede prima.** Un salvataggio normale
+  riscrive il PDF da zero: la firma non c'è più. Il programma lo dice e
+  aspetta un «sì», invece di farlo e basta.
+- **Non decide di chi fidarsi.** Plico non porta con sé nessun archivio di
+  autorità: una firma integra e valida di un certificato sconosciuto viene
+  mostrata come «integra, ma il certificato non è fra quelli che consideri
+  fidati». Si aggiungono i certificati di cui fidarsi uno per uno (file `.pem`)
+  e restano in `QSettings`.
+
+*File → Verifica le firme…* rilegge le firme dal file **su disco** e distingue
+i quattro casi che contano: firma integra e attendibile; integra ma di un
+certificato sconosciuto (ambra, non rosso: è comunque una firma vera); integra
+ma su un documento **modificato dopo la firma** — vale solo per la versione
+firmata; firma rotta o certificato scaduto.
+
 ### Integrazione desktop (KDE)
 
 - **Icone dal tema** (`QIcon.fromTheme`: `document-open`, `document-save-as`,
@@ -259,6 +298,7 @@ dentro (§ Flatpak), su una distribuzione è il pacchetto `tesseract` /
 - PySide6 ≥ 6.7
 - PyMuPDF (pymupdf) ≥ 1.24.3
 - pikepdf ≥ 9 (compressione mirata)
+- pyHanko ≥ 0.37 (firma PAdES; porta con sé crittografia e validazione)
 - Tesseract (libreria, 4 o 5) e almeno un dato di lingua per l'OCR — il
   Flatpak li porta entrambi
 
@@ -284,11 +324,12 @@ Il packaging è in `flatpak/` ed è pensato per essere pubblicabile su Flathub.
 | `io.github.gradia64.Plico.json` | manifest dell'applicazione |
 | `python3-pymupdf.json` | modulo per PyMuPDF, con wheel e `sha256` fissati |
 | `python3-pikepdf.json` | modulo per pikepdf, con wheel e `sha256` fissati |
+| `python3-pyhanko.json` | modulo per pyHanko e le sue dipendenze, sempre da wheel |
 | `io.github.gradia64.Plico.desktop` | launcher (registra `application/pdf`) |
 | `io.github.gradia64.Plico.metainfo.xml` | metadati AppStream |
 | `io.github.gradia64.Plico.svg` | icona |
 
-Quattro scelte non ovvie:
+Cinque scelte non ovvie:
 
 - **`base: io.qt.PySide.BaseApp`** invece di installare PySide6 con pip. La
   BaseApp di Flathub contiene già PySide6 compilato e allineato al Qt di
@@ -304,6 +345,13 @@ Quattro scelte non ovvie:
   `packaging`, ma `open()` e `save()` non li importano, e `packaging` è già
   nella BaseApp. Se servissero le API sulle immagini o il supporto PDF/A
   andrebbero aggiunte anche le loro wheel.
+- **pyHanko da wheel, in un solo modulo** (`python3-pyhanko.json`): pyHanko
+  tira con sé `cryptography`, `asn1crypto`, `aiohttp`, `lxml` e una decina di
+  altre dipendenze, tutte pure Python o con wheel `manylinux` per il 3.13 della
+  BaseApp, quindi si installano in un colpo solo con `--no-index --no-deps`.
+  Sono i venti file elencati nel modulo, ciascuno con il suo `sha256`: la
+  firma digitale è la parte del programma in cui "più o meno quella versione"
+  non è una risposta accettabile.
 - **`cleanup-commands: /app/cleanup-BaseApp.sh`**, richiesto dalla BaseApp.
 
 Costruire e installare nella propria utenza:

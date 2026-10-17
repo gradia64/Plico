@@ -29,11 +29,31 @@ from .optimize import (
     optimize_in_place,
 )
 from .redact import RedactionRect
-from .save import extract_pages, parse_page_ranges, save_as, save_compressed
+from .save import (
+    extract_pages,
+    parse_page_ranges,
+    save_as,
+    save_compressed,
+    save_signed,
+)
+from .sign import (
+    DEFAULT_FIELD,
+    Identity,
+    Signature,
+    SignatureRequest,
+    SigningError,
+    is_signed,
+    read_identity,
+    read_signatures,
+    sign_in_place,
+    stamp_box,
+    stamp_text,
+)
 from .textedit import FontChoice, TextEdit, TextSpan, apply_edit, check_edit, span_at
 
 __all__ = [
     "DEFAULT_DPI",
+    "DEFAULT_FIELD",
     "IMAGE_SUFFIXES",
     "LEVELS",
     "LEVELS_BY_KEY",
@@ -46,6 +66,7 @@ __all__ = [
     "EditText",
     "Field",
     "FontChoice",
+    "Identity",
     "MovePage",
     "OcrPage",
     "OcrWord",
@@ -55,6 +76,9 @@ __all__ = [
     "RemoveRedaction",
     "RotatePage",
     "SetFieldValue",
+    "Signature",
+    "SignatureRequest",
+    "SigningError",
     "TextEdit",
     "TextSpan",
     "apply_edit",
@@ -63,15 +87,22 @@ __all__ = [
     "extract_pages",
     "images_to_pdf",
     "is_image",
+    "is_signed",
     "languages",
     "open_for_reading",
     "optimize_in_place",
     "parse_page_ranges",
     "read_fields",
+    "read_identity",
+    "read_signatures",
     "recognise",
     "save_as",
     "save_compressed",
+    "save_signed",
+    "sign_in_place",
     "span_at",
+    "stamp_box",
+    "stamp_text",
     "user_tessdata_dir",
     "write_fields",
     "write_layer",

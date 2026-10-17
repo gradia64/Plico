@@ -92,6 +92,7 @@
         }
       ]
     },
+    "python3-pyhanko.json",
     "python3-pymupdf.json",
     "python3-pikepdf.json",
     {
