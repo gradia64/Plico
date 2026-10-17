@@ -7,6 +7,7 @@ document plus an index. See :func:`read_fields` for what happens when that
 rule is broken.
 """
 
+import re
 from dataclasses import dataclass
 
 import pymupdf
@@ -42,12 +43,16 @@ _FLAG_MULTILINE = 1 << 12
 CHECKED = "Yes"
 UNCHECKED = "Off"
 
-# Kinds Plico knows how to write back. Radio buttons are deliberately missing:
-# PyMuPDF cannot build them (``ValueError: bad xref``) and reads them with an
-# inverted, absurd rectangle, so offering an editor for them would be a
-# promise the save path could not keep. Signature fields belong to the signing
-# milestone, not to this one.
-_EDITABLE = (TEXT, CHECKBOX, CHOICE)
+# Kinds Plico knows how to write back. Radio buttons are here even though
+# PyMuPDF cannot *create* one -- ``page.add_widget`` on a radio fails with
+# ``ValueError: bad xref`` -- because writing an existing group works, and
+# nothing in Plico creates fields: it only fills in what the file already
+# has. (An old note here said PyMuPDF also *read* radios with an absurd
+# rectangle, and offered that as a second reason to leave them out; a group
+# built by another tool reads with a correct one, and the absurd values came
+# from a malformed field.) Signature fields belong to the signing milestone,
+# not to this one.
+_EDITABLE = (TEXT, CHECKBOX, CHOICE, RADIO)
 
 
 @dataclass(frozen=True)
@@ -86,27 +91,28 @@ def read_fields(page: pymupdf.Page) -> list[Field]:
     between a form that saves and a form that raises.
     """
     fields: list[Field] = []
+    doc = page.parent
     for widget in page.widgets() or ():
-        field = _describe_safely(widget)
+        field = _describe_safely(widget, doc)
         if field is not None:
             fields.append(field)
     return fields
 
 
-def _describe_safely(widget: pymupdf.Widget) -> Field | None:
+def _describe_safely(widget: pymupdf.Widget, doc: pymupdf.Document) -> Field | None:
     """Like :func:`_describe`, but a broken field yields ``None`` instead.
 
-    PyMuPDF does not refuse a malformed field: it hands back radio buttons with
-    an inverted, absurd rectangle, and it raises on the odd widget whose page
-    has gone away. Neither may make a whole document unreadable.
+    PyMuPDF does not refuse a malformed field: it hands back radio buttons
+    with an inverted, absurd rectangle, and it raises on the odd widget whose
+    page has gone away. Neither may make a whole document unreadable.
     """
     try:
-        return _describe(widget)
+        return _describe(widget, doc)
     except (AttributeError, ReferenceError, RuntimeError, ValueError):
         return None
 
 
-def _describe(widget: pymupdf.Widget) -> Field | None:
+def _describe(widget: pymupdf.Widget, doc: pymupdf.Document) -> Field | None:
     """Turn one widget into a :class:`Field`, or ``None`` if it is unusable."""
     name = widget.field_name or ""
     if not name:
@@ -119,17 +125,59 @@ def _describe(widget: pymupdf.Widget) -> Field | None:
         return None
 
     kind = _KINDS.get(widget.field_type, UNKNOWN)
+    value = widget.field_value or ""
+    options = tuple(widget.choice_values or ())
+    if kind == RADIO:
+        # One button of a group: the one state it can show is its own entry in
+        # the appearance, and the value worth showing is the group's choice,
+        # not this button's ``Off``.
+        value = _radio_value(doc, widget, value)
+        options = (_radio_option(widget),)
     return Field(
         name=name,
         kind=kind,
-        value=widget.field_value or "",
+        value=value,
         rect=(area.x0, area.y0, area.x1, area.y1),
-        options=tuple(widget.choice_values or ()),
+        options=options,
         multiline=bool(widget.field_flags & _FLAG_MULTILINE),
         read_only=(
             bool(widget.field_flags & _FLAG_READ_ONLY) or kind not in _EDITABLE
         ),
     )
+
+
+def _radio_option(widget: pymupdf.Widget) -> str:
+    """The one state a radio button can show.
+
+    PDF spells the options of a group in each button's appearance dictionary:
+    ``/AP /N`` holds ``/Off`` and the name of the option that button stands
+    for, and that name is what the field's ``/V`` is set to when the user
+    picks it. A button with nothing but ``Off`` belongs to no option.
+    """
+    states = widget.button_states() or {}
+    for state in states.get("normal") or ():
+        name = str(state)
+        if name and name.lower() != "off":
+            return name
+    return ""
+
+
+def _radio_value(doc: pymupdf.Document, widget: pymupdf.Widget, fallback: str) -> str:
+    """What a radio group has chosen.
+
+    The choice belongs to the *field*, which for a group is the parent object,
+    while MuPDF hands back each button's own appearance state -- ``Off`` for
+    every button the group did not choose. Reading ``/V`` where PDF keeps it
+    is the only way to tell a group's value from a button's.
+    """
+    kind, reference = doc.xref_get_key(widget.xref, "Parent")
+    if kind == "xref" and reference:
+        value_kind, value = doc.xref_get_key(int(reference.split()[0]), "V")
+        # PDF says a button field's /V is a name; MuPDF writes a string here,
+        # and files in the wild carry both, so both are accepted.
+        if value_kind in ("name", "string") and value:
+            return str(value).lstrip("/")
+    return fallback
 
 
 def write_fields(page: pymupdf.Page, values: dict[str, str]) -> int:
@@ -153,12 +201,69 @@ def write_fields(page: pymupdf.Page, values: dict[str, str]) -> int:
         if name not in values:
             continue
         value = values[name]
+        if _KINDS.get(widget.field_type, UNKNOWN) == RADIO:
+            written += _write_radio(doc, widget, value)
+            continue
         widget.field_value = value
         if value == "":
             _clear_value(doc, widget)
         widget.update()
         written += 1
     return written
+
+
+def _write_radio(doc: pymupdf.Document, widget: pymupdf.Widget, value: str) -> int:
+    """Choose one option of a radio group, from the button that stands for it.
+
+    The buttons of a group all carry the group's name, so a value written to
+    every one of them would be written to the wrong ones too: MuPDF turns the
+    other buttons off by itself, but pointing a button at a state it does not
+    have leaves it painting something it never shows. Only the button whose
+    own state *is* the wanted value may be turned on; the others are skipped.
+    """
+    if value == "":
+        _clear_radio(doc, widget)
+        return 1
+    if _radio_option(widget) != value:
+        return 0
+    widget.field_value = value
+    widget.update()
+    _name_the_choice(doc, widget, value)
+    return 1
+
+
+def _name_the_choice(doc: pymupdf.Document, widget: pymupdf.Widget, value: str) -> None:
+    """Write the group's ``/V`` as the *name* PDF asks for.
+
+    MuPDF stores the choice as a string, and PDF says a button field's ``/V``
+    is a name; a reader that follows the rule finds a string where it wanted a
+    name and shows no choice at all. One call after ``update()`` makes the
+    file say what the format says, and costs nothing.
+    """
+    kind, reference = doc.xref_get_key(widget.xref, "Parent")
+    target = int(reference.split()[0]) if kind == "xref" and reference else widget.xref
+    doc.xref_set_key(target, "V", f"/{value}")
+
+
+def _clear_radio(doc: pymupdf.Document, widget: pymupdf.Widget) -> None:
+    """Take the choice away from a button group.
+
+    ``/V`` on the field says which option is chosen and each button's ``/AS``
+    says what it draws: emptying one of the two leaves the old button painting
+    as if it were still chosen.
+    """
+    kind, reference = doc.xref_get_key(widget.xref, "Parent")
+    if kind != "xref" or not reference:
+        doc.xref_set_key(widget.xref, "V", "()")
+        doc.xref_set_key(widget.xref, "AS", "/Off")
+        return
+    parent = int(reference.split()[0])
+    doc.xref_set_key(parent, "V", "()")
+    kids_kind, kids = doc.xref_get_key(parent, "Kids")
+    if kids_kind != "array":
+        return
+    for kid in re.findall(r"(\d+)\s+0\s+R", kids):
+        doc.xref_set_key(int(kid), "AS", "/Off")
 
 
 def _clear_value(doc: pymupdf.Document, widget: pymupdf.Widget) -> None:

@@ -42,7 +42,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..model.document import PageItem
-from ..model.forms import CHECKBOX, UNCHECKED, Field
+from ..model.forms import CHECKBOX, CHECKED, RADIO, TEXT, UNCHECKED, Field
 from ..model.redact import RedactionRect, map_point, map_rect
 from ..model.textedit import TextEdit, TextSpan
 from ..rendering.worker import RenderRequest
@@ -452,7 +452,14 @@ class _PageLabel(QLabel):
     # -- the gesture ---------------------------------------------------- #
 
     def _select_field_under(self, point: QPointF) -> None:
-        """Tell the view which form field, if any, sits under *point*.
+        """Edit the form field under *point*, in place where that is possible.
+
+        A single-line text field opens its editor right on the page, and a
+        checkbox flips where it was clicked, while a radio button chooses the
+        option it stands for: all three are what the user means by clicking
+        them. Everything else -- a choice, a multiline or a read-only field --
+        is selected in the panel, which is where an editor for those kinds
+        lives: it can offer the options, grow, or say no.
 
         Last match wins, because that is the one painted on top.
         """
@@ -460,9 +467,17 @@ class _PageLabel(QLabel):
         if canvas is None:
             return
         for field in reversed(canvas.item.form_fields):
-            if self._rect_pixels(field.rect).contains(point):
+            if not self._rect_pixels(field.rect).contains(point):
+                continue
+            if field.editable and field.kind == TEXT and not field.multiline:
+                self._view.begin_field_edit(canvas, field)
+            elif field.editable and field.kind == CHECKBOX:
+                self._view.toggle_field(canvas, field)
+            elif field.editable and field.kind == RADIO:
+                self._view.choose_field(canvas, field)
+            else:
                 self._view.report_field_click(canvas.index, field.name)
-                return
+            return
 
     def mousePressEvent(self, event) -> None:
         if event.button() != Qt.MouseButton.LeftButton:
@@ -664,6 +679,10 @@ class PageView(QScrollArea):
     # (page index, field name): a click landed on a form field drawn on the
     # page. The view fills nothing — it only says where the user pointed.
     field_clicked = Signal(int, str)
+    # (page index, field name, value): a form field was filled in on the page
+    # itself — typed into, or a checkbox flipped. Same shape for both, because
+    # the window records both with the same command.
+    field_value_committed = Signal(int, str, str)
     # (page index, TextSpan, new text): the user confirmed a correction that
     # check_text_edit() accepted. The window turns it into an EditText.
     text_edited = Signal(int, object, str)
@@ -693,6 +712,10 @@ class PageView(QScrollArea):
         # The editor open over a span, and which span of which page it edits.
         self._editor: _SpanEditor | None = None
         self._editing: tuple[_Canvas, TextSpan] | None = None
+        # The same, for a form field filled in on the page: a text field gets
+        # an editor exactly where the field is drawn.
+        self._field_editor: _SpanEditor | None = None
+        self._editing_field: tuple[_Canvas, Field] | None = None
         # The note that says why a click opened no editor, and its timer.
         self._notice: QLabel | None = None
         self._notice_timer = QTimer(self)
@@ -741,6 +764,7 @@ class PageView(QScrollArea):
         # The page list changed shape: the editor's page index may now point
         # elsewhere, and its label may be about to go.
         self._close_text_editor()
+        self._close_field_editor()
         self._hide_notice()
         first_page = self._first_visible_page()
         self._items = list(self._model.pages)
@@ -823,6 +847,51 @@ class PageView(QScrollArea):
     def report_field_click(self, row: int, name: str) -> None:
         """A click landed on a form field: the window decides what happens."""
         self.field_clicked.emit(row, name)
+
+    def begin_field_edit(self, canvas: _Canvas, field: Field) -> None:
+        """Fill a form field in where it is drawn, instead of in the panel.
+
+        Only single-line text fields arrive here: a multiline one needs a box
+        that grows, and a choice needs its list of options -- the panel has
+        both, and it is one glance away from the page.
+        """
+        self._commit_field_edit()
+        self._hide_notice()
+        item = canvas.item
+        editor = _SpanEditor(canvas.label)
+        # The model's value, not the widget's: before a save the model is the
+        # only thing that knows what will end up in the file.
+        editor.setText(item.form_values.get(field.name, field.value))
+        editor.committed.connect(self._commit_field_edit)
+        editor.cancelled.connect(self._close_field_editor)
+        # Leaving the field confirms, like leaving a form box on a web page:
+        # the value is what the user sees, and there is a Ctrl+Z if it is not.
+        editor.focus_left.connect(self._commit_field_edit)
+        self._field_editor = editor
+        self._editing_field = (canvas, field)
+        self._place_field_editor()
+        editor.show()
+        editor.setFocus(Qt.FocusReason.MouseFocusReason)
+        editor.selectAll()
+
+    def toggle_field(self, canvas: _Canvas, field: Field) -> None:
+        """Flip a checkbox where it was clicked."""
+        current = canvas.item.form_values.get(field.name, field.value)
+        self.field_value_committed.emit(
+            canvas.index, field.name, UNCHECKED if current not in ("", UNCHECKED) else CHECKED
+        )
+
+    def choose_field(self, canvas: _Canvas, field: Field) -> None:
+        """Choose the radio button that was clicked.
+
+        A group of radio buttons all carry the same name, and each button
+        stands for one option: which one was clicked is written in the button,
+        so the click is the whole answer and there is nothing to type.
+        """
+        option = field.options[0] if field.options else ""
+        if not option:
+            return
+        self.field_value_committed.emit(canvas.index, field.name, option)
 
     def _make_label(self) -> _PageLabel:
         label = _PageLabel(self)
@@ -1116,6 +1185,9 @@ class PageView(QScrollArea):
     def set_redaction_mode(self, active: bool) -> None:
         """Turn the redaction tool on or off, for every page at once."""
         self._redaction_mode = bool(active)
+        # A field being filled in on the page is confirmed before the tool
+        # takes the mouse over: the click that follows is a redaction.
+        self._commit_field_edit()
         cursor = self._tool_cursor()
         for c in self._canvases:
             c.label.setCursor(cursor)
@@ -1165,6 +1237,7 @@ class PageView(QScrollArea):
     def set_selection_mode(self, active: bool) -> None:
         """Turn the selection tool on or off, for every page at once."""
         self._selection_mode = bool(active)
+        self._commit_field_edit()
         cursor = self._tool_cursor()
         for c in self._canvases:
             c.label.setCursor(cursor)
@@ -1238,6 +1311,7 @@ class PageView(QScrollArea):
         """Turn the text tool on or off. Leaving it confirms an open edit."""
         if not active:
             self._commit_text_edit(keep_open=False)
+        self._commit_field_edit()
         self._text_mode = bool(active)
         cursor = self._tool_cursor()
         for c in self._canvases:
@@ -1254,9 +1328,22 @@ class PageView(QScrollArea):
         """
         self._commit_text_edit(keep_open=False)
 
+    def finish_field_edit(self) -> None:
+        """Confirm the form field open in the editor, if any.
+
+        Called for the same reason as :meth:`finish_text_edit`: a value typed
+        on the page and not yet confirmed is unsaved work, and a save would
+        otherwise materialise the document without it.
+        """
+        self._commit_field_edit()
+
     def text_editor(self) -> QLineEdit | None:
         """The editor currently open over a span, if any."""
         return self._editor
+
+    def field_editor(self) -> QLineEdit | None:
+        """The editor currently open over a form field, if any."""
+        return self._field_editor
 
     def begin_text_edit(
         self, canvas: _Canvas, x: float, y: float, where: QPointF | None = None
@@ -1348,6 +1435,41 @@ class PageView(QScrollArea):
         self._notice_timer.stop()
         notice.hide()
         notice.deleteLater()
+
+    def _place_field_editor(self) -> None:
+        """Lay the editor exactly over the field it edits."""
+        if self._field_editor is None or self._editing_field is None:
+            return
+        canvas, field = self._editing_field
+        area = canvas.label._rect_pixels(field.rect)
+        font = self._field_editor.font()
+        font.setPixelSize(max(10, min(int(area.height() * 0.7), 18)))
+        self._field_editor.setFont(font)
+        self._field_editor.setGeometry(
+            int(area.left()),
+            int(area.top()),
+            max(60, int(area.width())),
+            max(20, int(area.height())),
+        )
+
+    def _commit_field_edit(self) -> None:
+        """Record what the field editor holds, if it changed anything."""
+        editor, editing = self._field_editor, self._editing_field
+        if editor is None or editing is None:
+            return
+        canvas, field = editing
+        value = editor.text()
+        self._close_field_editor()
+        if value != canvas.item.form_values.get(field.name, field.value):
+            self.field_value_committed.emit(canvas.index, field.name, value)
+
+    def _close_field_editor(self) -> None:
+        editor = self._field_editor
+        self._field_editor = None
+        self._editing_field = None
+        if editor is not None:
+            editor.hide()
+            editor.deleteLater()
 
     def _place_text_editor(self) -> None:
         """Lay the editor over its span: same place, a usable size.
@@ -1473,6 +1595,7 @@ class PageView(QScrollArea):
 
     def clear(self) -> None:
         self._close_text_editor()
+        self._close_field_editor()
         self._hide_notice()
         for c in self._canvases:
             self._layout.removeWidget(c.label)

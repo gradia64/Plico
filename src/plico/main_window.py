@@ -187,6 +187,9 @@ class MainWindow(QMainWindow):
         # The same route redactions take: the view reports where the user
         # pointed, and the window decides what to do about it.
         self._page_view.field_clicked.connect(self._on_field_clicked)
+        # A field filled in on the page comes back as a value, exactly like a
+        # field changed in the panel: one command, one way of recording it.
+        self._page_view.field_value_committed.connect(self._on_field_value_committed)
         self._form_dock = QDockWidget(self.tr("Modulo"), self)
         self._form_dock.setObjectName("form_dock")
         self._form_dock.setWidget(self._form_panel)
@@ -952,6 +955,7 @@ class MainWindow(QMainWindow):
         # change too: confirm it first, so the question below counts it
         # instead of the window dropping it with the editor.
         self._page_view.finish_text_edit()
+        self._page_view.finish_field_edit()
         if not self.is_modified():
             return True
         name = os.path.basename(self._save_target or "") or self.tr("Senza titolo")
@@ -1659,7 +1663,20 @@ class MainWindow(QMainWindow):
 
     def _on_field_edited(self, name: str, value: str) -> None:
         """The user changed a field in the panel: record it, undoably."""
-        row = self._form_panel.page()
+        self._set_field_value(self._form_panel.page(), name, value)
+
+    def _on_field_value_committed(self, row: int, name: str, value: str) -> None:
+        """The user filled a field in on the page itself: record it too.
+
+        The panel is put back in step with the page, because the two show the
+        same value and the panel's editor would otherwise keep the old one.
+        """
+        self._set_field_value(row, name, value, refresh_panel=True)
+
+    def _set_field_value(
+        self, row: int, name: str, value: str, refresh_panel: bool = False
+    ) -> None:
+        """Record one field value, whichever side of the window asked."""
         if not (0 <= row < len(self._doc_model.pages)):
             return
         item = self._doc_model.pages[row]
@@ -1671,6 +1688,10 @@ class MainWindow(QMainWindow):
         if item.form_values.get(name, current) == value:
             return
         self._undo_stack.push(SetFieldValue(self._doc_model, row, name, value))
+        self._status.setText(self.tr("Campo «{0}» aggiornato.").format(name))
+        if refresh_panel:
+            self._refresh_form_panel(row)
+            self._page_view.set_selected_field(row, name)
 
     def _on_field_clicked(self, row: int, name: str) -> None:
         """A field drawn on the page was clicked: edit it in the panel."""

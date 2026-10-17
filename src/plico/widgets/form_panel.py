@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..model.forms import CHECKBOX, CHECKED, CHOICE, UNCHECKED, Field
+from ..model.forms import CHECKBOX, CHECKED, CHOICE, RADIO, UNCHECKED, Field
 
 
 def _clear(layout: QFormLayout) -> None:
@@ -98,12 +98,13 @@ class FormPanel(QWidget):
 
         self._notice.hide()
         self._area.show()
-        for field in editable:
-            value = values.get(field.name, field.value)
-            self._seen[field.name] = value
-            editor = self._make_editor(field, value)
-            self._editors[field.name] = editor
-            self._form.addRow(field.name or self.tr("(senza nome)"), editor)
+        for group in _grouped(editable):
+            name = group[0].name
+            value = values.get(name, group[0].value)
+            self._seen[name] = value
+            editor = self._make_editor(group, value)
+            self._editors[name] = editor
+            self._form.addRow(name or self.tr("(senza nome)"), editor)
 
     def select_field(self, name: str) -> None:
         """Put the cursor in the editor of *name*, if it is on this page."""
@@ -116,13 +117,33 @@ class FormPanel(QWidget):
     #  Editors
     # ------------------------------------------------------------------ #
 
-    def _make_editor(self, field: Field, value: str) -> QWidget:
-        """Build the editor for *field* and start listening to it.
+    def _make_editor(self, fields: list[Field], value: str) -> QWidget:
+        """Build the editor for one field and start listening to it.
+
+        *fields* is a list because a radio group is one field drawn as several
+        buttons: they arrive as one widget each and become one editor. Every
+        other kind comes alone.
 
         The value is set BEFORE the signal is connected: filling an editor
         programmatically must not look like the user typing, or every page
         change would push an undo command.
         """
+        field = fields[0]
+        if field.kind == RADIO:
+            combo = QComboBox()
+            options = [option for one in fields for option in one.options if option]
+            if value not in options:
+                # No option chosen, or a choice this file does not offer: an
+                # empty entry says so instead of showing the first option as
+                # if it had been picked.
+                options.insert(0, "")
+            combo.addItems(options)
+            combo.setCurrentText(value)
+            combo.currentTextChanged.connect(
+                lambda text, name=field.name: self._changed(name, text)
+            )
+            return combo
+
         if field.kind == CHECKBOX:
             box = QCheckBox()
             box.setChecked(value not in ("", UNCHECKED))
@@ -171,3 +192,26 @@ class FormPanel(QWidget):
             return
         self._seen[name] = value
         self.value_changed.emit(name, value)
+
+
+def _grouped(fields: list[Field]) -> list[list[Field]]:
+    """Put the buttons of a radio group together, one editor per group.
+
+    A radio group reaches the panel as one field per button, all carrying the
+    group's name; the user sees one question with a list of answers, so the
+    panel must show it once. The buttons keep the order the page draws them
+    in, which is the order the file lists them.
+    """
+    groups: list[list[Field]] = []
+    seen: dict[str, list[Field]] = {}
+    for field in fields:
+        if field.kind != RADIO:
+            groups.append([field])
+            continue
+        if field.name in seen:
+            seen[field.name].append(field)
+            continue
+        group = [field]
+        seen[field.name] = group
+        groups.append(group)
+    return groups

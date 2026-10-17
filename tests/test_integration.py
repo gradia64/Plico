@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
 )
+from radio_forms import radio_pdf
 
 import plico.main_window
 from plico.main_window import MainWindow
@@ -2077,6 +2078,35 @@ def _form_pdf(path: str, pages: int = 1) -> None:
         doc.save(path, garbage=4, deflate=True)
 
 
+def _click_field(canvas, name: str, position: int = 0) -> None:
+    """Clicks the middle of a form field, on the page.
+
+    The click is a press and a release in the same pixel: that is what the
+    view reads as a click rather than as a drag. *position* picks among the
+    fields that share a name, which is how a radio group arrives: one field
+    per button.
+    """
+    field = [c for c in canvas.item.form_fields if c.name == name][position]
+    x = int((field.rect[0] + field.rect[2]) / 2 * canvas.scale)
+    y = int((field.rect[1] + field.rect[3]) / 2 * canvas.scale)
+    _drag(canvas.label, (x, y), (x, y))
+
+
+def _choice_pdf(path: str) -> None:
+    """A one page PDF with a single drop-down list."""
+    with pymupdf.open() as doc:
+        page = doc.new_page(width=595, height=842)
+        widget = pymupdf.Widget()
+        widget.field_name = "colore"
+        widget.field_type = pymupdf.PDF_WIDGET_TYPE_COMBOBOX
+        widget.choice_values = ["rosso", "verde"]
+        widget.field_value = "rosso"
+        widget.rect = pymupdf.Rect(72, 100, 300, 128)
+        page.add_widget(widget)
+        widget.update()
+        doc.save(path, garbage=4, deflate=True)
+
+
 def _file_values(path: str) -> dict[str, str]:
     with pymupdf.open(path) as doc:
         page = doc[0]
@@ -2196,8 +2226,29 @@ def test_the_panel_checkbox_records_the_state(qapp, tmp_path, windows):
     assert "accetto" not in mw._doc_model.pages[0].form_values
 
 
-def test_a_click_on_the_page_selects_the_field(qapp, tmp_path, windows):
-    """The click does not fill in: it tells the panel which field is being looked at."""
+def test_a_click_on_a_choice_field_selects_it_in_the_panel(qapp, tmp_path, windows):
+    """A choice needs its list of options: that editor lives in the panel.
+
+    Text fields and checkboxes are filled in where they are drawn; a choice
+    falls back to the panel, which is the only place that can offer the
+    options it is allowed to hold.
+    """
+    pdf = str(tmp_path / "tendina.pdf")
+    _choice_pdf(pdf)
+
+    mw = windows()
+    _open(mw, pdf)
+
+    canvas = mw._page_view._canvases[0]
+    _click_field(canvas, "colore")
+
+    assert mw._page_view.field_editor() is None, "una tendina non si compila sulla pagina"
+    assert mw._page_view.selected_field() == (0, "colore")
+    assert mw._form_panel.focusWidget() is not None
+
+
+def test_a_click_on_a_text_field_opens_the_editor_over_it(qapp, tmp_path, windows):
+    """The field is typed into where it is drawn, holding what it shows."""
     pdf = str(tmp_path / "modulo.pdf")
     _form_pdf(pdf)
 
@@ -2206,14 +2257,110 @@ def test_a_click_on_the_page_selects_the_field(qapp, tmp_path, windows):
 
     canvas = mw._page_view._canvases[0]
     field = next(c for c in canvas.item.form_fields if c.name == "nome")
-    inside = (
-        int((field.rect[0] + field.rect[2]) / 2 * canvas.scale),
-        int((field.rect[1] + field.rect[3]) / 2 * canvas.scale),
-    )
-    _drag(canvas.label, inside, inside)  # start == end: a plain click
+    expected = canvas.label._rect_pixels(field.rect)
+    _click_field(canvas, "nome")
 
-    assert mw._page_view.selected_field() == (0, "nome")
-    assert mw._form_panel.focusWidget() is not None
+    editor = mw._page_view.field_editor()
+    assert editor is not None, "un campo di testo si compila sulla pagina"
+    assert editor.text() == "vecchio", "l'editor si apre sul valore mostrato"
+
+    # Where the field is: what is typed and what is drawn must agree on the
+    # rectangle, or the correction lands somewhere else.
+    area = editor.geometry()
+    assert abs(area.left() - expected.left()) <= 2
+    assert abs(area.top() - expected.top()) <= 2
+
+
+def test_a_value_typed_on_the_page_is_one_undo_step(qapp, tmp_path, windows):
+    pdf = str(tmp_path / "modulo.pdf")
+    _form_pdf(pdf)
+
+    mw = windows()
+    _open(mw, pdf)
+    _click_field(mw._page_view._canvases[0], "nome")
+
+    editor = mw._page_view.field_editor()
+    editor.setText("Anna")
+    _press(editor, Qt.Key.Key_Return)
+
+    assert mw._page_view.field_editor() is None, "confermando l'editor si chiude"
+    assert mw._doc_model.pages[0].form_values["nome"] == "Anna"
+    assert mw._undo_stack.count() == 1
+    assert mw._undo_stack.undoText() == "Campo «nome» su pagina 1"
+    assert "«nome»" in mw._status.text()
+
+    mw._undo_stack.undo()
+    assert "nome" not in mw._doc_model.pages[0].form_values
+
+
+def test_typing_on_the_page_reaches_the_saved_file(qapp, tmp_path, monkeypatch, windows):
+    pdf = str(tmp_path / "modulo.pdf")
+    out = str(tmp_path / "out.pdf")
+    _form_pdf(pdf)
+
+    mw = windows()
+    _open(mw, pdf)
+    _click_field(mw._page_view._canvases[0], "nome")
+
+    editor = mw._page_view.field_editor()
+    editor.setText("Anna")
+    _press(editor, Qt.Key.Key_Return)
+
+    monkeypatch.setattr(
+        QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, ""))
+    )
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    mw._save_file_as()
+    _pump()
+
+    assert _file_values(out)["nome"] == "Anna"
+    assert _file_values(pdf)["nome"] == "vecchio", "la sorgente non si tocca"
+
+
+def test_a_click_on_a_checkbox_flips_it(qapp, tmp_path, windows):
+    """A box needs no editor: the click is the whole answer."""
+    pdf = str(tmp_path / "modulo.pdf")
+    _form_pdf(pdf)
+
+    mw = windows()
+    _open(mw, pdf)
+    canvas = mw._page_view._canvases[0]
+
+    _click_field(canvas, "accetto")
+    assert mw._page_view.field_editor() is None
+    assert mw._doc_model.pages[0].form_values["accetto"] == "Yes"
+
+    _click_field(canvas, "accetto")
+    assert mw._doc_model.pages[0].form_values["accetto"] == "Off"
+
+    # One field means one step of undo, however many times it was flipped:
+    # the two clicks describe the same field and the last value wins.
+    assert mw._undo_stack.count() == 1
+    mw._undo_stack.undo()
+    assert "accetto" not in mw._doc_model.pages[0].form_values
+
+
+def test_a_click_on_a_read_only_field_does_not_edit_it(qapp, tmp_path, windows):
+    pdf = str(tmp_path / "fisso.pdf")
+    with pymupdf.open() as doc:
+        page = doc.new_page(width=595, height=842)
+        widget = pymupdf.Widget()
+        widget.field_name = "protetto"
+        widget.field_type = pymupdf.PDF_WIDGET_TYPE_TEXT
+        widget.field_value = "non si tocca"
+        widget.field_flags = pymupdf.PDF_FIELD_IS_READ_ONLY
+        widget.rect = pymupdf.Rect(72, 100, 300, 128)
+        page.add_widget(widget)
+        widget.update()
+        doc.save(pdf, garbage=4, deflate=True)
+
+    mw = windows()
+    _open(mw, pdf)
+
+    _click_field(mw._page_view._canvases[0], "protetto")
+
+    assert mw._page_view.field_editor() is None
+    assert mw._doc_model.pages[0].form_values == {}
 
 
 def test_a_click_outside_the_fields_selects_nothing(qapp, tmp_path, windows):
@@ -2227,6 +2374,75 @@ def test_a_click_outside_the_fields_selects_nothing(qapp, tmp_path, windows):
     _drag(canvas.label, (5, 700), (5, 700))
 
     assert mw._page_view.selected_field() is None
+
+
+# --------------------------------------------------------------------- #
+#  Radio buttons: one name, several buttons, one answer
+# --------------------------------------------------------------------- #
+
+
+def test_the_panel_shows_a_radio_group_as_one_question(qapp, tmp_path, windows):
+    """The user sees one question with two answers, not two fields."""
+    pdf = str(tmp_path / "radio.pdf")
+    radio_pdf(pdf)
+
+    mw = windows()
+    _open(mw, pdf)
+
+    assert set(mw._form_panel._editors) == {"pasto"}
+    editor = _editor_di(mw, "pasto")
+    assert isinstance(editor, QComboBox)
+    assert [editor.itemText(i) for i in range(editor.count())] == ["primo", "secondo"]
+    assert editor.currentText() == "primo"
+
+
+def test_choosing_from_the_panel_writes_the_choice(qapp, tmp_path, windows):
+    pdf = str(tmp_path / "radio.pdf")
+    radio_pdf(pdf)
+
+    mw = windows()
+    _open(mw, pdf)
+    _type_in_panel(mw, "pasto", "secondo")
+
+    assert mw._doc_model.pages[0].form_values["pasto"] == "secondo"
+    assert mw._undo_stack.count() == 1
+    assert mw._undo_stack.undoText() == "Campo «pasto» su pagina 1"
+
+
+def test_a_click_on_a_radio_button_chooses_that_answer(qapp, tmp_path, windows):
+    """Clicking a button is the answer; clicking the other one changes it."""
+    pdf = str(tmp_path / "radio.pdf")
+    radio_pdf(pdf)
+
+    mw = windows()
+    _open(mw, pdf)
+    canvas = mw._page_view._canvases[0]
+
+    _click_field(canvas, "pasto", 1)
+
+    assert mw._page_view.field_editor() is None
+    assert mw._doc_model.pages[0].form_values["pasto"] == "secondo"
+
+    _click_field(canvas, "pasto", 0)
+
+    assert mw._doc_model.pages[0].form_values["pasto"] == "primo"
+    # Both clicks describe the same field, so they merge into one step.
+    assert mw._undo_stack.count() == 1
+    mw._undo_stack.undo()
+    assert mw._doc_model.pages[0].form_values == {}
+
+
+def test_the_chosen_answer_reaches_the_saved_file(qapp, tmp_path, windows):
+    pdf = str(tmp_path / "radio.pdf")
+    radio_pdf(pdf)
+    output = str(tmp_path / "scelto.pdf")
+
+    mw = windows()
+    _open(mw, pdf)
+    _click_field(mw._page_view._canvases[0], "pasto", 1)
+    save_as(mw._doc_model, output)
+
+    assert _file_values(output)["pasto"] == "secondo"
 
 
 def test_the_drawn_value_comes_from_the_model(qapp, tmp_path, windows):

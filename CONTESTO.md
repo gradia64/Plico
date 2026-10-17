@@ -73,16 +73,16 @@ plico/
     ├── test_worker.py        # il worker di rendering in isolamento (11)
     ├── test_optimize.py      # i livelli di compressione e optimize_in_place (16)
     ├── test_redact.py        # rotazione e redazione vera, zone ritoccabili (47)
-    ├── test_forms.py         # campi AcroForm: letti, scritti, riletti dal file (21)
+    ├── test_forms.py         # campi AcroForm: letti, scritti, riletti dal file (29)
     ├── test_textedit.py      # uno span sostituito: testo, sfondo, font, spazio (23)
     ├── test_images.py        # immagini → PDF: DPI, foto ridotte, EXIF, JPEG intatti (13)
     ├── test_ocr.py           # OCR: spazio pagina, strato invisibile, undo (12)
     ├── test_sign.py          # certificati, firma, verdetto, secondo salvataggio (26)
     ├── test_edit_text.py     # EditText e salvataggio: undo, redazioni, estrai, comprimi (21)
-    └── test_integration.py   # MainWindow vera, offscreen: 144 test end-to-end
+    └── test_integration.py   # MainWindow vera, offscreen: 153 test end-to-end
 ```
 
-Gate di qualità attuale: **378 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **395 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
 (23 file sorgente).
 
 ---
@@ -771,16 +771,30 @@ chiamare `update()` mentre la pagina che si sta salvando è ancora viva.
   una redazione altrove sulla stessa pagina;
 - vale per `save_as` **e** per `save_compressed`: `clean=True` conserva il
   modulo e i suoi valori (verificato);
-- i tipi modificabili sono **testo**, **casella** e **tendina/lista**. I
-  **radiobutton** restano fuori: PyMuPDF non li sa costruire (`ValueError: bad
-  xref`) e li rilegge con un `rect` assurdo (`±INT32_MAX`), quindi
-  `read_fields()` li scarta e non si offre un editor per ciò che non si
-  riuscirebbe a salvare. Le **firme** appartengono alla tappa della firma.
+- i tipi modificabili sono **testo**, **casella**, **tendina/lista** e
+  **radiobutton**. I radio ci sono anche se PyMuPDF **non sa crearne uno**
+  (`page.add_widget()` con `PDF_WIDGET_TYPE_RADIOBUTTON` solleva `ValueError:
+  bad xref`, sempre, con o senza valore): sa però **scriverli**, purché la
+  pagina resti viva — senza un riferimento alla pagina `update()` muore con
+  `ReferenceError: weakly-referenced object no longer exists`. Un gruppo è
+  **un campo con un bottone per scelta**, tutti con lo stesso nome: `read_fields`
+  ne restituisce uno per bottone, e `value`/`option` si leggono da `button_states()`
+  (`{'normal': ['Off', 'primo']}`) e dal `/V` del campo padre, non
+  dall'`/AS` del bottone. Scrivere significa mettere `/V` sul padre e `/AS` sul
+  bottone scelto e `/Off` sugli altri; MuPDF vuole il nome del campo come
+  **nome** `/secondo` e non come stringa, e PyMuPDF gliela scriveva come
+  stringa: da qui `_name_the_choice()`. Le **firme** appartengono a *File →
+  Firma…*.
 
 La vista disegna i campi sulla pagina (`_paint_fields`, con il valore preso dal
-**modello** e non dal file) e un clic su un campo seleziona l'editor
-corrispondente nel pannello: `PageView` emette `field_clicked` e `MainWindow`
-decide, esattamente come per la redazione.
+**modello** e non dal file). Un clic su un campo **fa quello che l'utente
+intende**: un campo di testo a riga singola apre l'editor sulla pagina, una
+casella si spunta dove è stata cliccata, un bottone radio sceglie la sua
+risposta. Tendina, testo multiriga e campi in sola lettura si limitano a
+selezionare l'editor nel pannello, che è dove può stare un editor che offre le
+scelte, cresce o dice di no: `PageView` emette `field_clicked` solo per questi,
+e per gli altri agisce da sé (`begin_field_edit`, `toggle_field`,
+`choose_field`), così `MainWindow` continua a ricevere un solo segnale.
 
 ### Modifica minima del testo (`model/textedit.py`)
 
@@ -1232,6 +1246,23 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
 
 ### PyMuPDF
 
+- **Un radiobutton non si crea, ma si scrive.** `page.add_widget()` con
+  `PDF_WIDGET_TYPE_RADIOBUTTON` solleva `ValueError: bad xref` **sempre** —
+  con il valore impostato, senza valore e con `field_value = True`: il difetto
+  e` nella creazione del widget, non nel valore. Nei test il gruppo si scrive
+  a mano con pikepdf (`tests/radio_forms.py`), che è anche la forma con cui lo
+  scrivono gli altri programmi. Scriverne uno, invece, PyMuPDF lo sa fare,
+  **purché la pagina resti viva**: legando `page = doc[0]` a una variabile
+  locale, `widget.field_value = "secondo"` + `update()` scrive `/V` sul campo
+  padre e `/AS /secondo` sul bottone. Con la pagina temporanea muore con
+  `ReferenceError: weakly-referenced object no longer exists` (dentro
+  `Widget._checker`, che fa `doc = self.parent.parent`), e questa è la ragione
+  per cui `forms.write_fields()` prende una `Page`, non un documento;
+- **MuPDF vuole i nomi dei campi come nomi**: PyMuPDF scriveva il valore del
+  gruppo radio come **stringa** (`/V (secondo)`), che è fuori specifica e che
+  i lettori seri non leggono. Per questo `forms._name_the_choice()` riscrive a
+  basso livello `xref_set_key(parent, "V", "/secondo")` — e la rilettura con
+  `field_value` tornava `'Off'` proprio perché l'`/AS` non era stato aggiornato;
 - **Su un handle bloccato la prima lettura è definitiva.** Se una pagina viene
   toccata *prima* di autenticare (`doc[0]`, `get_text()`), l'handle resta
   incapace di decifrare: un `authenticate()` successivo riporta
@@ -1507,10 +1538,12 @@ sostituita con la sorgente `git` del tag di rilascio.
   che è esattamente quello che si vuole evitare. Il file compresso nasce su un
   temporaneo e viene adottato solo se ha guadagnato, quindi il numero che si
   legge è quello vero;
-- i form si compilano **dal pannello**, non scrivendo sulla pagina: il clic su
-  un campo lo seleziona nel dock «Modulo», ma non si digita in-place. I
-  radiobutton non sono modificabili; le firme si fanno da *File → Firma…* (non
-  dal pannello, perché non si compilano: si calcolano, vedi §8);
+- i form si compilano **sulla pagina**: un clic su un campo di testo apre
+  l'editor dove sta il campo, una casella si spunta, un bottone radio sceglie
+  la sua risposta; il dock «Modulo» resta per ciò che sulla pagina non si
+  scrive — tendine, testo multiriga, campi in sola lettura. I radiobutton sono
+  modificabili anche se PyMuPDF non sa crearli (§8). Le firme si fanno da
+  *File → Firma…* (non dal pannello, perché non si compilano: si calcolano);
 - il cambio di monitor è gestito da `MainWindow`, non da `PageView`:
   `_watch_screen()` si connette una volta sola a `windowHandle().screenChanged`
   (dal `showEvent`, perché durante la costruzione `self.window()` è `None`) e
@@ -1540,7 +1573,7 @@ sostituita con la sorgente `git` del tag di rilascio.
 **Con la firma, la roadmap lunga è finita**: le quattro voci dell'idea
 originale ci sono tutte e nessuna è un abbozzo — ognuna ha la sua sezione in
 §8 e i suoi test. Quello che resta è l'elenco del debito tecnico qui sopra:
-rifiniture (scrittura in-place nei form, infrastruttura `.ts`), non capacità mai
+rifinitura (l'infrastruttura `.ts`), non capacità mai
 esistite.
 
 Delle dieci voci della review dell'ottobre 2026 non resta niente, e le

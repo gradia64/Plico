@@ -37,7 +37,7 @@ comprimerli.
   da eliminare, oppure si trascina sulle parole, e al salvataggio il testo
   viene **rimosso**, non coperto — quel che resta non è più copiabile né
   ricercabile
-- **Compilare i form AcroForm**: il dock «Modulo» mostra i campi della pagina
+- **Compilare i form AcroForm**: si scrive dentro la pagina, il dock «Modulo»
   in vista — testo, anche multiriga, caselle e tendine — e i valori finiscono
   nel file al salvataggio, con undo/redo
 - **Modifica minima del testo**: un clic su una riga la apre in un editor
@@ -229,9 +229,11 @@ sistema, altrimenti un sosia (serif, sans o monospazio) con lo stesso stile.
 
 ### Form: compilare il PDF, non solo leggerlo
 
-Il dock **Modulo** (a destra) elenca i campi della pagina in vista: testo
-(anche multiriga), caselle e tendine. Un clic su un campo sulla pagina lo
-seleziona nel pannello — si scrive lì, non dentro la pagina. I valori restano
+Si compila **sulla pagina**: un clic su un campo di testo apre l'editor dove
+sta il campo, una casella si spunta dove l'hai cliccata, un pulsante radio
+sceglie la risposta che rappresenta. Il dock **Modulo** (a destra) elenca i
+campi della pagina in vista e resta la strada per quelli che sulla pagina non
+si scrivono — tendine, testo multiriga, campi in sola lettura. I valori restano
 **modificabili finché non salvi** e passano per gli stessi undo/redo del resto
 (`Ctrl+Z`).
 
@@ -243,9 +245,10 @@ campo se lo porta via. Il valore disegnato sulla pagina è quello del modello,
 cioè quello che *sarà* nel file.
 
 Un campo viene scritto **solo se lo tocchi**: uno mai aperto conserva il valore
-che aveva nella sorgente, che non è la stessa cosa di svuotarlo. I pulsanti
-radio non sono modificabili — PyMuPDF non li sa costruire e li rilegge male — e
-le firme appartengono alla tappa successiva.
+che aveva nella sorgente, che non è la stessa cosa di svuotarlo. Un gruppo di
+pulsanti radio è **una domanda sola** — il dock lo mostra come una tendina con
+le risposte — e si sceglie anche cliccandone uno sulla pagina. Le firme
+appartengono a *File → Firma…*.
 
 ### OCR: rendere cercabile una scansione
 

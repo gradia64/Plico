@@ -5,6 +5,7 @@ system: this way the tests also run where that file is missing, and every field
 type has its own case.
 """
 
+import pikepdf
 import pymupdf
 from PySide6.QtGui import QUndoStack
 
@@ -14,7 +15,7 @@ from plico.model import (
     DocumentModel,
     SetFieldValue,
 )
-from plico.model.forms import CHECKBOX, CHECKED, CHOICE, TEXT, write_fields
+from plico.model.forms import CHECKBOX, CHECKED, CHOICE, RADIO, TEXT, write_fields
 from plico.model.redact import RedactionRect
 from plico.model.save import save_as, save_compressed
 
@@ -408,3 +409,119 @@ def test_a_repeated_field_survives_page_reordering(tmp_path):
     # The copy of the second page carries the name renamed by MuPDF
     # (`nome [x]`): this is why the value is written before the copy.
     assert _values_in_order(output, 1) == ["nuovo"]
+
+# --------------------------------------------------------------------- #
+#  Radio buttons: built by hand, because PyMuPDF cannot create them
+# --------------------------------------------------------------------- #
+# `radio_forms` writes the group the way PDF describes it: one field (the
+# parent) holding the buttons as kids, each kid carrying the one state it can
+# show. Its drawn states are what names the options.
+
+from radio_forms import radio_pdf as _radio_pdf
+
+
+def _radio_raw(path: str) -> tuple[str, list[str]]:
+    """What the file itself says: the group's /V and every button's /AS."""
+    with pikepdf.Pdf.open(path) as pdf:
+        parent = pdf.Root["/AcroForm"]["/Fields"][0]
+        return str(parent.get("/V")), [str(kid.get("/AS")) for kid in parent["/Kids"]]
+
+
+def _radio_opened(tmp_path, **kwargs) -> tuple[DocumentModel, str]:
+    source = str(tmp_path / "radio.pdf")
+    _radio_pdf(source, **kwargs)
+    model = DocumentModel()
+    model.open(source)
+    return model, source
+
+
+def test_a_radio_group_is_read_as_the_question_it_is(tmp_path):
+    """Every button knows its own option; the choice belongs to the group."""
+    model, _ = _radio_opened(tmp_path)
+
+    buttons = model.pages[0].form_fields
+    assert [button.kind for button in buttons] == [RADIO, RADIO]
+    assert [button.options for button in buttons] == [("primo",), ("secondo",)]
+    # Both buttons report the group's choice, not their own Off.
+    assert [button.value for button in buttons] == ["primo", "primo"]
+    assert all(button.editable for button in buttons)
+
+
+def test_the_buttons_are_where_the_page_draws_them(tmp_path):
+    model, _ = _radio_opened(tmp_path)
+
+    boxes = [field.rect for field in model.pages[0].form_fields]
+    assert boxes[0][0] < boxes[1][0], "il primo bottone sta a sinistra del secondo"
+    assert boxes[0][1] == boxes[1][1]
+
+
+def test_the_geometry_does_not_change_on_a_rotated_page(tmp_path):
+    """A field belongs to the document: rotating the page must not move it."""
+    straight_dir = tmp_path / "dritta"
+    turned_dir = tmp_path / "girata"
+    straight_dir.mkdir()
+    turned_dir.mkdir()
+    straight, _ = _radio_opened(straight_dir)
+    turned, _ = _radio_opened(turned_dir, rotation=90)
+
+    assert [f.rect for f in straight.pages[0].form_fields] == [
+        f.rect for f in turned.pages[0].form_fields
+    ]
+
+
+def test_choosing_a_button_names_the_choice(tmp_path):
+    """PDF wants a *name* in /V, and MuPDF writes a string: the file must say
+    what the format says, or a reader that follows the rule shows no choice."""
+    model, source = _radio_opened(tmp_path)
+    model.pages[0].form_values["pasto"] = "secondo"
+
+    output = str(tmp_path / "scelto.pdf")
+    save_as(model, output)
+
+    assert _radio_raw(output) == ("/secondo", ["/Off", "/secondo"])
+    assert _values(output)["pasto"] == "secondo"
+    assert _radio_raw(source)[0] == "/primo", "la sorgente non si tocca"
+
+
+def test_only_the_button_that_stands_for_the_option_is_turned_on(tmp_path):
+    """Writing the value to every button would point a button at a state it
+    does not have, and it would paint something it never shows."""
+    model, _ = _radio_opened(tmp_path)
+    model.pages[0].form_values["pasto"] = "secondo"
+
+    output = str(tmp_path / "uno.pdf")
+    save_as(model, output)
+
+    assert _radio_raw(output)[1] == ["/Off", "/secondo"]
+
+
+def test_a_value_no_button_offers_changes_nothing(tmp_path):
+    model, _ = _radio_opened(tmp_path)
+    model.pages[0].form_values["pasto"] = "inesistente"
+
+    output = str(tmp_path / "strano.pdf")
+    save_as(model, output)
+
+    assert _radio_raw(output) == ("/primo", ["/primo", "/Off"])
+
+
+def test_taking_the_choice_away_turns_every_button_off(tmp_path):
+    """/V lives on the field and /AS on each button: emptying one of the two
+    leaves the old button painted as chosen."""
+    model, _ = _radio_opened(tmp_path)
+    model.pages[0].form_values["pasto"] = ""
+
+    output = str(tmp_path / "vuoto.pdf")
+    save_as(model, output)
+
+    assert _radio_raw(output) == ("", ["/Off", "/Off"])
+
+
+def test_a_rotated_page_saves_the_choice(tmp_path):
+    model, _ = _radio_opened(tmp_path, rotation=90)
+    model.pages[0].form_values["pasto"] = "secondo"
+
+    output = str(tmp_path / "girata.pdf")
+    save_as(model, output)
+
+    assert _radio_raw(output)[0] == "/secondo"
