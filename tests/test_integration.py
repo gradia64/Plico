@@ -531,6 +531,7 @@ def test_file_menu_exposes_every_expected_action(windows):
         "Salva con &nome…",
         "&Unisci PDF…",
         "&Estrai pagine…",
+        "&Chiudi",
         "&Esci",
         "Annulla",
         "Ripeti",
@@ -2652,3 +2653,136 @@ def test_opening_another_document_turns_the_text_tool_off(windows, tmp_path):
     _open(mw, other)
 
     assert not mw._page_view.text_mode() and not mw._text_act.isChecked()
+
+
+# --------------------------------------------------------------------- #
+#  File → Chiudi: the document goes, the window stays
+# --------------------------------------------------------------------- #
+
+
+def _close_action(mw: MainWindow) -> QAction:
+    return next(
+        a for a in mw.menuBar().actions()[0].menu().actions() if a.text() == "&Chiudi"
+    )
+
+
+def test_close_is_in_the_file_menu_and_only_enabled_with_a_document(windows, tmp_path):
+    mw = windows()
+    action = _close_action(mw)
+    assert action.shortcut().toString() == "Ctrl+W"
+    assert not action.isEnabled(), "nothing to close yet"
+
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=2)
+    _open(mw, pdf)
+    assert action.isEnabled()
+
+    action.trigger()
+    assert not action.isEnabled()
+
+
+def test_close_empties_the_window_and_keeps_it_open(windows, tmp_path):
+    mw = windows()
+    mw.resize(1000, 700)
+    mw.show()
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=3)
+    _open(mw, pdf)
+    handle = mw._worker._docs.get(pdf)
+    assert handle is not None
+
+    assert mw._close_file()
+    _pump(0.2)
+
+    assert mw.isVisible(), "the window stays"
+    assert mw._doc_model.page_count == 0 and mw._doc_model.sources == []
+    assert mw._page_view._canvases == []
+    assert mw._thumb_bar.model().rowCount() == 0
+    assert mw._undo_stack.count() == 0
+    assert mw.windowTitle() == "Plico" and not mw.isWindowModified()
+    assert mw._status.text() == "Documento chiuso."
+    assert handle.is_closed, "the worker must let go of the file"
+
+
+def test_close_with_changes_can_be_cancelled(windows, tmp_path, monkeypatch):
+    mw = windows()
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=3)
+    _open(mw, pdf)
+    mw._delete_page()
+    questions = _answer(monkeypatch, QMessageBox.StandardButton.Cancel)
+
+    assert not mw._close_file()
+
+    assert len(questions) == 1
+    assert mw._doc_model.page_count == 2, "the document is still there, edits included"
+
+
+def test_close_with_changes_can_discard_them(windows, tmp_path, monkeypatch):
+    mw = windows()
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=3)
+    _open(mw, pdf)
+    mw._delete_page()
+    _answer(monkeypatch, QMessageBox.StandardButton.Discard)
+
+    assert mw._close_file()
+
+    assert mw._doc_model.page_count == 0
+    with pymupdf.open(pdf) as doc:
+        assert doc.page_count == 3, "«Non salvare» writes nothing"
+
+
+def test_close_with_changes_can_save_them_first(windows, tmp_path, monkeypatch):
+    mw = windows()
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=3)
+    _open(mw, pdf)
+    mw._delete_page()
+    _answer(monkeypatch, QMessageBox.StandardButton.Save)
+
+    assert mw._close_file()
+
+    assert mw._doc_model.page_count == 0
+    with pymupdf.open(pdf) as doc:
+        assert doc.page_count == 2
+
+
+def test_an_unconfirmed_text_correction_counts_as_a_change(windows, tmp_path, monkeypatch):
+    """Typed in the editor but not confirmed yet: closing must not drop it silently."""
+    mw = windows()
+    pdf = _editing(mw, tmp_path)
+    _click_word(mw, pdf, "Pagina 1")
+    mw._page_view.text_editor().setText("Pagina uno")
+    questions = _answer(monkeypatch, QMessageBox.StandardButton.Cancel)
+
+    assert not mw._close_file()
+
+    assert len(questions) == 1, "the typed correction is a change worth asking about"
+    assert [e.new_text for e in mw._doc_model.pages[0].text_edits] == ["Pagina uno"]
+
+
+def test_close_turns_the_tools_off(windows, tmp_path):
+    mw = windows()
+    _editing(mw, tmp_path)
+
+    mw._close_file()
+
+    assert not mw._page_view.text_mode() and not mw._text_act.isChecked()
+    assert not mw._page_view.redaction_mode() and not mw._redact_act.isChecked()
+
+
+def test_a_closed_window_opens_the_next_document_normally(windows, tmp_path):
+    mw = windows()
+    first = str(tmp_path / "primo.pdf")
+    second = str(tmp_path / "secondo.pdf")
+    _make_pdf(first, pages=2, text="Primo")
+    _make_pdf(second, pages=4, text="Secondo")
+    _open(mw, first)
+    mw._close_file()
+
+    _open(mw, second)
+
+    assert mw._doc_model.page_count == 4
+    assert mw.windowTitle() == "secondo.pdf[*]"
+    assert _close_action(mw).isEnabled()

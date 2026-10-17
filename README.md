@@ -22,7 +22,8 @@ comprimerli.
 - **Salvataggio** su file temporaneo: il PDF di partenza non si tocca.
   `Ctrl+S` salva sul file aperto (o sull'ultimo «Salva con nome»),
   `Ctrl+Shift+S` chiede dove; il titolo segna con `*` le modifiche non
-  salvate, e chiudere o aprire un altro file chiede prima di perderle
+  salvate, e chiudere o aprire un altro file chiede prima di perderle.
+  `Ctrl+W` (*File → Chiudi*) chiude il documento lasciando aperta la finestra
 - **Salva compresso** a tre livelli, con il guadagno mostrato a fine lavoro —
   e il livello "leggera" è senza perdita
 - **Cancellazione vera** (in inglese *redaction*): si trascina un rettangolo sui dati da eliminare e al

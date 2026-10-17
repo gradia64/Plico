@@ -966,6 +966,15 @@ class PageView(QScrollArea):
             # The outline of edited spans is drawn only while the tool is on.
             c.label.update()
 
+    def finish_text_edit(self) -> None:
+        """Confirm the correction open in the editor, if any.
+
+        For the window, before it decides whether there is anything unsaved:
+        typed-but-unconfirmed text is the user's work too. A correction the
+        save could not write is dropped, with the reason in the status bar.
+        """
+        self._commit_text_edit(keep_open=False)
+
     def text_editor(self) -> QLineEdit | None:
         """The editor currently open over a span, if any."""
         return self._editor

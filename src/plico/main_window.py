@@ -231,6 +231,16 @@ class MainWindow(QMainWindow):
             )
         )
         file_menu.addSeparator()
+        # Close the document, keep the window: the only other way to put a
+        # document down was to open another one in its place.
+        self._close_act = self._act(
+            self.tr("&Chiudi"), "document-close", "Ctrl+W", self._close_file
+        )
+        # Nothing to close until something is open; _update_title() keeps
+        # this in step from then on.
+        self._close_act.setEnabled(False)
+        file_menu.addAction(self._close_act)
+        file_menu.addSeparator()
         file_menu.addAction(self._act(self.tr("&Esci"), "application-exit", "Ctrl+Q", self.close))
         edit_menu = menubar.addMenu(self.tr("&Modifica"))
 
@@ -496,6 +506,46 @@ class MainWindow(QMainWindow):
         self._page_view.set_paused(False)
         self._thumb_bar.refresh()
 
+    def _close_file(self) -> bool:
+        """File → Chiudi: put the document down, keep the window.
+
+        Asks first when there are unsaved changes, like quitting and like
+        "Apri". Returns whether the document is now closed.
+        """
+        if not self._doc_model.sources:
+            return True
+        if not self._confirm_discard():
+            return False
+        self.close_document()
+        return True
+
+    def close_document(self) -> None:
+        """Empty the window: no document, no history, no tool on.
+
+        Unconditional -- the question about unsaved changes belongs to the
+        caller (:meth:`_close_file`). The worker is told to forget every
+        source too: it would otherwise keep the files open, and the user who
+        closes a PDF expects to be able to move or delete it.
+        """
+        sources = list(self._doc_model.sources)
+        # The view first: it drops an open editor WITHOUT confirming it (the
+        # answer about changes has already been given) and its render cache.
+        self._page_view.clear()
+        self._redact_act.setChecked(False)
+        self._on_redaction_toggled(False)
+        self._text_act.setChecked(False)
+        self._page_view.set_text_mode(False)
+        self._undo_stack.clear()
+        self._doc_model.close()
+        self._thumbnail_cache.clear()
+        for source in sources:
+            self._worker.evict_requested.emit(source)
+        self._current_page_index = 0
+        self._refresh_form_panel()
+        self._save_target = None
+        self._update_title()
+        self._status.setText(self.tr("Documento chiuso."))
+
     def _merge_file(self) -> None:
         """Unire: append every page of another PDF to the document.
 
@@ -667,6 +717,9 @@ class MainWindow(QMainWindow):
         else:
             self.setWindowTitle(f"{os.path.basename(self._save_target)}[*]")
         self.setWindowModified(self.is_modified())
+        # Every open, close and save passes through here, so "Chiudi" is
+        # enabled exactly while there is a document to close.
+        self._close_act.setEnabled(bool(self._doc_model.sources))
 
     def _confirm_discard(self) -> bool:
         """Ask before dropping unsaved changes; True means "go ahead".
@@ -677,6 +730,10 @@ class MainWindow(QMainWindow):
         path as Ctrl+S, and a save that fails or is cancelled keeps the
         document open.
         """
+        # A correction typed in the text editor but not yet confirmed is a
+        # change too: confirm it first, so the question below counts it
+        # instead of the window dropping it with the editor.
+        self._page_view.finish_text_edit()
         if not self.is_modified():
             return True
         name = os.path.basename(self._save_target or "") or self.tr("documento")

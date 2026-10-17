@@ -69,7 +69,7 @@ plico/
     └── test_integration.py   # MainWindow vera, offscreen: 94 test end-to-end
 ```
 
-Gate di qualità attuale: **289 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **297 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
 (18 file sorgente).
 
 ---
@@ -452,11 +452,23 @@ campi in sola lettura non vengono mostrati affatto.
   «Salva compresso» su un altro file è una copia e non segna il documento
   come salvato.
 - **`_confirm_discard()`** chiede Salva / Non salvare / Annulla prima di
-  `closeEvent` e prima del dialogo di `_open_file` (non dopo: la domanda
-  riguarda il documento in vista). «Salva» passa da `_save_file`; un
-  salvataggio fallito o annullato lascia la finestra aperta. Nei test
+  `closeEvent`, di *File → Chiudi* e del dialogo di `_open_file` (non dopo:
+  la domanda riguarda il documento in vista). «Salva» passa da `_save_file`;
+  un salvataggio fallito o annullato lascia il documento aperto. Prima di
+  decidere chiama `PageView.finish_text_edit()`: una correzione scritta
+  nell'editor ma non ancora confermata è lavoro dell'utente, e senza questo
+  passo sparirebbe con l'editor senza nessuna domanda. Nei test
   `QMessageBox.question` va **monkeypatchato** (§10): il fixture `windows`
   non chiama `close()`, quindi non incontra la domanda.
+- **File → Chiudi (`Ctrl+W`)**: `_close_file()` fa la domanda,
+  `close_document()` svuota la finestra senza chiedere nulla. L'ordine conta:
+  prima `PageView.clear()`, che chiude l'editor **senza** confermarlo (la
+  risposta sulle modifiche è già stata data) e svuota la cache dei render;
+  poi strumenti spenti, undo stack, `DocumentModel.close()`, cache delle
+  miniature, e un `evict` al worker per **ogni** sorgente, perché chi chiude
+  un PDF si aspetta di poterlo spostare o cancellare. La voce è attiva solo
+  con un documento aperto: la tiene allineata `_update_title()`, da cui
+  passano apertura, chiusura e salvataggio.
 - **La password si chiede in `MainWindow._ask_password()`**, con
   `QInputDialog.getText(..., QLineEdit.EchoMode.Password)`: `open_path()` e
   `merge_path()` la chiamano in un ciclo, e al secondo tentativo il testo dice
