@@ -1393,9 +1393,13 @@ sostituita con la sorgente `git` del tag di rilascio.
 
 **Debito tecnico noto:**
 
-- la redazione si disegna a mano o si chiede per parola (`Ctrl+Shift+F` →
-  `DocumentModel.find_text()`, tutte le occorrenze in tutte le pagine, un solo
-  Annulla): mancano la selezione di testo e la selezione di area. I metadati
+- la redazione ha entrambe le strade e sono tutte e due fatte: si **disegna**
+  la zona che copre il segreto (*Modifica → Cancella zona*, `Ctrl+Shift+X`, un
+  rettangolo per volta, `AddRedaction`, annullabile) oppure si **cerca** la
+  parola (`Ctrl+Shift+F` → `DocumentModel.find_text()`, tutte le occorrenze in
+  tutte le pagine, un solo Annulla). Quello che manca è la sola comodità della
+  selezione col mouse — trascinare su una frase invece di disegnarci sopra un
+  rettangolo, e tenere più zone in sospeso prima di applicarle. I metadati
   non sono più un debito — `/Info`, XMP e allegati non sopravvivono alla
   ricostruzione (vedi §8) — mentre le **annotazioni** vengono copiate;
 - la compressione ha tre livelli fissi, applicati a tutto il documento: non si
@@ -1429,7 +1433,7 @@ sostituita con la sorgente `git` del tag di rilascio.
 **Con la firma, la roadmap lunga è finita**: le quattro voci dell'idea
 originale ci sono tutte e nessuna è un abbozzo — ognuna ha la sua sezione in
 §8 e i suoi test. Quello che resta è l'elenco del debito tecnico qui sopra:
-rifiniture (selezione di testo e area per la redazione, livelli di compressione
+rifiniture (selezione col mouse per la redazione, livelli di compressione
 flessibili, scrittura in-place nei form, infrastruttura `.ts`), non capacità
 mai esistite.
 

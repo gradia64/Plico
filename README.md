@@ -173,12 +173,13 @@ strumenti — lascerebbe il segreto copiabile e ricercabile.
 le pagine e marca ogni occorrenza in un colpo solo, come un unico passo di
 undo.
 
-Due cose da sapere: si cancella quello che si disegna o quello che si cerca
-(mancano la selezione di testo e la selezione di area), e `apply_redactions()`
-elimina anche la grafica vettoriale che tocca il rettangolo, quindi un bordo o
-una tabella a cavallo del segno possono sparire. I metadati del PDF, invece,
-non sono un rischio: il file di uscita è ricostruito dalle sole pagine, quindi
-`/Info`, l'XMP e gli allegati non ci arrivano mai.
+Due cose da sapere: si cancella quello che si disegna o quello che si cerca —
+la zona non si seleziona col mouse, si traccia sopra il contenuto — e
+`apply_redactions()` elimina anche la grafica vettoriale che tocca il
+rettangolo, quindi un bordo o una tabella a cavallo del segno possono sparire.
+I metadati del PDF, invece, non sono un rischio: il file di uscita è
+ricostruito dalle sole pagine, quindi `/Info`, l'XMP e gli allegati non ci
+arrivano mai.
 
 ### Modifica del testo: una riga alla volta
 
