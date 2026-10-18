@@ -1,0 +1,43 @@
+name: Traduci
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "File sorgente (italiano), es. README.md"
+        required: true
+        type: string
+      mode:
+        description: "markdown | qt-ts | auto"
+        required: false
+        type: string
+        default: "auto"
+      langs:
+        description: "Lingue target separate da virgola"
+        required: false
+        type: string
+        default: "en,fr,de,es"
+      output-pattern:
+        description: "Pattern di output per markdown, es. README.{lang}.md"
+        required: false
+        type: string
+        default: ""
+      output-dir:
+        description: "Directory di output (per .ts/.po)"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  translate:
+    uses: gradia64/translator-bot/.github/workflows/translate.yml@main
+    with:
+      source: ${{ inputs.source }}
+      mode: ${{ inputs.mode }}
+      langs: ${{ inputs.langs }}
+      output-pattern: ${{ inputs.output-pattern }}
+      output-dir: ${{ inputs.output-dir }}
+    secrets:
+      TRANSLATOR_API_KEY: ${{ secrets.TRANSLATOR_API_KEY }}
+      TRANSLATOR_BASE_URL: ${{ secrets.TRANSLATOR_BASE_URL }}
+      TRANSLATOR_MODEL: ${{ secrets.TRANSLATOR_MODEL }}
