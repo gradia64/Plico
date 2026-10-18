@@ -1,4 +1,9 @@
-🌐 **Langue :** [Italiano](README.md) | [English](README.en.md) | [Español](README.es.md) | Français | [Deutsch](README.de.md)
+<p align="center">
+  <a href="README.md"><img src="https://img.shields.io/badge/Lang-Italiano-green?style=for-the-badge" alt="Italiano"></a>
+  <a href="README.en.md"><img src="https://img.shields.io/badge/Lang-English-blue?style=for-the-badge" alt="English"></a>
+  <a href="README.de.md"><img src="https://img.shields.io/badge/Lang-Deutsch-blue?style=for-the-badge" alt="Deutsch"></a>
+  <a href="README.es.md"><img src="https://img.shields.io/badge/Lang-Español-orange?style=for-the-badge" alt="Español"></a>
+</p>
 
 # Plico
 
