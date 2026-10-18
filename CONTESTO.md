@@ -1478,6 +1478,11 @@ di verità.
 
 Scelte non ovvie (documentate anche nel README):
 
+- **`Exec=plico %F`, non `%U`**: `%U` chiede URL, e GIO li passa davvero
+  (`file:///…/a%20b.pdf`), che `pymupdf.open` non apre. Per chi li passa lo
+  stesso (script, altri launcher) `app.local_path()` converte gli URL
+  `file:` in percorsi prima di aprirli.
+
 - **`base: io.qt.PySide.BaseApp`** e `pip3 install --no-deps`: PySide6 arriva
   già compilato dal runtime, allineato al Qt di `org.kde.Platform`. Il bundle
   non duplica Qt e pip non prova nemmeno a scaricare PySide6 da PyPI.

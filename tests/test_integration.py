@@ -3584,3 +3584,21 @@ def test_the_temporary_pdfs_are_removed_when_plico_stops(windows, tmp_path):
     mw.shutdown_worker()
 
     assert not os.path.exists(scratch)
+
+
+def test_a_file_url_from_the_launcher_becomes_a_path():
+    """GIO hands ``%U`` entries URLs, and PyMuPDF cannot open a URL."""
+    from plico.app import local_path
+
+    assert local_path("file:///home/anna/a%20b.pdf") == "/home/anna/a b.pdf"
+    assert local_path("/home/anna/a b.pdf") == "/home/anna/a b.pdf"
+    assert local_path("relativo.pdf") == "relativo.pdf"
+    assert local_path("https://example.org/a.pdf") == "https://example.org/a.pdf"
+
+
+def test_the_desktop_entry_asks_for_paths():
+    desktop = pathlib.Path(__file__).parent.parent / "flatpak" / "io.github.gradia64.Plico.desktop"
+    exec_line = next(
+        line for line in desktop.read_text().splitlines() if line.startswith("Exec=")
+    )
+    assert exec_line == "Exec=plico %F"
