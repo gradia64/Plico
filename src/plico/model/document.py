@@ -170,6 +170,41 @@ def _not_already_marked(
     return [rect for rect in rects if not marked(rect)]
 
 
+def _ocr_hits(
+    words: list[OcrWord], text: str, width: float, height: float
+) -> list[RedactionRect]:
+    """Where *text* occurs among recognised words, one rectangle per word.
+
+    Matched the way ``search_for`` matches the content stream: ignoring case,
+    and inside a word as well (``SEGRETO`` is found in ``SEGRETO,``). A phrase
+    spans consecutive words: the first must end with its first token, the
+    last start with its last one, and those in between be equal. Each word is
+    redacted whole -- the layer is written a word at a time, so a box narrower
+    than the word would leave the rest of it extractable.
+    """
+    tokens = text.casefold().split()
+    if not tokens:
+        return []
+    read = [word.text.casefold() for word in words]
+    hits: list[RedactionRect] = []
+    for start in range(len(read) - len(tokens) + 1):
+        window = read[start : start + len(tokens)]
+        if len(tokens) == 1:
+            matched = tokens[0] in window[0]
+        else:
+            matched = (
+                window[0].endswith(tokens[0])
+                and window[-1].startswith(tokens[-1])
+                and window[1:-1] == tokens[1:-1]
+            )
+        if matched:
+            hits.extend(
+                RedactionRect.from_corners(*word.rect, snug=True).clamped_to(width, height)
+                for word in words[start : start + len(tokens)]
+            )
+    return hits
+
+
 class DocumentModel(QObject):
     """Holds the virtual page list; the real PDF is never mutated until save."""
 
@@ -338,6 +373,9 @@ class DocumentModel(QObject):
                     )
                     for r in page.search_for(text)
                 ]
+                # The OCR layer is not in the source yet -- it is written at
+                # save time -- so its words are searched where they live.
+                rects.extend(_ocr_hits(item.ocr_words, text, width, height))
                 if fresh := _not_already_marked(item, rects):
                     found[index] = fresh
         finally:

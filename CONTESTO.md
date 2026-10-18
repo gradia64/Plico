@@ -1026,6 +1026,12 @@ si può selezionare, cercare con Ctrl+F, copiare — e la redazione per parola
 - **Dove vivono le parole.** `PageItem.ocr_words` (lista di `OcrWord`: testo e
   rettangolo in spazio pagina) è parte della pagina virtuale, quindi si annulla
   con Ctrl+Z come tutto il resto e non si può perdere per strada;
+  **la ricerca le trova prima del salvataggio**: `find_text()` cerca nella
+  sorgente *e* in `ocr_words` (`_ocr_hits`, senza distinguere maiuscole e
+  anche dentro una parola, come `search_for`; una frase segue parole
+  consecutive), perché lo strato arriva nel file solo salvando — prima la
+  promessa «Cancella parola lo trova» valeva solo dopo aver salvato e
+  riaperto. Ogni parola trovata è un segno *snug* grande quanto la parola;
   `DocumentModel.ocr_page()` legge la sorgente in sola lettura — come
   `find_text()` — e non tocca il modello. Chi le scrive sul PDF è solo
   `save.py` (`_write_ocr`).

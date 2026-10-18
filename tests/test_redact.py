@@ -677,3 +677,62 @@ def test_a_mark_fitted_to_words_still_blanks_the_picture_under_it(tmp_path) -> N
         pixmap = doc[0].get_pixmap(clip=pymupdf.Rect(100, 52, 101, 53))
     # Near the edge of the mark, outside the text band: white, not the scan.
     assert pixmap.pixel(0, 0) != (0, 0, 0)
+
+
+# --------------------------------------------------------------------- #
+#  Searching the words OCR read, before they are saved
+# --------------------------------------------------------------------- #
+
+
+def _scan_with_words(path: str) -> list:
+    """A page with no text of its own, and what an OCR pass would have read."""
+    from plico.model.ocr import OcrWord
+
+    with pymupdf.open() as doc:
+        doc.new_page(width=595, height=842)
+        doc.save(path)
+    return [
+        OcrWord("Il", (72, 100, 85, 114)),
+        OcrWord("codice", (90, 100, 130, 114)),
+        OcrWord("SEGRETO,", (135, 100, 200, 114)),
+        OcrWord("altro", (72, 300, 110, 314)),
+    ]
+
+
+def test_find_text_finds_the_words_ocr_read_before_the_save(tmp_path) -> None:
+    """The layer reaches the file only at save time, and the search used to
+    look at the file alone: after Riconosci testo, Cancella parola found
+    nothing until the document had been saved and reopened."""
+    src = str(tmp_path / "scan.pdf")
+    out = str(tmp_path / "out.pdf")
+    words = _scan_with_words(src)
+    model = DocumentModel()
+    model.open(src)
+    model.pages[0].ocr_words = words
+
+    found = model.find_text("segreto")
+
+    assert len(found[0]) == 1
+    assert found[0][0].as_tuple() == (135, 100, 200, 114)
+    model.pages[0].redactions.extend(found[0])
+    save_as(model, out)
+    with pymupdf.open(out) as doc:
+        text = doc[0].get_text()
+    assert "SEGRETO" not in text
+    assert "codice" in text and "altro" in text
+
+
+def test_find_text_follows_a_phrase_across_recognised_words(tmp_path) -> None:
+    src = str(tmp_path / "scan.pdf")
+    words = _scan_with_words(src)
+    model = DocumentModel()
+    model.open(src)
+    model.pages[0].ocr_words = words
+
+    found = model.find_text("codice segreto")
+
+    assert [rect.as_tuple() for rect in found[0]] == [
+        (90, 100, 130, 114),
+        (135, 100, 200, 114),
+    ]
+    assert model.find_text("codice altro") == {}
