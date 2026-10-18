@@ -106,8 +106,8 @@ LEVELS: tuple[CompressionLevel, ...] = (
         label=QT_TRANSLATE_NOOP("CompressionLevel", "Media"),
         detail=QT_TRANSLATE_NOOP(
             "CompressionLevel",
-            "Come Leggera, e in piu` ricampiona a 150 dpi le immagini che "
-            "superano i 200 dpi, salvandole in JPEG a qualita` 80.",
+            "Come Leggera, e in più ricampiona a 150 dpi le immagini che "
+            "superano i 200 dpi, salvandole in JPEG a qualità 80.",
         ),
         image_threshold=200,
         image_target=150,
@@ -118,7 +118,7 @@ LEVELS: tuple[CompressionLevel, ...] = (
         label=QT_TRANSLATE_NOOP("CompressionLevel", "Forte"),
         detail=QT_TRANSLATE_NOOP(
             "CompressionLevel",
-            "Come Media, ma scende a 96 dpi e qualita` 60: file molto piu` "
+            "Come Media, ma scende a 96 dpi e qualità 60: file molto più "
             "piccoli, immagini visibilmente morbide.",
         ),
         image_threshold=150,

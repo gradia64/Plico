@@ -76,7 +76,7 @@ class CompressionDialog(QDialog):
         self._images_only.setToolTip(
             self.tr(
                 "La ricompattazione non perde nulla: saltarla ha senso solo per "
-                "lasciare il file com'e` dovunque non ci siano immagini."
+                "lasciare il file com'è dovunque non ci siano immagini."
             )
         )
 

@@ -1292,7 +1292,7 @@ class MainWindow(QMainWindow):
     def _nothing_gained(self, result: CompressionResult) -> str:
         """Why nothing was gained, and the one thing still worth trying."""
         text = self.tr(
-            "Questo file non aveva niente da guadagnare: e` rimasto di {0}."
+            "Questo file non aveva niente da guadagnare: è rimasto di {0}."
         ).format(format_size(result.source_size))
         options = self._compression_options
         if options is not None and options.image_pages is not None:
