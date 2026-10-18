@@ -85,9 +85,10 @@ plico/
     └── test_integration.py   # MainWindow vera, offscreen: 153 test end-to-end
 ```
 
-Gate di qualità attuale: **402 passed, 2 skipped**, `ruff` pulito, `mypy` pulito
-(24 file sorgente). Il secondo `skip` è il giro `.ts` → `.qm`: `lrelease` sta
-solo nell'SDK di Qt (`tests/test_i18n.py`).
+Gate di qualità attuale: **431 passed, 4 skipped**, `ruff` pulito, `mypy` pulito
+(24 file sorgente). Gli `skip` dipendono dall'ambiente: il giro `.ts` → `.qm`
+(`lrelease` sta solo nell'SDK di Qt) e l'estrazione con `pylupdate6`
+(`tests/test_i18n.py`).
 
 ---
 
