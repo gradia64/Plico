@@ -48,7 +48,7 @@ plico/
 ├── src/plico/
 │   ├── app.py                # entry point: QApplication + apertura da riga di comando
 │   ├── i18n.py               # cataloghi .qm: dove cercarli, quali chiedere, caricarli
-│   ├── translations/         # plico_en.ts: le stringhe da tradurre (oggi vuote)
+│   ├── translations/         # plico_{en,es,fr,de}.ts: i cataloghi, tutti completi
 │   ├── main_window.py        # finestra, menu, toolbar, dock, QSettings, dialogs
 │   ├── model/
 │   │   ├── document.py       # DocumentModel, PageItem  ← il cuore
@@ -79,14 +79,15 @@ plico/
     ├── test_forms.py         # campi AcroForm: letti, scritti, riletti, redatti, riordinati (34)
     ├── test_textedit.py      # uno span sostituito: testo, sfondo, font, spazio (33)
     ├── test_images.py        # immagini → PDF: DPI, foto ridotte, EXIF, JPEG intatti (13)
-    ├── test_ocr.py           # OCR: spazio pagina, strato invisibile, undo (13)
+    ├── test_ocr.py           # OCR: spazio pagina, strato invisibile, undo, lingua (21)
     ├── test_sign.py          # certificati, firma, seconda firma, verdetto, firme vecchie (33)
     ├── test_edit_text.py     # EditText e salvataggio: undo, redazioni, estrai, comprimi (21)
     ├── test_i18n.py          # cataloghi: estrazione, nomi, caricamento, traduzione (8)
+    ├── test_translations.py  # le quattro lingue: complete, segnaposto, menu veri (24)
     └── test_integration.py   # MainWindow vera, offscreen: 161 test end-to-end
 ```
 
-Gate di qualità attuale: **448 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **480 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
 (24 file sorgente). Lo `skip` è il test delle icone, che vuole un tema che
 fornisca `object-rotate-*`. Gli altri tre `skip` possibili dipendono da
 strumenti che mancano (§9): `pylupdate6` e `lrelease`/`pyside6-lrelease` in
@@ -1066,7 +1067,11 @@ si può selezionare, cercare con Ctrl+F, copiare — e la redazione per parola
   deve portarsi via anche lo strato OCR che cade dentro il rettangolo.
 - **Le lingue** stanno in `~/.local/share/plico/tessdata`, senza root, oppure
   dove le mette la distribuzione; `$PLICO_TESSDATA` vince su tutto. Il Flatpak
-  impacchetta `eng` e `ita` in `/app/share/tessdata` (§11). Se manca la
+  impacchetta `ita`, `eng`, `spa`, `fra` e `deu` in `/app/share/tessdata`
+  (§11). La lingua proposta è quella dell'interfaccia più l'inglese
+  (`default_language()`), l'inglese da solo per una lingua che Plico non
+  parla; nella tendina le lingue hanno il loro nome («Deutsch»,
+  `widgets/ocr.language_name()`), che non va tradotto. Se manca la
   libreria o il dato di lingua `unavailable_reason()` lo dice in chiaro,
   invece di far fallire il lavoro a metà.
 - **Dove vivono le parole.** `PageItem.ocr_words` (lista di `OcrWord`: testo e
@@ -1601,8 +1606,8 @@ Scelte non ovvie (documentate anche nel README):
   forma a lista, ma il parser e lo schema ufficiale vogliono l'oggetto. È
   l'unico errore vero che il controllo di conformità ha trovato.
 - **Tesseract si compila qui** (`leptonica 1.84.1`, `tesseract 5.4.1`, poi un
-  modulo `simple` che copia `eng.traineddata` e `ita.traineddata` di
-  `tessdata_fast` in `/app/share/tessdata`): su Flathub non esiste
+  modulo `simple` che copia `ita`, `eng`, `spa`, `fra` e `deu` (`.traineddata`)
+  di `tessdata_fast`, tutti dallo stesso commit, in `/app/share/tessdata`): su Flathub non esiste
   un'estensione Tesseract e la runtime non lo porta, e senza la libreria
   `get_textpage_ocr()` fallisce anche avendo i dati di lingua. Tre trappole
   pagate: con CMake 4 un `cmake_minimum_required` vecchio **ferma** la
@@ -1633,7 +1638,7 @@ Scelte non ovvie (documentate anche nel README):
   (in `org.kde.Sdk` c'è `/usr/bin/lrelease`, nella runtime no) e i `.qm` sono
   gli unici file di cui l'applicazione ha bisogno a runtime: compilare qui
   vuol dire anche non spedire il compilatore. Il `.ts` è invece la sorgente del
-  traduttore e sta nel repository (`src/plico/translations/plico_en.ts`), con
+  traduttore e sta nel repository (`src/plico/translations/plico_*.ts`), con
   `[tool.setuptools.package-data]` che lo fa viaggiare anche con
   `pip install .`.
 
@@ -1695,7 +1700,7 @@ sostituita con la sorgente `git` del tag di rilascio.
 2. **redaction vera** — ✅ **fatta**, vedi §8;
 3. **OCR** integrato (Tesseract) — ✅ **fatto**, vedi §8:
    *Modifica → Riconosci testo…* (`Ctrl+Shift+O`) scrive uno strato
-   invisibile, e il Flatpak compila Tesseract e impacchetta `eng`+`ita`
+   invisibile, e il Flatpak compila Tesseract e impacchetta cinque lingue
    (§11). Il rinvio precedente non era pigrizia: senza il programma `tesseract`
    né i dati di lingua sulla macchina di sviluppo, l'unico modo di provarlo era
    costruirlo dentro il manifest — cosa che ora il manifest fa, e la prova gira
@@ -1742,9 +1747,8 @@ state affrontate è quello di questo elenco):
   caricati da `i18n.install_translators()` in `app.py` e verificati da
   `tests/test_i18n.py` (l'estrazione, il catalogo aggiornato, i nomi chiesti
   per la lingua di sistema, il giro completo `.ts` → `.qm` → stringa
-  tradotta). Il catalogo inglese è **vuoto**: è il posto dove tradurre, non una
-  traduzione fatta; senza di esso l'applicazione resta in italiano, che è la
-  lingua delle stringhe nel codice;
+  tradotta). I cataloghi sono **completi** in inglese, spagnolo, francese e
+  tedesco (vedi «Le lingue» qui sotto);
 - nei test restano una quarantina di **messaggi di `assert` in italiano**
   (identificatori, docstring e nomi dei test sono in inglese): sono per chi
   sviluppa, non per l'utente, e vanno tradotti quando si ripassa quel file.
@@ -1839,6 +1843,49 @@ peggio di come era scritto:
   pagine da ricampionare toglieva i campi delle pagine scelte. Ora ogni
   sorgente si copia una volta sola (`assemble.py`, §8), e i campi di una
   pagina eliminata non restano nel file.
+
+---
+
+### Le lingue
+
+Plico parla **italiano** (la lingua del codice), **inglese**, **spagnolo**,
+**francese** e **tedesco**. Quello che conta per mantenerlo così:
+
+- **ogni testo che l'utente legge passa da un catalogo**, anche quelli del
+  modello: un `ValueError` che finisce in un dialogo si scrive con
+  `QCoreApplication.translate("Contesto", "…").format(…)`, mai con una
+  f-string. `lupdate` legge **solo testo letterale**: `self.tr(variabile)` non
+  viene estratto (era così per i livelli di compressione e i nomi delle lingue
+  OCR), e per una tabella costruita all'import si marca il testo con
+  `QT_TRANSLATE_NOOP` (in `optimize.py` c'è una versione tipizzata: quella di
+  PySide6 restituisce `object`) e lo si traduce dove va a schermo;
+- **i cataloghi si rigenerano tutti e quattro** dopo aver toccato una stringa:
+  `for l in en es fr de; do pylupdate6 -no-obsolete src/plico -ts
+  src/plico/translations/plico_$l.ts; done`, poi si traducono le voci
+  `unfinished`. `tests/test_translations.py` fallisce finché un catalogo ha voci
+  non tradotte, ha messaggi diversi dagli altri, perde un segnaposto (`{0}`,
+  `%(name)s`) o un `&`, o dà due voci dello stesso menu la stessa scorciatoia —
+  e lo controlla caricando ogni lingua nella **finestra vera**;
+- **le scorciatoie `&` si scelgono per menu**: in tedesco *Datei* ha
+  Ö&ffnen, &Speichern, B&eenden…; una lettera doppia nello stesso menu fa
+  scegliere ad Alt la voce sbagliata;
+- **il francese vuole lo spazio indivisibile** (U+00A0) prima di `: ; ? ! %`
+  e dentro `« »`, altrimenti la punteggiatura va a capo da sola;
+- **una lingua senza catalogo riceve l'inglese** (`i18n.FALLBACK`), non
+  l'italiano: è più probabile che un utente portoghese legga l'inglese;
+- **anche Qt va tradotto**: i pulsanti dei dialoghi standard («Save»,
+  «Cancel», il selettore di file) vengono dal catalogo di Qt, che
+  `i18n.install_qt_translator()` carica da `QLibraryInfo`. Prima non lo
+  caricava nessuno, e anche l'utente italiano leggeva «Discard» sotto una
+  domanda in italiano;
+- il **metainfo** e il **.desktop** hanno l'inglese come lingua base (è quello
+  che AppStream e Flathub si aspettano) e le altre quattro come traduzioni;
+  nel metainfo le parole chiave tradotte portano `xml:lang` sulla singola
+  `<keyword>`, non su `<keywords>` (`appstreamcli` lo dà come errore).
+
+Una lingua nuova è un file `plico_xx.ts` in più: lo si crea con `pylupdate6`, si
+traduce, e lo si aggiunge a `LANGUAGES` in `tests/test_translations.py`, alle
+`<languages>` del metainfo e alle voci `[xx]` del `.desktop`.
 
 ---
 

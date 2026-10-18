@@ -295,8 +295,9 @@ non vengono riscritte: una pagina metà testo e metà scansione non si ritrova i
 testo doppio.
 
 I dati di lingua (`*.traineddata`) si mettono in
-`~/.local/share/plico/tessdata/`, senza root; il Flatpak porta già `eng` e
-`ita`. La libreria Tesseract deve essere presente: nel Flatpak è compilata
+`~/.local/share/plico/tessdata/`, senza root; il Flatpak porta già italiano,
+inglese, spagnolo, francese e tedesco, e propone la lingua dell'interfaccia
+insieme all'inglese. La libreria Tesseract deve essere presente: nel Flatpak è compilata
 dentro (§ Flatpak), su una distribuzione è il pacchetto `tesseract` /
 `libtesseract`.
 
@@ -349,9 +350,9 @@ firmato.
   `edit-undo`, `object-rotate-right`, `zoom-in`, …): nessun asset grafico nel
   pacchetto. Se il tema non fornisce l'icona, l'azione resta senza icona invece
   di mostrare un quadrato vuoto.
-- **Stringhe traducibili da subito** (`self.tr()` su tutto il testo
-  visibile): pronte per Qt Linguist (`lupdate` / `lrelease`) senza doverle
-  rintracciare a posteriori.
+- **Cinque lingue**: italiano, inglese, spagnolo, francese e tedesco, anche
+  nei pulsanti dei dialoghi standard di Qt e nei metadati dello store (vedi
+  «Tradurre Plico»).
 - **Stato della sessione in `QSettings`** (`~/.config/Plico/plico.conf`):
   geometria della finestra, layout di dock e barra strumenti, e fattore di
   zoom.
@@ -468,31 +469,35 @@ plico            # oppure: python -m plico.app
 
 ### Tradurre Plico
 
-Le stringhe visibili sono **in italiano** nel codice, quindi Plico funziona in
-italiano anche senza alcun catalogo: tradurre serve ad aggiungere una lingua.
-Il posto dove farlo è `src/plico/translations/plico_en.ts` (o un nuovo file
-accanto), con Qt Linguist o con un editor di testo.
+Plico parla **italiano**, **inglese**, **spagnolo**, **francese** e
+**tedesco**: segue la lingua del sistema, e una lingua che non conosce riceve
+l'inglese. Le stringhe sono in italiano nel codice; i cataloghi delle altre
+lingue stanno in `src/plico/translations/plico_{en,es,fr,de}.ts` e si
+modificano con Qt Linguist o con un editor di testo. Una lingua nuova è un file
+`plico_xx.ts` in più (CONTESTO.md, «Le lingue», dice cosa aggiornare insieme).
 
 `pylupdate6` arriva con PyQt6 (`pip install PyQt6` nel venv basta, serve solo
 lo strumento): senza, `tests/test_i18n.py` salta proprio il controllo che
 avvisa quando una stringa nuova manca dal catalogo.
 
 ```bash
-# 1. riestrarre le stringhe dopo aver toccato il codice (169 messaggi)
-pylupdate6 src/plico -ts src/plico/translations/plico_en.ts
+# 1. riestrarre le stringhe dopo aver toccato il codice (212 messaggi),
+#    in tutti e quattro i cataloghi
+for l in en es fr de; do
+    pylupdate6 -no-obsolete src/plico -ts src/plico/translations/plico_$l.ts
+done
 
-# 2. compilare: lrelease non è nel venv, ma c'è nell'SDK
-flatpak run --command=lrelease org.kde.Sdk//6.11 \
-    src/plico/translations/plico_en.ts -qm /tmp/plico_en.qm
+# 2. compilare: pyside6-lrelease arriva con PySide6 (o lrelease dall'SDK)
+pyside6-lrelease src/plico/translations/plico_de.ts -qm /tmp/plico_de.qm
 
 # 3. provarla senza installare niente
-PLICO_TRANSLATIONS=/tmp plico
+LANG=de_DE.UTF-8 PLICO_TRANSLATIONS=/tmp plico
 ```
 
-Il catalogo inglese oggi è **vuoto**: è il posto dove tradurre, non una
-traduzione fatta. Un test (`tests/test_i18n.py`) verifica che il catalogo
-salvato sia quello che le sorgenti producono, così nessuna stringa nuova
-resta fuori.
+`tests/test_i18n.py` verifica che i cataloghi siano quelli che le sorgenti
+producono, così nessuna stringa nuova resta fuori; `tests/test_translations.py`
+che ogni lingua sia completa, conservi i segnaposto (`{0}`) e non dia la stessa
+scorciatoia a due voci di un menu.
 
 ## Licenza
 
