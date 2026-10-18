@@ -581,13 +581,18 @@ class _PageLabel(QLabel):
         end = event.position()
         if self._adjust is not None:
             position, corner, before, _start = self._adjust
-            # Cleared first: forget_drag() would undo the very adjustment that
-            # just ended.
-            self._adjust = None
-            self.forget_drag()
-            self.update()
             canvas = self.canvas
             assert canvas is not None
+            # What the drag wrote straight into the model so the page could
+            # follow the mouse -- read before forget_drag() puts the old
+            # rectangle back. The command must own the change: letting redo()
+            # apply the new one keeps the whole gesture a single undo step,
+            # and a click must leave nothing behind at all. (Reading it after
+            # used to keep the few pixels a click had nudged the mark by, a
+            # change no Ctrl+Z knew about.)
+            after = canvas.item.redactions[position]
+            self.forget_drag()
+            self.update()
             if (end - start).manhattanLength() < CLICK_SLOP:
                 # A click on a mark still takes it back: moving it is a drag.
                 for rect in reversed(canvas.item.redactions):
@@ -595,14 +600,8 @@ class _PageLabel(QLabel):
                         self._view.forget_redaction(canvas, rect)
                         break
                 return
-            after = canvas.item.redactions[position]
             if after == before:
                 return
-            # The drag wrote the new rectangle straight into the model so the
-            # page could follow the mouse. The command must own the change:
-            # putting the old one back and letting redo() apply the new one
-            # keeps the whole gesture a single undo step.
-            canvas.item.redactions[position] = before
             self._view.adjust_redaction(canvas, position, before, after, corner is None)
             return
         self.forget_drag()

@@ -1814,6 +1814,28 @@ def test_a_click_on_a_mark_removes_it(qapp, tmp_path, windows):
     assert mw._undo_stack.undoText() == "Ripristina zona su pagina 1"
 
 
+def test_a_click_that_wobbles_leaves_the_mark_where_it_was(qapp, tmp_path, windows):
+    """A click moved by a pixel or two is still a click: undoing it puts back
+    the mark it removed, not one nudged by the wobble outside the undo stack."""
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=1)
+    mw = windows()
+    _open(mw, pdf)
+
+    mw._redact_act.trigger()
+    canvas = mw._page_view._canvases[0]
+    _drag(canvas.label, (20, 20), (120, 80))
+    _pump(0.1)
+    drawn = mw._doc_model.pages[0].redactions[0]
+
+    _drag(canvas.label, (70, 50), (71, 51))
+    _pump(0.1)
+    assert mw._doc_model.pages[0].redactions == []
+
+    mw._undo_stack.undo()
+    assert mw._doc_model.pages[0].redactions == [drawn]
+
+
 def test_a_mark_is_moved_with_the_mouse(qapp, tmp_path, windows):
     """Grabbing a zone and dragging it moves it, keeping its size."""
     pdf = str(tmp_path / "doc.pdf")
