@@ -77,6 +77,11 @@ FIELD_BORDER = QColor(64, 120, 200, 150)
 FIELD_SELECTED_WASH = QColor(230, 145, 40, 40)
 FIELD_SELECTED_BORDER = QColor(214, 138, 48)
 FIELD_TEXT = QColor(20, 20, 20)
+# Under the wash: the render already carries the field as the FILE draws it,
+# value included, and the model's value painted over it read as two texts on
+# top of each other («Individual» under «Family»), or as the old one still
+# there after the field was emptied.
+FIELD_BASE = QColor(255, 255, 255)
 
 # Text editing: an edited span is outlined while the tool is on, so the user
 # can find what was changed; the replacement itself is always painted.
@@ -408,6 +413,7 @@ class _PageLabel(QLabel):
         for field in item.form_fields:
             area = self._rect_pixels(field.rect)
             is_selected = picked == (canvas.index, field.name)
+            painter.fillRect(area, QBrush(FIELD_BASE))
             painter.fillRect(
                 area, QBrush(FIELD_SELECTED_WASH if is_selected else FIELD_WASH)
             )
@@ -1090,12 +1096,17 @@ class PageView(QScrollArea):
         first, last = self._visible_range()
         dpr = self.devicePixelRatioF() or 1.0
         for c in self._canvases[first:last]:
+            # The scale the page is LAID OUT at, not ``self._zoom``: in
+            # fit-width the two differ, and rendering at the zoom drew a page
+            # of the old size, centred in a label of the new one -- with the
+            # marks, fields and editor placed for the label, beside the words.
+            scale = round(c.scale, 4)
             key = (
                 "page",
                 c.item.source_id,
                 c.item.source_index,
                 c.item.rotation,
-                self._zoom,
+                scale,
                 dpr,
             )
             if c.current_key == key or c.pending_key == key:
@@ -1114,7 +1125,7 @@ class PageView(QScrollArea):
                     key,
                     self._model.source_for(c.item),
                     c.item.source_index,
-                    self._zoom * dpr,   # zoom in real pixels
+                    scale * dpr,        # zoom in real pixels
                     c.item.rotation,    # user offset only: MuPDF has already
                 )                       # applied the page's own /Rotate
             )

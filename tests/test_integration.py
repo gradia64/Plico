@@ -1089,6 +1089,30 @@ def test_thumbnail_cache_is_lru_not_fifo():
     assert "b" not in cache
 
 
+def test_fit_to_width_renders_the_page_at_the_width_it_lays_out(windows, tmp_path):
+    """Fit-width laid the page out as wide as the window but rendered it at
+    the old zoom: a small page centred in a grey label, with the redaction
+    marks, fields and editor drawn for the label -- beside the words."""
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=2)
+    mw = windows()
+    mw.resize(1200, 800)
+    mw.show()
+    _open(mw, pdf)
+
+    mw._page_view.set_zoom_fit_width()
+    _pump(1.0)
+
+    canvas = mw._page_view._canvases[0]
+    pixmap = canvas.label.pixmap()
+    assert not pixmap.isNull()
+    drawn = pixmap.width() / pixmap.devicePixelRatio()
+    assert abs(drawn - canvas.label.width()) <= 1, (drawn, canvas.label.width())
+    viewport = mw._page_view.viewport().width()
+    assert abs(canvas.label.width() - (viewport - 20)) <= 1, "la larghezza della vista"
+    assert canvas.current_key[4] != 1.0, "resa alla scala dell'impaginazione, non allo zoom"
+
+
 def test_the_page_cache_frees_the_bytes_it_replaced(windows):
     """Putting the same key back must not count the same bytes twice.
 
@@ -2273,6 +2297,35 @@ def _type_in_panel(mw: MainWindow, name: str, value: str) -> None:
     assert isinstance(editor, QLineEdit), editor
     editor.setText(value)
     editor.textEdited.emit(value)
+
+
+def test_a_changed_field_does_not_show_the_old_value_under_the_new(qapp, tmp_path, windows):
+    """The render already draws the field as the file has it; the model's value
+    used to be painted over it through a see-through wash, so a changed field
+    read as two texts on top of each other, and an emptied one kept the old."""
+    pdf = str(tmp_path / "modulo.pdf")
+    with pymupdf.open() as doc:
+        page = doc.new_page(width=595, height=842)
+        _add_field(page, "nome", pymupdf.PDF_WIDGET_TYPE_TEXT, (72, 100, 400, 140), "W" * 24)
+        doc.save(pdf, garbage=4, deflate=True)
+    mw = windows()
+    mw.resize(900, 800)
+    mw.show()
+    _open(mw, pdf)
+    mw._set_field_value(0, "nome", "")
+    _pump(0.5)
+
+    canvas = mw._page_view._canvases[0]
+    image = canvas.label.grab().toImage()
+    ratio = image.devicePixelRatio()
+    x0, y0, x1, y1 = (int(v * canvas.scale * ratio) for v in (72, 100, 400, 140))
+    ink = sum(
+        1
+        for x in range(x0 + 6, x1 - 6, 2)
+        for y in range(y0 + 6, y1 - 6, 2)
+        if image.pixelColor(x, y).lightness() < 120
+    )
+    assert ink == 0, f"{ink} punti scuri: il vecchio valore si vede ancora"
 
 
 def test_the_panel_shows_the_page_fields(qapp, tmp_path, windows):
