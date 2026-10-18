@@ -56,6 +56,7 @@ plico/
 │   │   ├── redact.py         # rettangoli di redazione e matrici di rotazione
 │   │   ├── forms.py          # campi AcroForm: lettura, scrittura, svuotamento
 │   │   ├── save.py           # save_as, save_compressed, extract_pages, parse_page_ranges
+│   │   ├── assemble.py       # un PDF da pagine di altri: ogni sorgente copiata una volta
 │   │   ├── textedit.py       # modifica minima del testo: uno span, il suo aspetto
 │   │   ├── images.py         # immagini → un PDF qualsiasi, che diventa una sorgente
 │   │   ├── ocr.py            # Tesseract: riconoscere, cercare i dati di lingua, strato invisibile
@@ -75,17 +76,17 @@ plico/
     ├── test_worker.py        # il worker di rendering in isolamento (11)
     ├── test_optimize.py      # i livelli di compressione e optimize_in_place (16)
     ├── test_redact.py        # redazione vera, zone ritoccabili, righe vicine, OCR (61)
-    ├── test_forms.py         # campi AcroForm: letti, scritti, riletti, redatti (30)
+    ├── test_forms.py         # campi AcroForm: letti, scritti, riletti, redatti, riordinati (34)
     ├── test_textedit.py      # uno span sostituito: testo, sfondo, font, spazio (33)
     ├── test_images.py        # immagini → PDF: DPI, foto ridotte, EXIF, JPEG intatti (13)
     ├── test_ocr.py           # OCR: spazio pagina, strato invisibile, undo (13)
-    ├── test_sign.py          # certificati, firma, seconda firma, verdetto (30)
+    ├── test_sign.py          # certificati, firma, seconda firma, verdetto, firme vecchie (33)
     ├── test_edit_text.py     # EditText e salvataggio: undo, redazioni, estrai, comprimi (21)
     ├── test_i18n.py          # cataloghi: estrazione, nomi, caricamento, traduzione (8)
-    └── test_integration.py   # MainWindow vera, offscreen: 160 test end-to-end
+    └── test_integration.py   # MainWindow vera, offscreen: 161 test end-to-end
 ```
 
-Gate di qualità attuale: **440 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **448 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
 (24 file sorgente). Lo `skip` è il test delle icone, che vuole un tema che
 fornisca `object-rotate-*`. Gli altri tre `skip` possibili dipendono da
 strumenti che mancano (§9): `pylupdate6` e `lrelease`/`pyside6-lrelease` in
@@ -531,10 +532,30 @@ file, così Ctrl+Z dice cosa sta per togliere.
 
 `model/save.py`:
 
-- `_contiguous_runs(items)` raggruppa le pagine consecutive **della stessa
-  sorgente**, così un documento solo riordinato si copia con pochi
-  `insert_pdf` invece di uno per pagina (il raggruppamento si interrompe
-  quando cambia `source_id`);
+- **ogni sorgente si copia una volta sola** (`model/assemble.py`,
+  `assemble(out, ordine)`): l'intervallo dalla prima all'ultima pagina che
+  contribuisce, in **una** chiamata a `insert_pdf`; le pagine in mezzo che non
+  servono si eliminano, e l'ordine si fa dentro il file d'uscita con
+  `move_page()` (e `fullcopy_page()` per una pagina chiesta due volte). Prima
+  le pagine si copiavano a sequenze contigue, una chiamata per sequenza, e
+  copiare **due volte dalla stessa sorgente** rompe i moduli (misurato su
+  PyMuPDF 1.28): un campo con un widget per pagina perdeva il widget della
+  seconda copia — la pagina usciva senza campo — e un campo incontrato di
+  nuovo veniva rinominato (`nome` → `nome [12]`). Non bastano né
+  `join_duplicates` né `final=0`, e `Document.select()` toglie l'intero
+  AcroForm. Tre dettagli:
+  - `delete_page()` lascia in `/Fields` i campi delle pagine tolte, **valore
+    compreso**: `_prune_fields()` toglie ogni campo che nessuna pagina mostra
+    più, perché una pagina eliminata non deve lasciare nel file quello che
+    c'era scritto;
+  - due campi della **stessa** sorgente con lo stesso nome sono un campo solo
+    (per PDF e per il modello, che scrive i valori per nome): la prima copia
+    li unisce (`join_duplicates`), una sorgente successiva che ne ha passa
+    prima da una copia sua. Campi omonimi di sorgenti **diverse** (anche lo
+    stesso file unito due volte) restano due, e MuPDF rinomina il secondo;
+  - il prezzo è copiare anche le pagine fra quelle chieste: estrarre la prima
+    e l'ultima di 1000 pagine costa ~1,1 s (misurato), un salvataggio normale
+    o rovesciato ~0,3 s;
 - `_write_pdf` riapre ogni sorgente con `open_for_reading(path,
   model.passwords.get(path))`: qui la password non si può chiedere — il
   salvataggio ricopia file che l'utente ha già sbloccato, e il worker li
@@ -604,8 +625,11 @@ non hai scelto»).
 **Il ricampionamento per pagina non esiste nell'API di PyMuPDF** —
 `rewrite_images()` non ha un elenco di pagine — e si ottiene ricostruendo il
 file a blocchi: le pagine scelte in un documento, `rewrite_images()` su quello,
-le altre in un secondo documento, e i due uniti con `insert_pdf` in ordine. Due
-conseguenze misurate:
+le altre in un secondo documento, e i due riuniti in ordine con `assemble()`
+(con `join_duplicates`, perché sono due copie dello stesso documento). Le
+pagine non scelte si tolgono dalla copia con `delete_page()`, **non** con
+`select()`: `select()` cancella l'AcroForm, e le pagine scelte uscivano dalla
+compressione senza i loro campi (misurato). Due conseguenze misurate:
 
 - **un'immagine condivisa da una pagina scelta e una no si sdoppia**: MuPDF la
   tiene una volta sola, e ricampionarla per una pagina sola obbliga l'altra a
@@ -1438,12 +1462,18 @@ tutte scoperte perché qualcosa saltava o falliva in silenzio:
   sola sequenza che svuota e ridipinge è `field_value = ""` → `/V` a `()` →
   `update()` (inchiostro 0). Per questo `write_fields()` chiama
   `_clear_value()`, che risale anche a `/Parent`.
-- **`insert_pdf()` rinomina i campi omonimi.** Se due pagine portano un widget
-  con lo stesso nome, dopo la copia il secondo si chiama `nome [12]` (misurato:
-  stesso xref nella sorgente, nomi diversi nel file costruito). Conseguenza:
-  `write_fields(page, {"nome": …})` sulla pagina già copiata restituisce `0` e
-  non scrive niente. Per questo `save.py` scrive i valori **sulla sorgente in
-  memoria** (`_fill_source_fields`) prima di copiare le pagine.
+- **`insert_pdf()` rinomina i campi omonimi**, e copiare due volte dalla
+  stessa sorgente perde i widget figli. Se due pagine portano un widget con lo
+  stesso nome, dopo la copia il secondo si chiama `nome [12]` (misurato:
+  stesso xref nella sorgente, nomi diversi nel file costruito), e
+  `write_fields(page, {"nome": …})` sulla pagina già copiata restituisce `0`.
+  Per questo `save.py` scrive i valori **sulla sorgente in memoria**
+  (`_fill_source_fields`) prima di copiare, e `assemble()` copia ogni sorgente
+  in una chiamata sola (§8). Collegate: `Document.select()` toglie l'AcroForm,
+  `delete_page()` lascia i campi della pagina tolta in `/Fields`, e
+  `xref_set_key(catalogo, "AcroForm/Fields", …)` attraverso un AcroForm
+  **indiretto** scrive la stringa `fitz: replace me!` invece dell'array:
+  l'AcroForm va risolto prima (`assemble.acroform_key()`).
 - **`get_textpage_ocr()` vuole il `tessdata` esplicito.** Senza, non cerca da
   solo: fallisce con `RuntimeError: No tessdata specified and Tesseract is not
   installed`, anche quando la libreria c'è. E `tessdata=` non basta alla
@@ -1794,19 +1824,21 @@ terza (le chiamate a PyMuPDF serializzate dal GIL) è stata smentita misurando
 prima di scriverla. Prima di fidarsi di una frase che dice «verificato»,
 cercare il test che la verifica.
 
-**Limiti noti che restano, scritti come tali:**
+**I tre limiti rimasti dopo la review sono chiusi anch'essi**, ma uno era
+peggio di come era scritto:
 
-- dopo un'unione annullata, un render **ancora in corso** del file tolto può
-  arrivare quando l'unione successiva ha già chiesto la stessa chiave, e
-  mostrarsi una volta: dall'interfaccia non succede (fra le due unioni c'è un
-  dialogo di scelta file), e la correzione completa è non riusare mai un
-  `source_id`, che cambia il modello;
-- firmando un documento firmato **con modifiche non salvate** il campo della
-  firma vecchia resta nel file e chi lo verifica la vede rotta: la domanda lo
-  dice prima, ma un file ricostruito potrebbe anche toglierlo;
-- `insert_pdf()` rinomina i campi omonimi (`nome` → `nome [12]`) quando le
-  pagine che li portano vengono copiate in blocchi diversi: i valori arrivano
-  giusti (§8), ma nel file salvato i nomi dei campi possono cambiare.
+- un `source_id` **non si riusa mai** (`904d08c`, §8): un'unione annullata
+  lascia la sorgente registrata e inutilizzata, quindi nemmeno un render del
+  file tolto ancora in viaggio dal worker può rispondere per un altro file;
+- un file ricostruito **non porta firme rotte** (`87fabb3`, §8): ogni
+  salvataggio, non solo la firma di modifiche, usciva con la firma vecchia
+  rotta e `/SigFlags` a 3, cioè con l'aspetto di una falsificazione;
+- i campi dei moduli: il limite scritto era «i nomi possono cambiare», ma
+  misurando è venuto fuori che **un campo con un widget per pagina perdeva il
+  widget** appena le pagine venivano riordinate, e che *Salva compresso* con le
+  pagine da ricampionare toglieva i campi delle pagine scelte. Ora ogni
+  sorgente si copia una volta sola (`assemble.py`, §8), e i campi di una
+  pagina eliminata non restano nel file.
 
 ---
 

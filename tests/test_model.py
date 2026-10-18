@@ -10,8 +10,8 @@ from PySide6.QtCore import QCoreApplication
 from PySide6.QtGui import QUndoStack
 
 from plico.model.commands import AppendDocument, DeletePage, MovePage, RotatePage
-from plico.model.document import DocumentModel, PageItem, PasswordRequired
-from plico.model.save import _contiguous_runs, extract_pages, parse_page_ranges, save_as
+from plico.model.document import DocumentModel, PasswordRequired
+from plico.model.save import extract_pages, parse_page_ranges, save_as
 
 # --- fixtures -------------------------------------------------------------
 
@@ -88,26 +88,6 @@ def test_parse_ranges_rejects_out_of_bounds(spec):
 def test_parse_ranges_whitespace_ok_and_bounds_inclusive():
     assert parse_page_ranges(" 1 , 3-4 ", 4) == [0, 2, 3]
     assert parse_page_ranges("1-1", 1) == [0]
-
-
-# --- _contiguous_runs -------------------------------------------------------
-
-def test_contiguous_runs_break_on_source_and_gap():
-    items = [
-        PageItem(source_index=0, base_rotation=0, source_id=0),
-        PageItem(source_index=1, base_rotation=0, source_id=0),
-        PageItem(source_index=5, base_rotation=0, source_id=1),  # source change
-        PageItem(source_index=6, base_rotation=0, source_id=1),
-        PageItem(source_index=2, base_rotation=0, source_id=0),  # return → new run
-        PageItem(source_index=9, base_rotation=0, source_id=0),  # gap → new run
-    ]
-    runs = [[(i.source_id, i.source_index) for i in r] for r in _contiguous_runs(items)]
-    assert runs == [
-        [(0, 0), (0, 1)],
-        [(1, 5), (1, 6)],
-        [(0, 2)],
-        [(0, 9)],
-    ]
 
 
 # --- commands and model consistency -----------------------------------------

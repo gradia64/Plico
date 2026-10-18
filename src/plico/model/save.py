@@ -4,12 +4,13 @@ import contextlib
 import os
 import shutil
 import tempfile
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TypeVar
 
 import pymupdf
 
+from .assemble import acroform_key, assemble
 from .document import DocumentModel, PageItem, open_for_reading
 from .forms import write_fields
 from .ocr import write_layer
@@ -24,28 +25,6 @@ from .sign import SignatureRequest, sign_in_place
 from .textedit import apply_edit
 
 _T = TypeVar("_T")
-
-
-def _contiguous_runs(items: list[PageItem]) -> Iterator[list[PageItem]]:
-    """Group page items that are consecutive pages of the SAME source.
-
-    ``insert_pdf`` copies a *range* of pages, so a document that was merely
-    reordered can be copied in a handful of calls instead of one call per
-    page. On very large PDFs this is the difference between seconds and
-    minutes. The run must break whenever the source document changes, or a
-    merged document would copy the wrong pages.
-    """
-    run: list[PageItem] = []
-    for item in items:
-        if run and not (
-            item.source_id == run[-1].source_id
-            and item.source_index == run[-1].source_index + 1
-        ):
-            yield run
-            run = []
-        run.append(item)
-    if run:
-        yield run
 
 
 def _redact(page: pymupdf.Page, item: PageItem) -> None:
@@ -187,8 +166,9 @@ def _drop_old_signatures(out: pymupdf.Document) -> None:
             ):
                 page.delete_widget(widget)
                 found = True
-    if found:
-        out.xref_set_key(out.pdf_catalog(), "AcroForm/SigFlags", "0")
+    target = acroform_key(out, "SigFlags")
+    if found and target is not None:
+        out.xref_set_key(*target, "0")
 
 
 def _write_pdf(
@@ -214,41 +194,37 @@ def _write_pdf(
     for item in items:
         if item.form_values:
             values_by_source.setdefault(item.source_id, {}).update(item.form_values)
-    # One handle per source document, opened on demand: a merged document
-    # can interleave pages from several files, so the run list must be
-    # served from whichever source each run belongs to.
+    if not items:
+        # A PDF with zero pages is not a useful artefact; fail loudly rather
+        # than writing a file the user cannot open.
+        raise ValueError("Il documento non contiene pagine da salvare.")
+    # One handle per source document: a merged document can interleave pages
+    # from several files, and each is copied from its own.
     sources: dict[int, pymupdf.Document] = {}
     try:
+        for item in items:
+            if item.source_id in sources:
+                continue
+            path = model.sources[item.source_id]
+            # An encrypted source is unlocked again here: the model kept the
+            # password precisely because this function has nobody to ask (and
+            # neither has the worker).
+            src = open_for_reading(path, model.passwords.get(path))
+            sources[item.source_id] = src
+            # Fields are written before the pages are copied, and before any
+            # redaction: see _fill_source_fields.
+            values = values_by_source.get(item.source_id)
+            if values:
+                _fill_source_fields(src, values)
         with pymupdf.open() as out:
-            for run in _contiguous_runs(items):
-                source_id = run[0].source_id
-                src = sources.get(source_id)
-                if src is None:
-                    path = model.sources[source_id]
-                    # An encrypted source is unlocked again here: the model
-                    # kept the password precisely because this function has
-                    # nobody to ask (and neither has the worker).
-                    src = open_for_reading(path, model.passwords.get(path))
-                    sources[source_id] = src
-                    # Fields are written before the pages are copied, and
-                    # before any redaction: see _fill_source_fields.
-                    values = values_by_source.get(source_id)
-                    if values:
-                        _fill_source_fields(src, values)
-                out.insert_pdf(
-                    src,
-                    from_page=run[0].source_index,
-                    to_page=run[-1].source_index,
-                )
-                # Rotation is per page, so it is applied after the bulk copy.
-                base = len(out) - len(run)
-                for offset, item in enumerate(run):
-                    page = out[base + offset]
-                    page.set_rotation(item.total_rotation)
-            if len(out) == 0:
-                # A PDF with zero pages is not a useful artefact; fail loudly
-                # rather than writing a file the user cannot open.
-                raise ValueError("Il documento non contiene pagine da salvare.")
+            # Each source copied once, then put in order inside the output:
+            # copying a source twice loses or renames its form fields (see
+            # assemble.py).
+            assemble(out, [(sources[item.source_id], item.source_index) for item in items])
+            # Rotation is per page, so it is applied after the copy.
+            for index, item in enumerate(items):
+                page = out[index]
+                page.set_rotation(item.total_rotation)
             # Text edits and redactions run on the built pages: out[] and items
             # are parallel, so each lands on the page built for its item. The
             # order is the dependency order: the OCR layer is text a redaction

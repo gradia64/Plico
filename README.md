@@ -80,6 +80,7 @@ plico/
     │   ├── sign.py            # firma PAdES con pyHanko e rilettura delle firme
     │   ├── images.py          # da immagini a PDF: A4, dpi, EXIF, JPEG intatti
     │   ├── save.py            # save_as(), save_compressed(), extract_pages()
+    │   ├── assemble.py        # pagine da più PDF, campi dei moduli intatti
     │   └── optimize.py        # livelli di compressione, optimize_in_place()
     ├── rendering/
     │   └── worker.py          # RenderWorker in QThread
@@ -103,8 +104,9 @@ rotazione scelta dall'utente. Tutto deriva da questa lista:
   puntano a un secondo `source_id`; nessuna pagina viene copiata
 - **rendering**: il worker apre in sola lettura i documenti sorgente,
   su richiesta, e renderizza senza coordinarsi col modello
-- **salvataggio**: un solo loop che materializza la lista, aprendo
-  ciascuna sorgente una volta sola e copiando le sequenze contigue
+- **salvataggio**: materializza la lista copiando ciascuna sorgente una volta
+  sola e mettendo poi le pagine in ordine nel file d'uscita — copiare due volte
+  dalla stessa sorgente rinomina o perde i campi dei moduli
 
 L'identità di una pagina è sempre la coppia `(source_id, source_index)`, mai
 il solo `source_index`: dopo un'unione due pagine hanno regolarmente lo

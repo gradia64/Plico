@@ -39,6 +39,8 @@ from dataclasses import dataclass
 import pikepdf
 import pymupdf
 
+from .assemble import assemble
+
 __all__ = [
     "LEVELS",
     "LEVELS_BY_KEY",
@@ -228,14 +230,26 @@ def _rewrite_some_pages(
         _clean(doc, out, options)
         return
     with pymupdf.open(src) as part:
-        part.select(pages)
+        # The pages left alone are deleted from the copy one by one, not with
+        # select(): select() drops the AcroForm, and the chosen pages came
+        # out of the compression without their form fields (measured).
+        chosen = set(pages)
+        for index in range(part.page_count - 1, -1, -1):
+            if index not in chosen:
+                part.delete_page(index)
         _resample(part, options.level)
         with pymupdf.open() as body:
             position = {index: slot for slot, index in enumerate(pages)}
-            for index in range(doc.page_count):
-                source = part if index in position else doc
-                slot = position.get(index, index)
-                body.insert_pdf(source, from_page=slot, to_page=slot)
+            # Both halves are the same document, so a field split across them
+            # is ONE field again in the body, not a renamed second one.
+            assemble(
+                body,
+                [
+                    (part, position[index]) if index in position else (doc, index)
+                    for index in range(doc.page_count)
+                ],
+                join_duplicates=True,
+            )
             _clean(body, out, options)
 
 
