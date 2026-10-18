@@ -87,8 +87,8 @@ plico/
     └── test_integration.py   # MainWindow vera, offscreen: 161 test end-to-end
 ```
 
-Gate di qualità attuale: **493 passed, 8 skipped**, `ruff` pulito, `mypy` pulito
-(25 file sorgente). Uno `skip` è il test delle icone, che vuole un tema che
+Gate di qualità attuale: **513 passed, 1 skipped** (con `lrelease` dell'SDK nel `PATH`), `ruff` pulito, `mypy` pulito
+(26 file sorgente). Uno `skip` è il test delle icone, che vuole un tema che
 fornisca `object-rotate-*`. Gli altri skip possibili dipendono da
 strumenti che mancano (§9): `pylupdate6` e `lrelease`/`pyside6-lrelease` in
 `tests/test_i18n.py`. **Uno skip lì non è innocuo**: è il test che avvisa
@@ -269,7 +269,7 @@ La UI comunica solo via signal; le connessioni fra thread diversi sono
 `queued`, quindi gli slot girano nel thread giusto senza gestire nulla a mano.
 
 ```python
-key = ("page" | "thumb", source_id, source_index, rotation, zoom, dpr)
+key = ("page" | "thumb", source_id, source_index, rotation, zoom, dpr, redactions)
 
 class RenderRequest:
     key: tuple
@@ -277,7 +277,14 @@ class RenderRequest:
     source_index: int    # quale pagina in quel PDF
     zoom: float          # pixel REALI (zoom × dpr)
     rotation: int        # solo offset utente
+    redactions: tuple    # RedactionRect da applicare prima del render, () per nessuna
 ```
+
+Con `redactions` non vuoto il worker non disegna la pagina della sorgente ma
+`redacted_copy()`: una copia di una pagina sola (`insert_pdf`) con le
+cancellazioni bruciate da `burn_redactions()`, la stessa funzione che usa il
+salvataggio. L'handle della sorgente resta in sola lettura e la copia si
+chiude subito dopo il render.
 
 `RenderWorker` ha quattro signal:
 
@@ -819,6 +826,46 @@ moduli**, con un ciclo a parte: `page.annots()` non elenca i widget e
 `apply_redactions()` non li tocca, quindi un campo compilato con «Mario Rossi»
 e coperto da una zona usciva dal salvataggio con il suo valore (misurato).
 `_redact()` elimina anche ogni widget che tocca un segno (`delete_widget`).
+
+**Anteprima e conferma (ottobre 2026, segnalazione dell'utente).** Un utente
+ha segnato due parole, non ha visto cambiare niente, ha salvato e riaperto il
+file per scoprire che erano sparite davvero. Le zone si disegnavano **solo
+finché lo strumento era acceso**; spento, la pagina tornava intatta fino al
+salvataggio, e con *Cancella parola* lo strumento veniva acceso apposta per
+mostrare i segni. Ora:
+
+- `PageView.redaction_preview()` è vero quando né «Cancella zona» né
+  «Cancella selezione» sono accesi; in quel caso `_request_visible()` mette le
+  zone della pagina nella chiave e nella `RenderRequest`, e la pagina si vede
+  **come verrà salvata**. Con uno strumento acceso la chiave ha `()` e sopra la
+  pagina vera si disegnano i segni con le maniglie. Accendere o spegnere uno
+  strumento, e ogni `page_changed` (anche un Annulla a strumento spento),
+  richiede di nuovo le pagine visibili;
+- con l'anteprima, i campi del modulo e i testi modificati che toccano una zona
+  **non** vengono ridisegnati sopra (`_hidden_by_preview()`): al salvataggio se
+  ne vanno con la zona, e ridisegnarli smentirebbe l'anteprima;
+- le miniature hanno le zone nella chiave **sempre**, qualunque strumento sia
+  acceso: `_is_stale_thumb_key()` scarta quella con un insieme di zone diverso;
+- *Cancella parola* non accende più lo strumento;
+- `MainWindow._saved_marks` è l'insieme `(source_id, source_index, rect)` già
+  scritto nel file di destinazione (`_mark_saved()` lo aggiorna; apertura e
+  chiusura lo svuotano). «In sospeso» vuol dire modello meno quello: dopo un
+  «Salva con nome» il modello tiene le zone, ma il file le ha già. Il titolo
+  le conta (« — 2 cancellazioni da applicare»), aggiornato a ogni
+  `indexChanged` della pila;
+- `_confirm_redactions()` chiede prima di **ogni** scrittura che le applica:
+  `_save_to()` e la firma (le zone non ancora nel file di destinazione,
+  `_marks_to_write()`), la copia compressa e l'estrazione (tutte quelle delle
+  pagine scritte, perché il file è sempre nuovo). Frasi intere per ogni caso,
+  perché i traduttori non possono riordinare due mezze frasi. Il dialogo è
+  `_ask_to_burn()`, e `tests/conftest.py` lo sostituisce con un «sì» per
+  tutta la suite: un `QMessageBox` modale offscreen aspetterebbe per sempre;
+- `widgets/toast.py`: un `QLabel` sopra la vista, in basso al centro, con i
+  colori dei tooltip del tema, trasparente al mouse, che sparisce dopo 4,5 s.
+  `MainWindow._notify()` scrive lo stesso testo nella barra di stato e nel
+  toast. Lo usano i segni (zona disegnata, selezione, *Cancella parola*),
+  l'uscita da uno strumento con cancellazioni in sospeso e la fine dell'OCR,
+  che prima finiva solo nella barra di stato.
 
 ### Compilazione dei form (`model/forms.py`)
 

@@ -254,8 +254,10 @@ class _PageLabel(QLabel):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         # Fields are always drawn: they are how the user finds what can be
-        # filled in. Redactions only while the tool is on, so that a page
-        # carrying marks still reads as a page.
+        # filled in. Redactions are drawn as marks only while a tool that
+        # works on them is on; otherwise the page itself is the preview (the
+        # worker burnt them into a copy), and a mark drawn on top of it would
+        # hide exactly what the user wants to check.
         self._paint_fields(painter)
         # Text edits are always painted: the page must read the way it will
         # be saved, tool or no tool.
@@ -319,8 +321,24 @@ class _PageLabel(QLabel):
         painter.setTransform(self._page_transform())
         outline = self._view.text_mode()
         for edit in canvas.item.text_edits:
+            # Edits are written before the redactions, so a mark over one
+            # takes the new words too: the preview must not paint them back.
+            if self._hidden_by_preview(edit.span.bbox):
+                continue
             self._paint_text_edit(painter, edit, outline)
         painter.restore()
+
+    def _hidden_by_preview(self, rect: tuple[float, float, float, float]) -> bool:
+        """Whether *rect* (page space) is under a mark the preview applies."""
+        canvas = self.canvas
+        assert canvas is not None
+        if not self._view.redaction_preview():
+            return False
+        x0, y0, x1, y1 = rect
+        return any(
+            r.x0 < x1 and x0 < r.x1 and r.y0 < y1 and y0 < r.y1
+            for r in canvas.item.redactions
+        )
 
     def _paint_text_edit(self, painter: QPainter, edit: TextEdit, outline: bool) -> None:
         span = edit.span
@@ -411,6 +429,10 @@ class _PageLabel(QLabel):
             return
         picked = self._view.selected_field()
         for field in item.form_fields:
+            # A field under a mark goes with it at save time; the preview
+            # leaves it out for the same reason.
+            if self._hidden_by_preview(field.rect):
+                continue
             area = self._rect_pixels(field.rect)
             is_selected = picked == (canvas.index, field.name)
             painter.fillRect(area, QBrush(FIELD_BASE))
@@ -790,6 +812,9 @@ class PageView(QScrollArea):
             # would leave that page impossible to select.
             canvas.words = None
             canvas.label.update()
+        # A mark added or removed with no tool on (Cancella parola, an undo)
+        # changes the preview, which is a render of its own.
+        self._request_visible()
 
     @staticmethod
     def _identity(item: PageItem) -> tuple[int, int]:
@@ -1101,6 +1126,9 @@ class PageView(QScrollArea):
             # of the old size, centred in a label of the new one -- with the
             # marks, fields and editor placed for the label, beside the words.
             scale = round(c.scale, 4)
+            # Without a mark tool on, the page is drawn as the save will write
+            # it: the redactions burnt in, the words under them gone.
+            marks = tuple(c.item.redactions) if self.redaction_preview() else ()
             key = (
                 "page",
                 c.item.source_id,
@@ -1108,6 +1136,7 @@ class PageView(QScrollArea):
                 c.item.rotation,
                 scale,
                 dpr,
+                marks,
             )
             if c.current_key == key or c.pending_key == key:
                 continue
@@ -1127,7 +1156,8 @@ class PageView(QScrollArea):
                     c.item.source_index,
                     scale * dpr,        # zoom in real pixels
                     c.item.rotation,    # user offset only: MuPDF has already
-                )                       # applied the page's own /Rotate
+                    marks,              # applied the page's own /Rotate
+                )
             )
 
     def _on_rendered(self, key, img) -> None:
@@ -1192,6 +1222,14 @@ class PageView(QScrollArea):
         """Whether a drag on a page draws a mark instead of doing nothing."""
         return self._redaction_mode
 
+    def redaction_preview(self) -> bool:
+        """Whether the pages show their redactions applied, as saved.
+
+        True unless a tool that edits the marks is on: those need the page
+        underneath, to see what a mark covers and to move it.
+        """
+        return not (self._redaction_mode or self._selection_mode)
+
     def set_redaction_mode(self, active: bool) -> None:
         """Turn the redaction tool on or off, for every page at once."""
         self._redaction_mode = bool(active)
@@ -1208,6 +1246,9 @@ class PageView(QScrollArea):
             # The marks are painted only while the tool is on, so leaving it
             # has to wipe them off the screen immediately.
             c.label.update()
+        # And the page under them changes: the preview with the redactions
+        # applied when leaving, the page as it is when entering.
+        self._request_visible()
 
     def commit_redaction(
         self, canvas: _Canvas, x0: float, y0: float, x1: float, y1: float
@@ -1253,6 +1294,7 @@ class PageView(QScrollArea):
             c.label.setCursor(cursor)
             c.label.forget_drag()
             c.label.update()
+        self._request_visible()
 
     def page_words(self, canvas: _Canvas) -> list[RedactionRect]:
         """The words of *canvas*, read once and kept on it.

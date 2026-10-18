@@ -45,8 +45,10 @@ _INVALID = QModelIndex()
 def thumb_key(item: PageItem, zoom: float = THUMB_ZOOM, dpr: float = 1.0) -> tuple:
     """Cache/render key for a thumbnail.
 
-    ("thumb", source_id, source_index, rotation, zoom, dpr) -- source_id is
-    included so a merged document cannot reuse another source's pixmap.
+    ("thumb", source_id, source_index, rotation, zoom, dpr, redactions) --
+    source_id is included so a merged document cannot reuse another source's
+    pixmap. The redactions are there because a thumbnail shows the page as it
+    will be saved: with them burnt in, whatever tool is on.
 
     The rotation in the key is the USER offset, which is what the renderer
     applies on top of the page's own /Rotate. It is part of the key so a
@@ -59,6 +61,7 @@ def thumb_key(item: PageItem, zoom: float = THUMB_ZOOM, dpr: float = 1.0) -> tup
         item.rotation,
         zoom,
         dpr,
+        tuple(item.redactions),
     )
 
 
@@ -220,6 +223,7 @@ class ThumbnailBar(QListView):
                 item.source_index,
                 THUMB_ZOOM * self._dpr,
                 item.rotation,
+                tuple(item.redactions),
             )
         )
 
@@ -392,13 +396,17 @@ class ThumbnailBar(QListView):
 
 
 def _is_stale_thumb_key(key: tuple, item: PageItem) -> bool:
-    """True for a thumbnail key of *item* rendered at a different rotation."""
+    """True for a thumbnail key of *item* that no longer shows it as it is.
+
+    A different rotation, or a different set of redactions: either way the
+    picture is of a page that is not there any more.
+    """
     return (
-        len(key) == 6
+        len(key) == 7
         and key[0] == "thumb"
         and key[1] == item.source_id
         and key[2] == item.source_index
-        and key[3] != item.rotation
+        and (key[3] != item.rotation or key[6] != tuple(item.redactions))
     )
 
 

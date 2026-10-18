@@ -25,6 +25,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtGui import QImage
 
 from ..model.document import open_for_reading
+from ..model.redact import RedactionRect, redacted_copy
 
 # Enough for the handful of documents a merged job realistically interleaves,
 # while keeping the number of open files bounded.
@@ -34,10 +35,16 @@ MAX_OPEN_DOCUMENTS = 16
 class RenderRequest:
     """A single render request emitted to the worker thread.
 
-    key = ("page" | "thumb", source_id, source_index, rotation, zoom, dpr)
+    key = ("page" | "thumb", source_id, source_index, rotation, zoom, dpr,
+           redactions)
 
     ``source_id`` is part of the key so that merging a second PDF cannot be
     served a cached pixmap belonging to a different source document.
+
+    ``redactions`` (a tuple of :class:`RedactionRect`, empty for none) asks for
+    the page as the save will write it: the marks burnt into a copy, the
+    words under them gone. It is in the key as well, so adding or removing a
+    mark renders again instead of reusing the picture of the page before.
     """
 
     def __init__(
@@ -47,12 +54,14 @@ class RenderRequest:
         source_index: int,
         zoom: float,
         rotation: int,
+        redactions: tuple[RedactionRect, ...] = (),
     ) -> None:
         self.key = key                      # cache/render identity
         self.source_path = source_path      # which PDF to render from
         self.source_index = source_index    # page position in that PDF
         self.zoom = zoom                    # zoom in real pixels (zoom × dpr)
         self.rotation = rotation            # user offset on top of /Rotate
+        self.redactions = redactions        # burnt into a copy before rendering
 
 
 class RenderWorker(QObject):
@@ -104,8 +113,15 @@ class RenderWorker(QObject):
         if doc is None:
             self.render_failed.emit(req.key)
             return
+        preview: pymupdf.Document | None = None
         try:
-            page = doc[req.source_index]
+            if req.redactions:
+                # A copy: the handle is shared and the source stays as it is
+                # on disk until a save.
+                preview = redacted_copy(doc, req.source_index, req.redactions)
+                page = preview[0]
+            else:
+                page = doc[req.source_index]
             mat = pymupdf.Matrix(req.zoom, req.zoom).prerotate(req.rotation)
             pix = page.get_pixmap(matrix=mat, alpha=False)
             # QImage wraps the samples buffer; copy so the buffer can be freed
@@ -124,6 +140,9 @@ class RenderWorker(QObject):
         # render_failed, leaving the page "in flight" forever.
         except Exception:  # noqa: BLE001
             self.render_failed.emit(req.key)
+        finally:
+            if preview is not None:
+                preview.close()
 
     @Slot(str)
     def _evict(self, path: str) -> None:

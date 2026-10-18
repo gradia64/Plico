@@ -22,6 +22,7 @@ from .optimize import (
     Progress,
     optimize_in_place,
 )
+from .redact import burn_redactions
 from .sign import SignatureRequest, sign_in_place
 from .textedit import apply_edit
 
@@ -31,49 +32,11 @@ _T = TypeVar("_T")
 def _redact(page: pymupdf.Page, item: PageItem) -> None:
     """Burn *item*'s redaction rectangles into *page*.
 
-    ``add_redact_annot`` expects coordinates in the page's UNROTATED space,
-    which is exactly the space the model stores its rectangles in, so there
-    is nothing to convert here. ``apply_redactions`` then removes the text
-    under the box, blanks the overlapping image pixels and drops the line art
-    that crosses it -- and it leaves the page's /Rotate alone, so it can run
-    after ``set_rotation`` without changing the orientation we just wrote.
-
     This is the point of no return: the words are gone from the content
-    stream, not merely covered up.
-
-    Two passes, because the text and the rest do not always need the same
-    rectangle. The first takes the image pixels and the line art under every
-    mark, whole; the second takes the text, through each mark's
-    :meth:`RedactionRect.text_band` -- the whole zone for one the user drew,
-    a band across the line for one fitted to words, so that redacting a word
-    does not also delete letters of the lines above and below it.
+    stream, not merely covered up. The work is :func:`burn_redactions`, which
+    the on-screen preview runs too.
     """
-    for rect in item.redactions:
-        page.add_redact_annot(pymupdf.Rect(*rect.as_tuple()))
-    page.apply_redactions(text=pymupdf.PDF_REDACT_TEXT_NONE)  # type: ignore[attr-defined]
-    for rect in item.redactions:
-        page.add_redact_annot(pymupdf.Rect(*rect.text_band().as_tuple()))
-    page.apply_redactions(
-        images=pymupdf.PDF_REDACT_IMAGE_NONE,  # type: ignore[attr-defined]
-        graphics=pymupdf.PDF_REDACT_LINE_ART_NONE,  # type: ignore[attr-defined]
-        text=pymupdf.PDF_REDACT_TEXT_REMOVE,  # type: ignore[attr-defined]
-    )
-    # The content under the rectangles is gone, but the annotations are not:
-    # a sticky note repeating a redacted word survives apply_redactions() and
-    # would leak exactly what the redaction was meant to hide (measured). So
-    # anything that touches a rectangle goes with it -- the same rule the eye
-    # applies to a redaction.
-    marks = [pymupdf.Rect(*r.as_tuple()) for r in item.redactions]
-    for annot in list(page.annots() or []):
-        if any(annot.rect.intersects(mark) for mark in marks):
-            page.delete_annot(annot)
-    # Form fields too, and they need their own loop: ``annots()`` leaves the
-    # widgets out, and apply_redactions() does not touch them either. A field
-    # filled in with «Mario Rossi» and covered by a mark came out of the save
-    # with its value intact (measured).
-    for widget in list(page.widgets() or []):
-        if any(widget.rect.intersects(mark) for mark in marks):
-            page.delete_widget(widget)
+    burn_redactions(page, item.redactions)
 
 
 def _edit_text(page: pymupdf.Page, item: PageItem) -> None:

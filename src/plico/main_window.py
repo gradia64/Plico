@@ -68,6 +68,7 @@ from .widgets.form_panel import FormPanel
 from .widgets.ocr import OcrDialog, OcrTask
 from .widgets.page_view import PageView
 from .widgets.sign import SignatureDialog, SignDialog
+from .widgets.toast import Toast
 
 
 def _host_path(path: str) -> str:
@@ -109,6 +110,9 @@ class MainWindow(QMainWindow):
         # edit; the title's [*] follows it, including when an undo walks the
         # document back to exactly what was saved.
         self._undo_stack.cleanChanged.connect(self._update_title)
+        # Every step can add or remove a redaction, and the title counts the
+        # ones still waiting for a save.
+        self._undo_stack.indexChanged.connect(self._update_title)
 
         # --- what "Salva" writes to, and what the undo stack cannot see ---
         # The file a plain Ctrl+S writes: the document opened, or the last
@@ -123,6 +127,12 @@ class MainWindow(QMainWindow):
         # is refreshed exactly where the file on disk can change: open, save
         # and sign.
         self._signed_on_disk = False
+        # The redactions already written into the save target, as
+        # (source_id, source_index, rect). The model keeps its marks after a
+        # "Salva con nome" -- the sources are untouched -- so "pending" is what
+        # the model has minus what the file already has: that is what the
+        # title counts and what a save asks to confirm.
+        self._saved_marks: frozenset[tuple[int, int, RedactionRect]] = frozenset()
         # The PDFs made from images live here until Plico exits: the worker
         # renders from a path, so they must be real files. Created on first
         # use, removed by shutdown_worker().
@@ -163,6 +173,9 @@ class MainWindow(QMainWindow):
         # --- central widget (PageView handles its own rendering) ---
         self._page_view = PageView(self._worker, self._doc_model)
         self._status = QLabel(self.tr("Pronto"))
+        # The same message as the status bar, over the page, for the outcomes
+        # the user must not miss (an OCR run, a mark that waits for a save).
+        self._toast = Toast(self._page_view)
 
         # Layout: page view in a container with status bar
         central = QWidget()
@@ -594,6 +607,7 @@ class MainWindow(QMainWindow):
         # "failed" and nothing would ask for it again.
         self._page_view.set_paused(True)
         self._doc_model.set_pages(items, path)
+        self._saved_marks = frozenset()
         # The model emits ``changed`` and the views rebuild from it. Page
         # sizes come from the model too, so the render thread needs no
         # round-trip before the layout is correct.
@@ -665,6 +679,7 @@ class MainWindow(QMainWindow):
         self._refresh_form_panel()
         self._save_target = None
         self._signed_on_disk = False
+        self._saved_marks = frozenset()
         self._update_title()
         self._status.setText(self.tr("Documento chiuso."))
 
@@ -895,6 +910,8 @@ class MainWindow(QMainWindow):
             )
             if choice != QMessageBox.StandardButton.Save:
                 return False
+        if not self._confirm_redactions(self._marks_to_write(path)):
+            return False
         # Computed BEFORE writing: os.replace() gives the target a new inode,
         # and afterwards it would no longer match the source it replaced.
         overwritten = self._doc_model.sources_at(path)
@@ -924,6 +941,7 @@ class MainWindow(QMainWindow):
         self._save_target = path
         # Every write here materialises the page list; none of them signs.
         self._signed_on_disk = False
+        self._saved_marks = self._marks()
         self._undo_stack.setClean()
         self._update_title()
 
@@ -936,6 +954,91 @@ class MainWindow(QMainWindow):
         if not self._doc_model.sources:
             return False
         return not self._undo_stack.isClean()
+
+    def _marks(
+        self, indices: list[int] | None = None
+    ) -> frozenset[tuple[int, int, RedactionRect]]:
+        """Every redaction of the pages at *indices* (all pages for None)."""
+        pages = self._doc_model.pages
+        chosen = range(len(pages)) if indices is None else indices
+        return frozenset(
+            (pages[i].source_id, pages[i].source_index, rect)
+            for i in chosen
+            for rect in pages[i].redactions
+        )
+
+    def _pending_marks(self) -> frozenset[tuple[int, int, RedactionRect]]:
+        """The redactions the save target does not have yet."""
+        return self._marks() - self._saved_marks
+
+    def _marks_to_write(self, path: str) -> frozenset[tuple[int, int, RedactionRect]]:
+        """What a full save to *path* burns that was not confirmed already.
+
+        Saving again to the target the marks went into last time asks nothing
+        for those; any other file gets all of them, and they are asked again.
+        """
+        same = self._save_target is not None and os.path.abspath(path) == os.path.abspath(
+            self._save_target
+        )
+        return self._pending_marks() if same else self._marks()
+
+    def _confirm_redactions(self, marks: frozenset[tuple[int, int, RedactionRect]]) -> bool:
+        """Ask before *marks* become permanent in a file; True to go ahead.
+
+        The marks are undoable until now and the preview has shown them, but
+        what comes next is not: the content under them leaves the file for
+        good. One question, with the numbers, right before the write.
+        """
+        if not marks:
+            return True
+        pages = sorted({
+            i
+            for i, item in enumerate(self._doc_model.pages)
+            for rect in item.redactions
+            if (item.source_id, item.source_index, rect) in marks
+        })
+        listed = ", ".join(str(i + 1) for i in pages)
+        # Whole sentences, one per case: a translator cannot reorder the
+        # halves of a sentence glued together in code.
+        if len(marks) == 1:
+            what = self.tr(
+                "Il contenuto di una zona, a pagina {0}, verrà eliminato definitivamente dal file."
+            ).format(listed)
+        elif len(pages) == 1:
+            what = self.tr(
+                "Il contenuto di {0} zone, a pagina {1}, verrà eliminato definitivamente dal file."
+            ).format(len(marks), listed)
+        else:
+            what = self.tr(
+                "Il contenuto di {0} zone, alle pagine {1}, verrà eliminato "
+                "definitivamente dal file."
+            ).format(len(marks), listed)
+        text = (
+            what
+            + "\n\n"
+            + self.tr(
+                "Testo, immagini e grafica sotto le zone non si potranno più recuperare "
+                "da quel file. Il documento aperto resta modificabile."
+            )
+        )
+        return self._ask_to_burn(text)
+
+    def _ask_to_burn(self, text: str) -> bool:
+        """The dialog of :meth:`_confirm_redactions`; tests replace it."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(self.tr("Cancellazione definitiva"))
+        box.setText(text)
+        burn = box.addButton(self.tr("Elimina e salva"), QMessageBox.ButtonRole.AcceptRole)
+        cancel = box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(cancel)
+        box.exec()
+        return box.clickedButton() is burn
+
+    def _notify(self, text: str) -> None:
+        """Say *text* in the status bar and, for a few seconds, over the page."""
+        self._status.setText(text)
+        self._toast.show_message(text)
 
     def _update_title(self) -> None:
         """File name in the title, with the [*] that marks unsaved changes.
@@ -955,6 +1058,18 @@ class MainWindow(QMainWindow):
                 # believe the version on screen is the signed one.
                 name += self.tr(" — firmato")
             self.setWindowTitle(f"{name}[*]")
+        pending = len(self._pending_marks())
+        if pending:
+            # Said in the title because it is a state, not an event: until the
+            # next save these marks are a promise, and the file on disk still
+            # has what is under them.
+            suffix = (
+                self.tr(" — una cancellazione da applicare")
+                if pending == 1
+                else self.tr(" — {0} cancellazioni da applicare").format(pending)
+            )
+            title = self.windowTitle()
+            self.setWindowTitle(title.replace("[*]", suffix + "[*]"))
         self.setWindowModified(self.is_modified())
         # Every open, close and save passes through here, so "Chiudi" is
         # enabled exactly while there is a document to close.
@@ -1093,6 +1208,8 @@ class MainWindow(QMainWindow):
             return
         # Computed BEFORE writing, as in _save_to: the swap gives the target a
         # new inode.
+        if not on_disk and not self._confirm_redactions(self._marks_to_write(path)):
+            return
         overwritten = self._doc_model.sources_at(path)
         try:
             if on_disk:
@@ -1229,6 +1346,9 @@ class MainWindow(QMainWindow):
         # Computed BEFORE writing: compressing over a source gives that file
         # a new inode, and afterwards the comparison would no longer
         # recognise the original.
+        # A copy, not the save target: every mark goes into it.
+        if not self._confirm_redactions(self._marks()):
+            return
         self._compression_overwritten = self._doc_model.sources_at(path)
         self._compression_path = path
         self._compression_options = options
@@ -1376,6 +1496,8 @@ class MainWindow(QMainWindow):
         if not path:
             return
 
+        if not self._confirm_redactions(self._marks(indices)):
+            return
         try:
             extract_pages(self._doc_model, path, indices)
             self._status.setText(self.tr("Estratte {0} pagine in: {1}").format(len(indices), path))
@@ -1464,7 +1586,7 @@ class MainWindow(QMainWindow):
                 self.tr("Cancella zona: trascina un rettangolo sul contenuto da eliminare; un clic su una zona la ripristina.")
             )
         else:
-            self._status.setText(self.tr("Pronto"))
+            self._announce_preview()
 
     def _on_selection_toggled(self, active: bool) -> None:
         """Enter or leave the tool that redacts the words you drag over."""
@@ -1487,7 +1609,29 @@ class MainWindow(QMainWindow):
                 )
             )
         else:
+            self._announce_preview()
+
+    def _announce_preview(self) -> None:
+        """Leaving a mark tool: say what the page now shows, if anything waits.
+
+        Without a tool the pages are the preview -- the redactions applied --
+        and the change of picture deserves a word, or a page with holes in it
+        looks like damage instead of like the result.
+        """
+        if not self._doc_model.sources:
             self._status.setText(self.tr("Pronto"))
+            return
+        pending = len(self._pending_marks())
+        if not pending:
+            self._status.setText(self.tr("Pronto"))
+            return
+        self._notify(
+            self.tr("Anteprima: la pagina è come verrà salvata. Una cancellazione da applicare.")
+            if pending == 1
+            else self.tr(
+                "Anteprima: la pagina è come verrà salvata. {0} cancellazioni da applicare."
+            ).format(pending)
+        )
 
     def _leave_tools(self) -> None:
         """Esc: leave whichever tool is on, leaving its work where it is."""
@@ -1537,6 +1681,12 @@ class MainWindow(QMainWindow):
     def _add_redaction(self, index: int, rect: RedactionRect) -> None:
         """A rectangle was drawn on page *index*."""
         self._undo_stack.push(AddRedaction(self._doc_model, index, rect))
+        self._notify(
+            self.tr(
+                "Zona segnata a pagina {0}: il contenuto sarà eliminato al salvataggio. "
+                "Esc per vedere l'anteprima."
+            ).format(index + 1)
+        )
 
     def _adjust_redaction(
         self,
@@ -1567,10 +1717,16 @@ class MainWindow(QMainWindow):
                 self._undo_stack.push(AddRedaction(self._doc_model, index, rect))
         finally:
             self._undo_stack.endMacro()
-        self._status.setText(
-            self.tr("Cancellate {0} parole sulla pagina {1}.").format(len(words), index + 1)
+        self._notify(
+            self.tr(
+                "{0} parole segnate a pagina {1}: saranno eliminate al salvataggio. "
+                "Esc per vedere l'anteprima."
+            ).format(len(words), index + 1)
             if len(words) != 1
-            else self.tr("Cancellata una parola sulla pagina {0}.").format(index + 1)
+            else self.tr(
+                "Una parola segnata a pagina {0}: sarà eliminata al salvataggio. "
+                "Esc per vedere l'anteprima."
+            ).format(index + 1)
         )
 
     def _remove_redaction(self, index: int, rect: RedactionRect) -> None:
@@ -1606,18 +1762,28 @@ class MainWindow(QMainWindow):
         finally:
             self._undo_stack.endMacro()
 
-        # Turn the tool on: redactions are only painted while it is, and marks
-        # the user cannot see are worse than no marks at all. setChecked() does
-        # not emit `triggered`, so the mode is applied explicitly.
-        self._redact_act.setChecked(True)
-        self._on_redaction_toggled(True)
-
+        # No tool is turned on: without one the pages show the redactions
+        # applied, which is the answer to "what did that just do?". The marks
+        # can still be corrected with Cancella zona.
         count = sum(len(rects) for rects in occurrences.values())
-        self._status.setText(
-            self.tr("Cancellate {0} occorrenze di «{1}» su {2} pagine.").format(
-                count, text, len(occurrences)
-            )
-        )
+        if count == 1:
+            page = next(iter(occurrences)) + 1
+            message = self.tr(
+                "Un'occorrenza di «{0}» segnata a pagina {1}: sarà eliminata al "
+                "salvataggio. La pagina ne mostra già l'anteprima."
+            ).format(text, page)
+        elif len(occurrences) == 1:
+            page = next(iter(occurrences)) + 1
+            message = self.tr(
+                "{0} occorrenze di «{1}» segnate a pagina {2}: saranno eliminate al "
+                "salvataggio. La pagina ne mostra già l'anteprima."
+            ).format(count, text, page)
+        else:
+            message = self.tr(
+                "{0} occorrenze di «{1}» segnate su {2} pagine: saranno eliminate al "
+                "salvataggio. La pagina ne mostra già l'anteprima."
+            ).format(count, text, len(occurrences))
+        self._notify(message)
 
     # ------------------------------------------------------------------ #
     #  OCR (a scan is a picture of words: this makes the words real)
@@ -1678,7 +1844,7 @@ class MainWindow(QMainWindow):
         """
         found = {index: read for index, read in words.items() if read}
         if not found:
-            self._status.setText(
+            self._notify(
                 self.tr("Riconoscimento interrotto: nessun testo letto.")
                 if cancelled
                 else self.tr("Nessun testo riconosciuto nelle pagine scelte.")
@@ -1706,7 +1872,9 @@ class MainWindow(QMainWindow):
             message += " " + self.tr("{0} pagine senza testo.").format(empty)
         if cancelled:
             message = self.tr("Riconoscimento interrotto. ") + message
-        self._status.setText(message)
+        # Over the page as well: the run ends behind a progress dialog, and
+        # the status bar alone is easy to miss (reported by a user who did).
+        self._notify(message)
 
     # ------------------------------------------------------------------ #
     #  Form fields (an AcroForm field is state of the virtual page too)

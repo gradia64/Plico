@@ -182,8 +182,18 @@ on large files.
 over the data to remove, a plain click on a zone cancels it, `Esc` exits.
 An already drawn zone is **corrected without redrawing it**: the corners
 resize it, the centre moves it. Zones stay **editable until you save** —
-they are undo commands like the others (`Ctrl+Z`) and the dark preview on
-the page shows exactly where they will land.
+they are undo commands like the others (`Ctrl+Z`).
+
+The result **shows right away**, without saving and reopening. With the tool
+on, zones are dark rectangles with handles, so you can correct them; as soon
+as you turn it off (`Esc`) the page and its thumbnail show the **real
+preview**: the redactions applied to an in-memory copy of the page, by the
+same code as the save, so you also see what goes away with the words (a
+border, part of an image). Every mark is confirmed by a notice over the page,
+and the window title counts the redactions still to apply. Before writing the
+file — save, sign, compressed copy, page extraction — Plico asks for
+confirmation with the number of zones and the pages, because from there the
+content cannot be recovered.
 
 At save time PyMuPDF rewrites the content streams and **removes** the words
 that fall inside the zone: neither the text nor the image under the
@@ -194,7 +204,8 @@ would otherwise stay in the file, value included.
 
 `Ctrl+Shift+F` (_Edit → Redact word…_) instead searches for a word on **all**
 pages and marks every occurrence in one go, as a single undo step. It also
-searches text recognised by OCR, even before saving.
+searches text recognised by OCR, even before saving. It turns no tool on: the
+pages show the preview of the removed occurrences at once.
 
 `Ctrl+Shift+L` (_Edit → Redact selection_) is the third route, the one
 expected by anyone who has used an editor: drag over the words to remove and
@@ -283,7 +294,8 @@ whole document) and in which language, with Italian and English together as
 the proposal. It runs in the thread pool with a cancellable progress bar —
 while it runs the window accepts no page edits on the pages it is reading —
 and each run is **a single** undo step: one `Ctrl+Z` removes the layer from
-all pages at once.
+all pages at once. At the end a notice over the page says on how many pages it
+read text (or that it found none), besides the status bar.
 
 The layer's font is one of the Base-14 and is not embedded, so making a
 scan searchable adds not a byte. Words already in the PDF are not rewritten:

@@ -2691,7 +2691,10 @@ def test_redact_text_marks_every_occurrence_in_one_step(
     assert mw._undo_stack.count() == 1, "una macro, non un comando per pagina"
     assert mw._undo_stack.undoText() == "Cancella «Pagina»"
     assert sum(len(item.redactions) for item in mw._doc_model.pages) == 3
-    assert mw._redact_act.isChecked(), "le tacche vanno mostrate, non solo messe"
+    # No tool turned on: the pages show the marks applied, which is how the
+    # user sees what the search did.
+    assert not mw._redact_act.isChecked()
+    assert mw._page_view.redaction_preview()
 
     mw._undo_stack.undo()
     assert all(not item.redactions for item in mw._doc_model.pages)

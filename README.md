@@ -185,8 +185,18 @@ anche sui file grandi.
 eliminare, un clic secco su una zona la annulla, `Esc` esce. Una zona già
 disegnata si **corregge senza rifarla**: gli angoli la ridimensionano, il
 centro la sposta. Le zone restano **modificabili finché non salvi** — sono
-comandi undo come gli altri (`Ctrl+Z`) e l'anteprima scura sulla pagina mostra
-esattamente dove finiranno.
+comandi undo come gli altri (`Ctrl+Z`).
+
+Il risultato **si vede subito**, senza salvare e riaprire. Con lo strumento
+acceso le zone sono rettangoli scuri con le maniglie, per correggerle; appena
+lo spegni (`Esc`) la pagina e la sua miniatura mostrano l'**anteprima vera**:
+le cancellazioni applicate a una copia della pagina in memoria, con lo stesso
+codice del salvataggio, quindi anche quello che sparisce insieme alle parole
+(un bordo, un pezzo di immagine). Ogni segno è confermato da un avviso sopra la
+pagina, e il titolo della finestra conta le cancellazioni ancora da applicare.
+Prima di scrivere il file — salvataggio, firma, copia compressa, estrazione di
+pagine — Plico chiede conferma con il numero di zone e le pagine, perché da lì
+il contenuto non si recupera più.
 
 Al salvataggio PyMuPDF riscrive i content stream e **toglie** le parole che
 ricadono nella zona: nel file non restano né il testo né l'immagine sotto il
@@ -197,7 +207,9 @@ compilato con un nome resterebbe altrimenti nel file, valore compreso.
 
 `Ctrl+Shift+F` (*Modifica → Cancella parola…*) cerca invece una parola in **tutte**
 le pagine e marca ogni occorrenza in un colpo solo, come un unico passo di
-undo. Cerca anche nel testo riconosciuto dall'OCR, già prima di salvare.
+undo. Cerca anche nel testo riconosciuto dall'OCR, già prima di salvare. Non
+accende nessuno strumento: le pagine mostrano subito l'anteprima delle
+occorrenze tolte.
 
 `Ctrl+Shift+L` (*Modifica → Cancella selezione*) è la terza strada, quella che
 si aspetta chi ha usato un editor: si trascina sulle parole da eliminare e
@@ -289,7 +301,9 @@ successive, o tutto il documento) e in che lingua, con italiano e inglese
 insieme come proposta. Gira nel thread pool con una barra di avanzamento
 annullabile — finché gira, la finestra non accetta modifiche alle pagine che
 sta leggendo — e ogni giro è **un solo** passo di undo: un `Ctrl+Z` toglie lo
-strato di tutte le pagine in una volta.
+strato di tutte le pagine in una volta. Alla fine un avviso sopra la pagina
+dice su quante pagine ha letto il testo (o che non ne ha trovato), oltre alla
+barra di stato.
 
 Il font dello strato è uno dei Base-14 e non viene incorporato, quindi rendere
 cercabile una scansione non aggiunge un byte. Le parole che il PDF già contiene
