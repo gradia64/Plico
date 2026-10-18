@@ -1047,8 +1047,8 @@ class MainWindow(QMainWindow):
             else:
                 text = self.tr(
                     "«{0}» è firmato, ma ha modifiche non salvate.\n\nPer firmarle il "
-                    "file va riscritto, e la firma che porta ora non sarà più valida. "
-                    "Vuoi continuare?"
+                    "file va riscritto, e la firma che porta ora verrà tolta: resterà "
+                    "solo la nuova. Vuoi continuare?"
                 ).format(name)
             choice = QMessageBox.question(
                 self,

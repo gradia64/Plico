@@ -4,14 +4,14 @@
 <context>
     <name>AddRedaction</name>
     <message>
-        <location filename="../model/commands.py" line="148" />
+        <location filename="../model/commands.py" line="157" />
         <source>Cancella zona su pagina {0}</source>
         <translation type="unfinished" />
     </message>
 </context><context>
     <name>AppendDocument</name>
     <message>
-        <location filename="../model/commands.py" line="114" />
+        <location filename="../model/commands.py" line="121" />
         <source>Unisci «{0}»</source>
         <translation type="unfinished" />
     </message>
@@ -78,7 +78,7 @@ Il file non viene ricompattato: cambiano solo le immagini.</source>
 </context><context>
     <name>EditText</name>
     <message>
-        <location filename="../model/commands.py" line="299" />
+        <location filename="../model/commands.py" line="308" />
         <source>Modifica testo su pagina {0}</source>
         <translation type="unfinished" />
     </message>
@@ -503,7 +503,7 @@ Una seconda firma si aggiunge alla prima, non la sostituisce: vuoi continuare?</
         <location filename="../main_window.py" line="1048" />
         <source>«{0}» è firmato, ma ha modifiche non salvate.
 
-Per firmarle il file va riscritto, e la firma che porta ora non sarà più valida. Vuoi continuare?</source>
+Per firmarle il file va riscritto, e la firma che porta ora verrà tolta: resterà solo la nuova. Vuoi continuare?</source>
         <translation type="unfinished" />
     </message>
     <message>
@@ -790,41 +790,41 @@ Entra nel file solo al salvataggio, come ogni altra modifica.</source>
 </context><context>
     <name>OcrPage</name>
     <message>
-        <location filename="../model/commands.py" line="371" />
+        <location filename="../model/commands.py" line="380" />
         <source>Riconosci testo su pagina {0}</source>
         <translation type="unfinished" />
     </message>
 </context><context>
     <name>PageView</name>
     <message>
-        <location filename="../widgets/page_view.py" line="1307" />
+        <location filename="../widgets/page_view.py" line="1294" />
         <source>Nessuna parola nella selezione.</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/page_view.py" line="1383" />
+        <location filename="../widgets/page_view.py" line="1370" />
         <source>Qui non c'è testo: clicca sopra una riga del documento.</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/page_view.py" line="1387" />
+        <location filename="../widgets/page_view.py" line="1374" />
         <source>Questa pagina non contiene testo modificabile: probabilmente è un'immagine, come una scansione.</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/page_view.py" line="1403" />
+        <location filename="../widgets/page_view.py" line="1390" />
         <source>Impossibile leggere il testo: {0}</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/page_view.py" line="1533" />
+        <location filename="../widgets/page_view.py" line="1520" />
         <source>Impossibile verificare la modifica: {0}</source>
         <translation type="unfinished" />
     </message>
 </context><context>
     <name>RemoveRedaction</name>
     <message>
-        <location filename="../model/commands.py" line="170" />
+        <location filename="../model/commands.py" line="179" />
         <source>Ripristina zona su pagina {0}</source>
         <translation type="unfinished" />
     </message>
@@ -838,7 +838,7 @@ Entra nel file solo al salvataggio, come ogni altra modifica.</source>
 </context><context>
     <name>SetFieldValue</name>
     <message>
-        <location filename="../model/commands.py" line="239" />
+        <location filename="../model/commands.py" line="248" />
         <source>Campo «{0}» su pagina {1}</source>
         <translation type="unfinished" />
     </message>

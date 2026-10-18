@@ -1136,9 +1136,20 @@ esso, ed è l'unica cosa nel processo che sa leggere ciò che ha prodotto.
   salvate** `_sign_file()` usa `sign_copy(sorgente, destinazione, richiesta)`:
   copia i byte così come sono e pyHanko accoda la firma in un aggiornamento
   incrementale. Con modifiche non salvate la sola strada è riscrivere, e la
-  domanda lo dice («la firma che porta ora non sarà più valida»). Il test di
+  domanda lo dice («la firma che porta ora verrà tolta»). Il test di
   `sign_in_place` chiamato due volte non se ne accorgeva: la finestra non passa
   di lì.
+- **Un file ricostruito non porta firme che non può onorare.** `insert_pdf()`
+  copia il campo della firma vecchia insieme alla pagina, e `/SigFlags` resta
+  a 3: misurato, un semplice salvataggio di un documento firmato usciva con un
+  campo il cui digest non corrisponde a niente, che riaperto dava il titolo
+  «— firmato» e alla verifica una firma **rotta** — l'aspetto di una
+  falsificazione, per un salvataggio qualsiasi. `_drop_old_signatures()` (in
+  `_write_pdf`, quindi per ogni salvataggio, estrazione, compressione e firma
+  ricostruita) toglie i campi firma **riempiti** (un `/V` sul widget o sul
+  campo padre) e rimette `/SigFlags` a 0; un campo firma **vuoto**, il posto
+  lasciato per una firma futura, è contenuto del modulo e resta. Anche il
+  riquadro stampato se ne va: è l'aspetto del widget.
 - **La finestra adotta il file firmato** (`MainWindow._sign_file()`): dopo la
   firma il documento è il file appena scritto. Continuare a lavorare sulla lista
   di pagine che l'ha prodotto significherebbe perdere la firma al primo

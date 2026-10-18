@@ -319,11 +319,13 @@ Quattro cose che questa implementazione fa e una che non fa:
 - **Una seconda firma si aggiunge alla prima.** Se il documento firmato non ha
   modifiche non salvate, la firma nuova si accoda al file così com'è (un
   aggiornamento incrementale) e la prima resta valida. Con modifiche non
-  salvate il file va riscritto, e la firma che c'era non coprirebbe più niente:
-  il programma lo dice prima e chiede se continuare.
+  salvate il file va riscritto e la firma che c'era non coprirebbe più niente,
+  quindi viene tolta e resta solo la nuova: il programma lo dice prima e chiede
+  se continuare.
 - **Salvare sopra un file firmato chiede prima.** Un salvataggio normale
-  riscrive il PDF da zero: la firma non c'è più. Il programma lo dice e
-  aspetta un «sì», invece di farlo e basta.
+  riscrive il PDF da zero: la firma non c'è più, e il file salvato non ne porta
+  una rotta al suo posto. Il programma lo dice e aspetta un «sì», invece di
+  farlo e basta.
 - **Non decide di chi fidarsi.** Plico non porta con sé nessun archivio di
   autorità: una firma integra e valida di un certificato sconosciuto viene
   mostrata come «integra, ma il certificato non è fra quelli che consideri

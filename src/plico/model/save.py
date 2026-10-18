@@ -153,6 +153,44 @@ def _write_ocr(page: pymupdf.Page, item: PageItem) -> None:
     write_layer(page, item.ocr_words)
 
 
+def _signed(doc: pymupdf.Document, widget: pymupdf.Widget) -> bool:
+    """Whether a signature widget holds a signature (a /V), on itself or its field."""
+    kind: str = doc.xref_get_key(widget.xref, "V")[0]
+    if kind != "null":
+        return True
+    parent_kind, reference = doc.xref_get_key(widget.xref, "Parent")
+    if parent_kind == "xref" and reference:
+        kind = doc.xref_get_key(int(reference.split()[0]), "V")[0]
+        return kind != "null"
+    return False
+
+
+def _drop_old_signatures(out: pymupdf.Document) -> None:
+    """Take out the signatures the rebuilt file can no longer honour.
+
+    A signature covers the bytes of the file it was made in, and this file is
+    built anew: copied over by ``insert_pdf()``, the old one survives as a
+    field whose digest matches nothing, and /SigFlags still says "signed"
+    (measured: a plain save of a signed document came out with the field, the
+    flags at 3, and pyHanko reading ``intact=False``). Reopened, the file
+    looked signed and failed verification -- the look of a forgery, for what
+    was an ordinary save. The filled signature fields go; an EMPTY one, a
+    place left for a signature to come, is form content and stays.
+    """
+    found = False
+    for index in range(len(out)):
+        # Bound to a local: a widget keeps a weak reference to its page.
+        page = out[index]
+        for widget in list(page.widgets() or ()):
+            if widget.field_type == pymupdf.PDF_WIDGET_TYPE_SIGNATURE and _signed(  # type: ignore[attr-defined]
+                out, widget
+            ):
+                page.delete_widget(widget)
+                found = True
+    if found:
+        out.xref_set_key(out.pdf_catalog(), "AcroForm/SigFlags", "0")
+
+
 def _write_pdf(
     model: DocumentModel, out_path: str, pages: list[int] | None = None
 ) -> None:
@@ -225,6 +263,7 @@ def _write_pdf(
                         _edit_text(page, item)
                     if item.redactions:
                         _redact(page, item)
+            _drop_old_signatures(out)
             if any(item.text_edits for item in items):
                 # A replacement embeds its font whole: one edit in a system
                 # font took a 36 KB file to 241 KB. Subsetting brings it back

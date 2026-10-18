@@ -664,27 +664,31 @@ def test_signing_unsaved_changes_says_the_old_signature_goes(
         QMessageBox.StandardButton.Cancel,
     )
 
-    assert any("non sarà più valida" in text for text in asked)
+    assert any("verrà tolta" in text for text in asked)
     assert not os.path.exists(target)
 
 
 def test_a_broken_signature_is_never_called_intact(certificate, tmp_path) -> None:
     """``intact`` comes first: a broken signature on a file that also has
     later revisions used to read «La firma è integra, ma … modificato dopo»."""
-    source = str(tmp_path / "documento.pdf")
-    signed = str(tmp_path / "firmato.pdf")
-    rebuilt = str(tmp_path / "riscritto.pdf")
-    _plain_pdf(source)
-    sign_in_place(source, _request(certificate[0]))
-    model = DocumentModel()
-    model.open(source)
-    save_as(model, signed)
-    sign_in_place(signed, _request(certificate[0]))
-    model = DocumentModel()
-    model.open(signed)
-    save_signed(model, rebuilt, _request(certificate[0]))
+    path = str(tmp_path / "documento.pdf")
+    _plain_pdf(path)
+    sign_in_place(path, _request(certificate[0]))
+    # One byte the signature covers, changed: the header's binary comment,
+    # so the file still parses and only the digest notices.
+    data = bytearray(_bytes(path))
+    comment = data.index(b"%", 1)
+    data[comment + 1] ^= 0x01
+    with open(path, "wb") as handle:
+        handle.write(data)
+    # ...and a later revision on top, so that "changed" is true as well.
+    with pymupdf.open(path) as doc:
+        doc[0].insert_text((72, 72), "dopo")
+        doc.saveIncr()
+    rebuilt = path
 
     broken = next(s for s in read_signatures(rebuilt) if not s.intact)
+    assert broken.changed, "il caso che l'ordine vecchio sbagliava"
     text, style = _verdict(broken)
 
     assert "integra" not in text
@@ -708,3 +712,69 @@ def test_a_form_that_was_never_signed_is_not_signed(tmp_path) -> None:
         assert doc.get_sigflags() == 0
 
     assert not is_signed(path)
+
+
+# --------------------------------------------------------------------- #
+#  A rebuilt file does not carry signatures it cannot honour
+# --------------------------------------------------------------------- #
+
+
+def test_a_plain_save_of_a_signed_document_drops_the_old_signature(
+    certificate, tmp_path
+) -> None:
+    """The old signature used to come out of a save as a field whose digest
+    matched nothing, with /SigFlags still 3: reopened, the file looked signed
+    and failed verification."""
+    source = str(tmp_path / "firmato.pdf")
+    out = str(tmp_path / "salvato.pdf")
+    _plain_pdf(source)
+    sign_in_place(source, _request(certificate[0]))
+    model = DocumentModel()
+    model.open(source)
+
+    save_as(model, out)
+
+    assert not is_signed(out)
+    assert read_signatures(out) == []
+    with pymupdf.open(out) as doc:
+        assert doc.page_count == 2
+
+
+def test_signing_changes_to_a_signed_document_leaves_one_sound_signature(
+    certificate, tmp_path
+) -> None:
+    source = str(tmp_path / "firmato.pdf")
+    out = str(tmp_path / "rifirmato.pdf")
+    _plain_pdf(source)
+    sign_in_place(source, _request(certificate[0]))
+    model = DocumentModel()
+    model.open(source)
+    model.pages[0].rotation = 90
+
+    save_signed(model, out, _request(certificate[0], reason="Dopo le modifiche"))
+
+    signatures = read_signatures(out)
+    assert len(signatures) == 1
+    assert signatures[0].intact and signatures[0].valid and signatures[0].covers_whole_file
+
+
+def test_an_empty_signature_field_is_kept(tmp_path) -> None:
+    """A place left for a signature to come is form content, not a signature."""
+    source = str(tmp_path / "modulo.pdf")
+    out = str(tmp_path / "salvato.pdf")
+    with pymupdf.open() as doc:
+        page = doc.new_page()
+        widget = pymupdf.Widget()
+        widget.field_name = "Firma del richiedente"
+        widget.field_type = pymupdf.PDF_WIDGET_TYPE_SIGNATURE
+        widget.rect = pymupdf.Rect(300, 700, 550, 760)
+        page.add_widget(widget)
+        doc.save(source)
+    model = DocumentModel()
+    model.open(source)
+
+    save_as(model, out)
+
+    with pymupdf.open(out) as doc:
+        page = doc[0]
+        assert [w.field_name for w in page.widgets()] == ["Firma del richiedente"]
