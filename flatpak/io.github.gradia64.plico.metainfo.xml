@@ -76,6 +76,41 @@
     <p xml:lang="de">Die Datei wird erst beim Speichern verändert: Das geöffnete Dokument ist eine Liste virtueller Seiten, die auf die ursprünglichen PDFs zeigen, die nur gelesen werden. Das macht Rückgängig sofort und Speichern sicher.</p>
   </description>
 
+  <screenshots>
+    <screenshot type="default">
+      <caption>A document with its pages, fit to the width of the window</caption>
+      <caption xml:lang="it">Un documento con le sue pagine, adattato alla larghezza della finestra</caption>
+      <caption xml:lang="es">Un documento con sus páginas, ajustado al ancho de la ventana</caption>
+      <caption xml:lang="fr">Un document et ses pages, ajusté à la largeur de la fenêtre</caption>
+      <caption xml:lang="de">Ein Dokument mit seinen Seiten, an die Fensterbreite angepasst</caption>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/main/flatpak/screenshots/main.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Personal data marked for erasure: on saving it leaves the file</caption>
+      <caption xml:lang="it">Dati personali segnati per la cancellazione: al salvataggio escono dal file</caption>
+      <caption xml:lang="es">Datos personales marcados para borrar: al guardar salen del archivo</caption>
+      <caption xml:lang="fr">Données personnelles marquées pour l'effacement : à l'enregistrement, elles quittent le fichier</caption>
+      <caption xml:lang="de">Persönliche Daten zum Löschen markiert: Beim Speichern verlassen sie die Datei</caption>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/main/flatpak/screenshots/redact.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Filling in a PDF form, on the page or in the side panel</caption>
+      <caption xml:lang="it">Compilare un modulo PDF, sulla pagina o nel pannello laterale</caption>
+      <caption xml:lang="es">Rellenar un formulario PDF, en la página o en el panel lateral</caption>
+      <caption xml:lang="fr">Remplir un formulaire PDF, sur la page ou dans le panneau latéral</caption>
+      <caption xml:lang="de">Ein PDF-Formular ausfüllen, auf der Seite oder in der Seitenleiste</caption>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/main/flatpak/screenshots/form.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Correcting a line of text where it stands</caption>
+      <caption xml:lang="it">Correggere una riga di testo dove si trova</caption>
+      <caption xml:lang="es">Corregir una línea de texto en su sitio</caption>
+      <caption xml:lang="fr">Corriger une ligne de texte là où elle se trouve</caption>
+      <caption xml:lang="de">Eine Textzeile direkt an ihrer Stelle korrigieren</caption>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/main/flatpak/screenshots/edit.png</image>
+    </screenshot>
+  </screenshots>
+
   <launchable type="desktop-id">io.github.gradia64.plico.desktop</launchable>
 
   <provides>
