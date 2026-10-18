@@ -390,13 +390,13 @@ Il packaging è in `flatpak/` ed è pensato per essere pubblicabile su Flathub.
 
 | File | Ruolo |
 | --- | --- |
-| `io.github.gradia64.Plico.json` | manifest dell'applicazione |
+| `io.github.gradia64.plico.json` | manifest dell'applicazione |
 | `python3-pymupdf.json` | modulo per PyMuPDF, con wheel e `sha256` fissati |
 | `python3-pikepdf.json` | modulo per pikepdf, con wheel e `sha256` fissati |
 | `python3-pyhanko.json` | modulo per pyHanko e le sue dipendenze, sempre da wheel |
-| `io.github.gradia64.Plico.desktop` | launcher (registra `application/pdf`, riceve percorsi con `%F`) |
-| `io.github.gradia64.Plico.metainfo.xml` | metadati AppStream |
-| `io.github.gradia64.Plico.svg` | icona |
+| `io.github.gradia64.plico.desktop` | launcher (registra `application/pdf`, riceve percorsi con `%F`) |
+| `io.github.gradia64.plico.metainfo.xml` | metadati AppStream |
+| `io.github.gradia64.plico.svg` | icona |
 
 Sei scelte non ovvie:
 
@@ -444,9 +444,9 @@ flatpak run org.flatpak.Builder --force-clean --user --install \
     --install-deps-from=flathub \
     --state-dir="$HOME/.cache/plico-flatpak/state" \
     "$HOME/.cache/plico-flatpak/build" \
-    flatpak/io.github.gradia64.Plico.json
+    flatpak/io.github.gradia64.plico.json
 
-flatpak run io.github.gradia64.Plico
+flatpak run io.github.gradia64.plico
 ```
 
 Per pubblicare su Flathub la sorgente `type: dir` del modulo `plico` va

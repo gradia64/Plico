@@ -1572,7 +1572,7 @@ tutte scoperte perché qualcosa saltava o falliva in silenzio:
 
 ## 11. Flatpak
 
-I file stanno in `flatpak/`: `io.github.gradia64.Plico.json` (manifest),
+I file stanno in `flatpak/`: `io.github.gradia64.plico.json` (manifest),
 `python3-pymupdf.json` e `python3-pikepdf.json` (i moduli delle due
 dipendenze, con wheel e `sha256` fissati), `.desktop`, `.metainfo.xml`,
 `.svg`. Gli stessi file sono installati anche da `pip install .` tramite
@@ -1580,6 +1580,20 @@ dipendenze, con wheel e `sha256` fissati), `.desktop`, `.metainfo.xml`,
 di verità.
 
 Scelte non ovvie (documentate anche nel README):
+
+- **L'id è `io.github.gradia64.plico`, tutto minuscolo**: AppStream lo chiede
+  (`cid-contains-uppercase-letter`) e dopo la prima pubblicazione su Flathub un
+  id non si cambia più, quindi è stato adeguato prima. È il nome del `.desktop`,
+  dell'icona, del manifest e del componente AppStream, e `app.APP_ID` lo passa a
+  `QApplication.setDesktopFileName()`: su Wayland è così che la finestra viene
+  collegata al suo lanciatore (senza, il compositore vedeva «plico» e il dock
+  mostrava un'icona generica). `test_the_app_id_names_every_desktop_file`
+  controlla che i cinque posti dicano la stessa cosa. Gli URL del repository
+  restano `github.com/gradia64/Plico`: la verifica di Flathub per gli id
+  `io.github` confronta il nome del repository senza badare alle maiuscole. Chi
+  aveva installato una build con l'id vecchio (`…Plico`) ha ora **due app
+  diverse**: quella vecchia va disinstallata a mano
+  (`flatpak uninstall io.github.gradia64.Plico`).
 
 - **`Exec=plico %F`, non `%U`**: `%U` chiede URL, e GIO li passa davvero
   (`file:///…/a%20b.pdf`), che `pymupdf.open` non apre. Per chi li passa lo
@@ -1652,11 +1666,11 @@ curl -s -o /tmp/schema.json \
 /tmp/lintenv/bin/python -c "
 import json, jsonschema
 jsonschema.Draft7Validator(json.load(open('/tmp/schema.json'))).validate(
-    json.load(open('flatpak/io.github.gradia64.Plico.json')))" && echo "manifest OK"
+    json.load(open('flatpak/io.github.gradia64.plico.json')))" && echo "manifest OK"
 
 # 2. metadati AppStream e launcher
-appstreamcli validate --no-net flatpak/io.github.gradia64.Plico.metainfo.xml
-desktop-file-validate flatpak/io.github.gradia64.Plico.desktop
+appstreamcli validate --no-net flatpak/io.github.gradia64.plico.metainfo.xml
+desktop-file-validate flatpak/io.github.gradia64.plico.desktop
 
 # 3. build e installazione
 flatpak remote-add --user --if-not-exists flathub \
@@ -1666,9 +1680,9 @@ flatpak install --user -y flathub org.flatpak.Builder//stable \
 
 flatpak run org.flatpak.Builder --force-clean --user --install \
     --install-deps-from=flathub \
-    build-dir flatpak/io.github.gradia64.Plico.json
+    build-dir flatpak/io.github.gradia64.plico.json
 
-flatpak run io.github.gradia64.Plico
+flatpak run io.github.gradia64.plico
 ```
 
 Verifiche già eseguite con esito positivo: schema `flatpak-builder`

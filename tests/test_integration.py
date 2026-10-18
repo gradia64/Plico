@@ -3680,8 +3680,26 @@ def test_a_file_url_from_the_launcher_becomes_a_path():
     assert local_path("https://example.org/a.pdf") == "https://example.org/a.pdf"
 
 
+def test_the_app_id_names_every_desktop_file():
+    """One id for the .desktop file, the Flatpak, AppStream and Wayland: a
+    mismatch leaves the running window without its icon."""
+    import json
+
+    from plico.app import APP_ID
+
+    flatpak = pathlib.Path(__file__).parent.parent / "flatpak"
+    assert APP_ID == APP_ID.lower(), "AppStream vuole un id minuscolo"
+    assert (flatpak / f"{APP_ID}.desktop").is_file()
+    assert (flatpak / f"{APP_ID}.svg").is_file()
+    assert json.loads((flatpak / f"{APP_ID}.json").read_text())["app-id"] == APP_ID
+    metainfo = (flatpak / f"{APP_ID}.metainfo.xml").read_text()
+    assert f"<id>{APP_ID}</id>" in metainfo
+    assert f">{APP_ID}.desktop</launchable>" in metainfo
+    assert f"Icon={APP_ID}" in (flatpak / f"{APP_ID}.desktop").read_text()
+
+
 def test_the_desktop_entry_asks_for_paths():
-    desktop = pathlib.Path(__file__).parent.parent / "flatpak" / "io.github.gradia64.Plico.desktop"
+    desktop = pathlib.Path(__file__).parent.parent / "flatpak" / "io.github.gradia64.plico.desktop"
     exec_line = next(
         line for line in desktop.read_text().splitlines() if line.startswith("Exec=")
     )

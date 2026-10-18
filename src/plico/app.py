@@ -9,6 +9,12 @@ from .i18n import install_qt_translator, install_translators
 from .main_window import MainWindow
 from .model import is_image
 
+#: The application id: the name of the .desktop file, of the Flatpak and of the
+#: AppStream component. Told to Qt so that Wayland matches the window to its
+#: launcher -- without it the compositor sees «plico», finds no plico.desktop,
+#: and the dock shows a generic icon for the running window.
+APP_ID = "io.github.gradia64.plico"
+
 
 def local_path(argument: str) -> str:
     """A command-line argument as a path PyMuPDF can open.
@@ -49,6 +55,7 @@ def main() -> int:
     QApplication.setOrganizationName("Plico")
     QApplication.setApplicationName("plico")
     QApplication.setApplicationDisplayName("Plico")
+    QApplication.setDesktopFileName(APP_ID)
 
     app = QApplication.instance() or QApplication(sys.argv)
     # Before the first window: the strings are read while it is built.

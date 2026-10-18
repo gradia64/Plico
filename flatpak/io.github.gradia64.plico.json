@@ -1,5 +1,5 @@
 {
-  "app-id": "io.github.gradia64.Plico",
+  "app-id": "io.github.gradia64.plico",
   "runtime": "org.kde.Platform",
   "runtime-version": "6.11",
   "sdk": "org.kde.Sdk",
