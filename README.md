@@ -36,14 +36,15 @@ comprimerli.
 - **Cancellazione vera** (in inglese *redaction*): si disegna una zona sui dati
   da eliminare, oppure si trascina sulle parole, e al salvataggio il testo
   viene **rimosso**, non coperto — quel che resta non è più copiabile né
-  ricercabile
+  ricercabile. Se ne vanno anche i campi del modulo e le note sotto la zona,
+  mentre cancellare una parola non tocca le righe sopra e sotto
 - **Compilare i form AcroForm**: si scrive dentro la pagina, il dock «Modulo»
   in vista — testo, anche multiriga, caselle e tendine — e i valori finiscono
   nel file al salvataggio, con undo/redo
 - **Modifica minima del testo**: un clic su una riga la apre in un editor
   sulla pagina; il testo vecchio viene tolto dal file e quello nuovo scritto
   nello stesso punto, con lo stesso corpo, colore e — quando è installato — lo
-  stesso font
+  stesso font. Le righe vicine restano intatte anche con l'interlinea singola
 - **OCR** (*Modifica → Riconosci testo…*, `Ctrl+Shift+O`): una scansione
   diventa **cercabile e selezionabile** senza cambiare aspetto — il testo
   riconosciuto viene scritto sotto l'immagine, invisibile. Si sceglie quali
@@ -51,7 +52,7 @@ comprimerli.
 - **Firmare** (*File → Firma…*, `Ctrl+Shift+D`): una firma **PAdES** con il
   proprio certificato, invisibile o stampata in un riquadro sulla pagina, e
   *File → Verifica le firme…* per rileggere chi ha firmato e se il documento è
-  stato toccato dopo
+  stato toccato dopo. Una seconda firma si aggiunge alla prima senza romperla
 
 ### Requisito di accettazione
 
@@ -186,11 +187,13 @@ esattamente dove finiranno.
 Al salvataggio PyMuPDF riscrive i content stream e **toglie** le parole che
 ricadono nella zona: nel file non restano né il testo né l'immagine sotto il
 rettangolo. Un rettangolo nero disegnato sopra — quello che fanno parecchi
-strumenti — lascerebbe il segreto copiabile e ricercabile.
+strumenti — lascerebbe il segreto copiabile e ricercabile. Con il contenuto se
+ne vanno anche le **note** e i **campi del modulo** che la zona tocca: un campo
+compilato con un nome resterebbe altrimenti nel file, valore compreso.
 
 `Ctrl+Shift+F` (*Modifica → Cancella parola…*) cerca invece una parola in **tutte**
 le pagine e marca ogni occorrenza in un colpo solo, come un unico passo di
-undo.
+undo. Cerca anche nel testo riconosciuto dall'OCR, già prima di salvare.
 
 `Ctrl+Shift+L` (*Modifica → Cancella selezione*) è la terza strada, quella che
 si aspetta chi ha usato un editor: si trascina sulle parole da eliminare e
@@ -200,10 +203,22 @@ selezione; trascinare dove non c'è testo non lascia niente; un clic su un segno
 lo toglie, come nella zona, e anche qui un segno si sposta e si ridimensiona.
 Funziona anche sulle parole lette dall'OCR.
 
-Tre cose da sapere: le parole si prendono **intere** (un segno a metà parola
-non nasconderebbe niente), l'unità minima è la parola e non la lettera, e
-`apply_redactions()` elimina anche la grafica vettoriale che tocca il
-rettangolo, quindi un bordo o una tabella a cavallo del segno possono sparire.
+Quattro cose da sapere:
+
+- le parole si prendono **intere** (un segno a metà parola non nasconderebbe
+  niente), e l'unità minima è la parola, non la lettera;
+- un segno fatto di parole — da *Cancella parola* o da *Cancella selezione* —
+  toglie il testo della **sua riga soltanto**: con l'interlinea singola le
+  lettere delle righe sopra e sotto toccano il suo riquadro, e restano dove
+  sono. Una zona **disegnata** invece cancella tutto ciò che tocca, perché è
+  quello che si è disegnato, e lo stesso vale per un segno di parole che si è
+  spostato o ridimensionato;
+- `apply_redactions()` elimina anche la grafica vettoriale che tocca il
+  rettangolo, quindi un bordo o una tabella a cavallo del segno possono
+  sparire;
+- un clic su un segno lo toglie anche se il mouse si è mosso di un pixel: è un
+  clic, non uno spostamento, e `Ctrl+Z` lo rimette esattamente dov'era.
+
 I metadati del PDF, invece, non sono un rischio: il file di uscita è
 ricostruito dalle sole pagine, quindi `/Info`, l'XMP e gli allegati non ci
 arrivano mai.
@@ -218,10 +233,14 @@ Lo strumento corregge il testo che c'è: non aggiunge testo nuovo in un punto
 vuoto. La correzione si vede subito sulla pagina ed è un comando come gli
 altri (`Ctrl+Z`); nel file entra solo al salvataggio, dove il testo vecchio
 viene **rimosso** dal content stream — non coperto — e quello nuovo scritto
-nello stesso punto. Sfondo, bordi delle tabelle e testo accanto restano.
+nello stesso punto. Sfondo, bordi delle tabelle e testo accanto restano, e
+così le righe sopra e sotto: il testo vecchio si toglie da una fascia attorno
+alla riga, non dal suo riquadro, che con l'interlinea singola toccherebbe
+anche le vicine.
 
 È una modifica *minima*, e lo dice: un testo che non ci sta nello spazio
-libero (fino al bordo della cella o alla parola successiva) viene
+libero (fino al bordo della cella, alla parola successiva o al margine della
+pagina, anche su una pagina ruotata) viene
 rimpicciolito fino all'80% e oltre rifiutato, con il motivo nella barra di
 stato. Non si modificano il testo verticale e i font Type3. Il font è quello
 del documento quando si può riusare, altrimenti lo stesso installato sul
@@ -257,13 +276,15 @@ Tesseract e scrive sotto l'immagine uno **strato di testo invisibile**
 (modalità di render 3). La pagina si vede identica, ma il testo si può
 selezionare, copiare, cercare con `Ctrl+F` — e la *Cancella parola*
 (`Ctrl+Shift+F`) finalmente lo trova, cosa che su una scansione non marcata è
-impossibile.
+impossibile. Lo trova subito, non solo dopo aver salvato: lo strato entra nel
+file al salvataggio, ma la ricerca guarda anche le parole appena riconosciute.
 
 Il riconoscimento costa (circa mezzo secondo per pagina A4 a 300 dpi), per
 questo non è automatico: si dice quali pagine (la corrente, la corrente e le
 successive, o tutto il documento) e in che lingua, con italiano e inglese
 insieme come proposta. Gira nel thread pool con una barra di avanzamento
-annullabile, e ogni giro è **un solo** passo di undo: un `Ctrl+Z` toglie lo
+annullabile — finché gira, la finestra non accetta modifiche alle pagine che
+sta leggendo — e ogni giro è **un solo** passo di undo: un `Ctrl+Z` toglie lo
 strato di tutte le pagine in una volta.
 
 Il font dello strato è uno dei Base-14 e non viene incorporato, quindi rendere
@@ -286,7 +307,7 @@ o se compare in un riquadro in basso a destra con nome, data e motivo: il
 riquadro è contenuto della pagina, quindi non si può togliere senza rompere la
 firma.
 
-Tre cose che questa implementazione fa e una che non fa:
+Quattro cose che questa implementazione fa e una che non fa:
 
 - **La firma è l'ultimo byte del file.** Prima si materializza il documento
   (con tutti i campi compilati, il testo riscritto, le redazioni applicate, le
@@ -295,6 +316,11 @@ Tre cose che questa implementazione fa e una che non fa:
 - **Firmare adotta il file firmato.** Dopo `Firma…` la sessione punta al nuovo
   file, perché continuare a lavorare sulla lista di pagine che l'ha generato
   significherebbe perdere la firma al primo salvataggio successivo.
+- **Una seconda firma si aggiunge alla prima.** Se il documento firmato non ha
+  modifiche non salvate, la firma nuova si accoda al file così com'è (un
+  aggiornamento incrementale) e la prima resta valida. Con modifiche non
+  salvate il file va riscritto, e la firma che c'era non coprirebbe più niente:
+  il programma lo dice prima e chiede se continuare.
 - **Salvare sopra un file firmato chiede prima.** Un salvataggio normale
   riscrive il PDF da zero: la firma non c'è più. Il programma lo dice e
   aspetta un «sì», invece di farlo e basta.
@@ -305,10 +331,13 @@ Tre cose che questa implementazione fa e una che non fa:
   e restano in `QSettings`.
 
 *File → Verifica le firme…* rilegge le firme dal file **su disco** e distingue
-i quattro casi che contano: firma integra e attendibile; integra ma di un
-certificato sconosciuto (ambra, non rosso: è comunque una firma vera); integra
-ma su un documento **modificato dopo la firma** — vale solo per la versione
-firmata; firma rotta o certificato scaduto.
+i casi che contano: firma integra e attendibile; integra ma di un certificato
+sconosciuto (ambra, non rosso: è comunque una firma vera); integra ma su un
+documento **modificato dopo la firma** — vale solo per la versione firmata;
+firma **rotta**, cioè il contenuto che copriva è cambiato (rosso, sempre, anche
+se il file ha revisioni successive); firma non valida o certificato scaduto.
+Un modulo che non è mai stato firmato non viene scambiato per un documento
+firmato.
 
 ### Integrazione desktop (KDE)
 
@@ -344,7 +373,11 @@ L'entry point accetta i file da aprire, come si aspetta un'app desktop:
 ```bash
 plico relazione.pdf              # apre
 plico a.pdf b.pdf                # apre a.pdf e vi unisce b.pdf
+plico ricevuta.jpg a.pdf         # crea un documento dalla foto e vi unisce a.pdf
 ```
+
+Accetta anche gli URL `file:///…` che passano alcuni launcher. Il file
+`.desktop` chiede comunque percorsi (`Exec=plico %F`).
 
 ## Flatpak
 
@@ -356,7 +389,7 @@ Il packaging è in `flatpak/` ed è pensato per essere pubblicabile su Flathub.
 | `python3-pymupdf.json` | modulo per PyMuPDF, con wheel e `sha256` fissati |
 | `python3-pikepdf.json` | modulo per pikepdf, con wheel e `sha256` fissati |
 | `python3-pyhanko.json` | modulo per pyHanko e le sue dipendenze, sempre da wheel |
-| `io.github.gradia64.Plico.desktop` | launcher (registra `application/pdf`) |
+| `io.github.gradia64.Plico.desktop` | launcher (registra `application/pdf`, riceve percorsi con `%F`) |
 | `io.github.gradia64.Plico.metainfo.xml` | metadati AppStream |
 | `io.github.gradia64.Plico.svg` | icona |
 
@@ -436,8 +469,12 @@ italiano anche senza alcun catalogo: tradurre serve ad aggiungere una lingua.
 Il posto dove farlo è `src/plico/translations/plico_en.ts` (o un nuovo file
 accanto), con Qt Linguist o con un editor di testo.
 
+`pylupdate6` arriva con PyQt6 (`pip install PyQt6` nel venv basta, serve solo
+lo strumento): senza, `tests/test_i18n.py` salta proprio il controllo che
+avvisa quando una stringa nuova manca dal catalogo.
+
 ```bash
-# 1. riestrarre le stringhe dopo aver toccato il codice (167 messaggi)
+# 1. riestrarre le stringhe dopo aver toccato il codice (169 messaggi)
 pylupdate6 src/plico -ts src/plico/translations/plico_en.ts
 
 # 2. compilare: lrelease non è nel venv, ma c'è nell'SDK
