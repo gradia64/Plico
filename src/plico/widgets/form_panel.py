@@ -30,6 +30,9 @@ def _clear(layout: QFormLayout) -> None:
             break
         widget = item.widget()
         if widget is not None:
+            # Hidden at once: deleteLater() waits for the event loop, and until
+            # then the editor would still be drawn where its row used to be.
+            widget.hide()
             widget.deleteLater()
 
 
