@@ -87,7 +87,7 @@ plico/
     └── test_integration.py   # MainWindow vera, offscreen: 161 test end-to-end
 ```
 
-Gate di qualità attuale: **476 passed, 8 skipped**, `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **491 passed, 8 skipped**, `ruff` pulito, `mypy` pulito
 (25 file sorgente). Uno `skip` è il test delle icone, che vuole un tema che
 fornisca `object-rotate-*`. Gli altri skip possibili dipendono da
 strumenti che mancano (§9): `pylupdate6` e `lrelease`/`pyside6-lrelease` in
@@ -1746,8 +1746,26 @@ dettagli: su Ubuntu 24.04 serve
 non può creare la sandbox della build, e state, build e repo stanno **fuori**
 dal checkout, perché il modulo `plico` si costruisce dal checkout stesso.
 
-Per una submission reale: la sorgente `type: dir` del modulo `plico` va
-sostituita con la sorgente `git` del tag di rilascio.
+**Rilascio.** Il manifest in `flatpak/` resta di sviluppo (`type: dir`);
+quello per Flathub lo scrive `tools/flathub_manifest.py vX.Y.Z <dir>`, che
+legge **tutto dal tag** (manifest, moduli inclusi, `pyproject.toml`, metainfo)
+e sostituisce solo la sorgente del modulo `plico` con
+`{"type": "git", "url": …, "tag": …, "commit": <hash completo>}`. Prima
+rifiuta: un tag non `vX.Y.Z` o in disaccordo con `pyproject.toml` e con la
+prima `<release>` della metainfo; screenshot della metainfo che non contengono
+`/vX.Y.Z/` (Flathub li copia al momento della build, `main` si muove); un tag
+leggero; una firma che non verifica (`git tag -v` con
+`gpg.ssh.allowedSignersFile` = `.github/allowed_signers` **del working tree**:
+quello del tag permetterebbe a un tag di garantire per sé stesso); un tag
+assente da `origin` o diverso lì. `--allow-unsigned` e `--offline` servono
+solo per le prove. La firma è **SSH** (`~/.ssh/id_ed25519`,
+`gradia@disroot.org`), non PGP: Flathub ricompila dal commit fissato e firma il
+proprio repository, quindi una chiave PGP non aggiungerebbe niente; il tag
+firmato serve a dire chi l'ha creato. Il checkout ha già la configurazione
+locale (`gpg.format ssh`, `user.signingkey`, `tag.gpgSign true`,
+`gpg.ssh.allowedSignersFile`). I test (`tests/test_flathub_manifest.py`)
+creano un repository temporaneo con una chiave SSH usa e getta e verificano
+sia il tag firmato sia i rifiuti.
 
 ---
 

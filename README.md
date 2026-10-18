@@ -462,8 +462,47 @@ Gli **screenshot** dello store stanno in `flatpak/screenshots/` e li produce
 `tools/screenshots.py` dall'app vera; nel metainfo puntano a `main`, e al
 rilascio vanno fissati al tag.
 
-Per pubblicare su Flathub la sorgente `type: dir` del modulo `plico` va
-sostituita con la sorgente `git` del tag di rilascio.
+### Rilasciare
+
+Flathub non costruisce dal checkout ma da un tag git, fissato anche al suo
+commit. Il manifest di `flatpak/` resta quello di sviluppo (`type: dir`), e
+quello da inviare lo genera `tools/flathub_manifest.py` **dal tag**. Prima di
+scrivere controlla che:
+
+- il tag sia `v` + la versione di `pyproject.toml` + l'ultima `<release>` della
+  metainfo;
+- gli screenshot della metainfo puntino al tag e non a `main`;
+- il tag sia annotato, firmato da una chiave di `.github/allowed_signers` e
+  presente su `origin` con lo stesso oggetto.
+
+I tag si firmano con la chiave **SSH** (niente PGP da custodire). Da fare una
+volta sola per checkout:
+
+```bash
+git config gpg.format ssh
+git config user.signingkey ~/.ssh/id_ed25519.pub
+git config tag.gpgSign true
+git config gpg.ssh.allowedSignersFile "$PWD/.github/allowed_signers"
+```
+
+Perché GitHub mostri il tag come «Verified», la stessa chiave va registrata
+anche come *signing key* dell'account (Settings → SSH and GPG keys → New SSH
+key → Signing key).
+
+A ogni rilascio:
+
+```bash
+# 1. versione in pyproject.toml, nuova <release> e URL degli screenshot
+#    (…/Plico/vX.Y.Z/flatpak/screenshots/…) nella metainfo; commit e push
+# 2. tag firmato, verificato, pubblicato
+git tag -s v0.1.0 -m "Plico 0.1.0"
+git tag -v v0.1.0
+git push origin v0.1.0
+# 3. il manifest per Flathub, con i moduli che include
+python tools/flathub_manifest.py v0.1.0 ~/flathub/io.github.gradia64.plico
+```
+
+`--allow-unsigned --offline` fa una prova a secco su un tag locale non firmato.
 
 ## Sviluppo
 
