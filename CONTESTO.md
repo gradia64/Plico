@@ -1713,12 +1713,17 @@ Python 3.11 e 3.13 (le librerie di sistema di §9 più Tesseract, e PyQt6 per
 `.desktop` e lo schema del manifest. `flatpak.yml`, su `main` e a mano: la build
 vera con `org.flatpak.Builder`, `flatpak-builder-lint` sul manifest e sul repo
 (per ora **non bloccante**, finché il modulo `plico` resta `type: dir`), e il
-bundle `plico.flatpak` come artefatto. Esito della prima build riuscita (ottobre
-2026): il linter segnala **un solo** errore vero,
-`finish-args-home-filesystem-access` — il `--filesystem=home` di §11, che su
-Flathub richiede un'eccezione motivata oppure un salvataggio che passi solo dai
-portali (vedi «Cosa manca»). Gli errori sugli screenshot spariscono con
-`--mirror-screenshots-url`, che è quello che fanno i builder di Flathub. Dettagli
+bundle `plico.flatpak` come artefatto. Esito delle prime build riuscite (ottobre
+2026): sul manifest il linter segnala solo `finish-args-home-filesystem-access`
+— il `--filesystem=home` di §11, che su Flathub richiede un'eccezione motivata
+oppure un salvataggio che passi solo dai portali. Sul pacchetto costruito
+segnala in più `appstream-external-screenshot-url` e
+`appstream-remote-icon-not-mirrored`: riguardano la copia di screenshot e
+icone sui server di Flathub, che fa la loro infrastruttura di build.
+`--mirror-screenshots-url` copia gli screenshot nel pacchetto (il log dice
+«Committed screenshot ref») ma **non** fa sparire quei due errori: che siano
+solo un effetto della build locale è probabile ma **non verificato**, e va
+controllato sulla prima build di prova su Flathub. Dettagli
 del runner: dentro `org.flatpak.Builder` `--install-deps-from` vuole una
 sessione D-Bus (runtime, SDK e BaseApp si installano prima, e il builder gira
 in `dbus-run-session`), e `--sandbox` rifiuta il sorgente `".."` del modulo

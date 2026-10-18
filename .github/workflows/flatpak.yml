@@ -75,9 +75,10 @@ jobs:
             "$WORK/build" "$MANIFEST"
 
       - name: Lint the build
-        # Screenshots are mirrored into the build above, as Flathub's own
-        # builders do; what is left is finish-args-home-filesystem-access,
-        # which needs either an exception from Flathub or a portal-only save.
+        # Known so far: finish-args-home-filesystem-access (needs an exception
+        # from Flathub or a portal-only save), and the screenshot and icon
+        # mirroring errors, which concern Flathub's own media hosting and stay
+        # even with --mirror-screenshots-url (see CONTESTO.md §11).
         continue-on-error: true
         run: |
           flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo "$WORK/repo"
