@@ -59,10 +59,24 @@ def _redact(page: pymupdf.Page, item: PageItem) -> None:
 
     This is the point of no return: the words are gone from the content
     stream, not merely covered up.
+
+    Two passes, because the text and the rest do not always need the same
+    rectangle. The first takes the image pixels and the line art under every
+    mark, whole; the second takes the text, through each mark's
+    :meth:`RedactionRect.text_band` -- the whole zone for one the user drew,
+    a band across the line for one fitted to words, so that redacting a word
+    does not also delete letters of the lines above and below it.
     """
     for rect in item.redactions:
         page.add_redact_annot(pymupdf.Rect(*rect.as_tuple()))
-    page.apply_redactions()
+    page.apply_redactions(text=pymupdf.PDF_REDACT_TEXT_NONE)  # type: ignore[attr-defined]
+    for rect in item.redactions:
+        page.add_redact_annot(pymupdf.Rect(*rect.text_band().as_tuple()))
+    page.apply_redactions(
+        images=pymupdf.PDF_REDACT_IMAGE_NONE,  # type: ignore[attr-defined]
+        graphics=pymupdf.PDF_REDACT_LINE_ART_NONE,  # type: ignore[attr-defined]
+        text=pymupdf.PDF_REDACT_TEXT_REMOVE,  # type: ignore[attr-defined]
+    )
     # The content under the rectangles is gone, but the annotations are not:
     # a sticky note repeating a redacted word survives apply_redactions() and
     # would leak exactly what the redaction was meant to hide (measured). So

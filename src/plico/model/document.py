@@ -330,8 +330,10 @@ class DocumentModel(QObject):
                 # temporary page would be collected with it.
                 page = doc[item.source_index]
                 width, height = item.unrotated_size
+                # Snug: a hit is the box of words on one line, and its text
+                # must go without taking letters off the lines around it.
                 rects = [
-                    RedactionRect.from_corners(r.x0, r.y0, r.x1, r.y1).clamped_to(
+                    RedactionRect.from_corners(r.x0, r.y0, r.x1, r.y1, snug=True).clamped_to(
                         width, height
                     )
                     for r in page.search_for(text)
@@ -358,9 +360,12 @@ class DocumentModel(QObject):
             # Bound to a local on purpose: reading from a temporary page would
             # let the page be collected with the words still pointing at it.
             page = doc[item.source_index]
-            boxes = [word[:4] for word in page.get_text("words")]
+            boxes = [tuple(word[:4]) for word in page.get_text("words")]
         boxes.extend(word.rect for word in item.ocr_words)
-        return [RedactionRect.from_corners(*box).clamped_to(width, height) for box in boxes]
+        return [
+            RedactionRect.from_corners(x0, y0, x1, y1, snug=True).clamped_to(width, height)
+            for x0, y0, x1, y1 in boxes
+        ]
 
     def unmarked(self, index: int, rects: list[RedactionRect]) -> list[RedactionRect]:
         """The rectangles an existing redaction on the page does not cover."""

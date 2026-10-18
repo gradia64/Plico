@@ -41,16 +41,41 @@ class RedactionRect:
     y0: float
     x1: float
     y1: float
+    # Fitted to the words of ONE line (a search hit, a selected word), as
+    # opposed to a zone the user drew. MuPDF deletes every glyph whose box
+    # touches a redaction, and a glyph box runs from ascender to descender:
+    # at ordinary single spacing it reaches into the lines above and below,
+    # so a word-sized rectangle took letters off its neighbours (measured:
+    # redacting «SEGRETO» turned the next line's «innocente» into «sott»).
+    # A snug rectangle removes its text through :meth:`text_band` instead.
+    snug: bool = False
 
     @classmethod
-    def from_corners(cls, x0: float, y0: float, x1: float, y1: float) -> "RedactionRect":
+    def from_corners(
+        cls, x0: float, y0: float, x1: float, y1: float, snug: bool = False
+    ) -> "RedactionRect":
         """Build from two arbitrary corners, normalising them.
 
         A drag can start at any corner, so a rectangle is only ever
         constructed through here — ``x0`` is always the left edge and ``y0``
         the top one, which is what the rest of the code assumes.
         """
-        return cls(min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
+        return cls(min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1), snug)
+
+    def text_band(self) -> "RedactionRect":
+        """The part of the rectangle that deletes text.
+
+        A drawn zone deletes everything it touches: that is what the user
+        drew. A snug one deletes through a thin band across the middle of the
+        line, which every glyph of that line crosses and no glyph of the next
+        line reaches -- a neighbouring box starts at least one leading below,
+        and at single spacing that is ~0.73 of this box's height (measured
+        with Helvetica and Times at 1.0, 1.15 and 1.2 leading).
+        """
+        if not self.snug:
+            return self
+        height = self.y1 - self.y0
+        return RedactionRect(self.x0, self.y0 + 0.4 * height, self.x1, self.y0 + 0.6 * height)
 
     @property
     def width(self) -> float:
@@ -75,10 +100,16 @@ class RedactionRect:
             min(max(self.y0, 0.0), height),
             min(max(self.x1, 0.0), width),
             min(max(self.y1, 0.0), height),
+            self.snug,
         )
 
     def translated(self, dx: float, dy: float) -> "RedactionRect":
-        """The same rectangle moved by *dx*, *dy* points, size untouched."""
+        """The same rectangle moved by *dx*, *dy* points, size untouched.
+
+        A moved mark is a zone the user placed, no longer the box of a word:
+        a word-sized box parked across two half lines would put its text band
+        in the gap between them and delete nothing it covers.
+        """
         return RedactionRect(self.x0 + dx, self.y0 + dy, self.x1 + dx, self.y1 + dy)
 
     def with_corner(self, corner: str, x: float, y: float) -> "RedactionRect":
@@ -87,7 +118,8 @@ class RedactionRect:
         The dragged corner moves and the opposite one stays where it was, so
         resizing a zone does not also shift it. The result is normalised, so
         dragging a corner past the opposite one turns the rectangle over
-        instead of inverting it.
+        instead of inverting it. Like a move, a resize makes the mark a drawn
+        zone: stretched over two lines, a word's text band would miss both.
         """
         if corner == "tl":
             return RedactionRect.from_corners(x, y, self.x1, self.y1)

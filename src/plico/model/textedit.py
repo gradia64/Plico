@@ -315,6 +315,23 @@ def check_edit(page: pymupdf.Page, span: TextSpan, new_text: str) -> FontChoice:
     return _resolve(page, span, new_text)[1]
 
 
+def _removal_band(span: TextSpan) -> pymupdf.Rect:
+    """Where the old text is redacted: a band across the line, not its box.
+
+    MuPDF deletes every glyph whose box touches the redaction, and a glyph
+    box runs from ascender to descender. The span's own box therefore reaches
+    into the lines above and below at ordinary single spacing, and redacting
+    it took letters off both (measured at 1.0, 1.15 and 1.2 leading, with
+    Helvetica and Times). Every glyph of the span crosses the band between
+    half and a fifth of the size above the baseline; no glyph of another
+    line does.
+    """
+    baseline = span.origin[1]
+    return pymupdf.Rect(
+        span.bbox[0], baseline - 0.5 * span.size, span.bbox[2], baseline - 0.2 * span.size
+    )
+
+
 def apply_edit(page: pymupdf.Page, span: TextSpan, new_text: str) -> FontChoice:
     """Replace *span*'s text on *page* with *new_text*.
 
@@ -328,9 +345,8 @@ def apply_edit(page: pymupdf.Page, span: TextSpan, new_text: str) -> FontChoice:
 
     # Remove ONLY the text: no fill (fill=None paints nothing -- measured on
     # a shaded cell, the background stays) and no image or line-art damage
-    # (borders and shading stay). Neighbouring spans survive because MuPDF
-    # removes a character only when the box covers it.
-    page.add_redact_annot(pymupdf.Rect(span.bbox), fill=None)
+    # (borders and shading stay).
+    page.add_redact_annot(_removal_band(span), fill=None)
     page.apply_redactions(
         images=pymupdf.PDF_REDACT_IMAGE_NONE,  # type: ignore[attr-defined]
         graphics=pymupdf.PDF_REDACT_LINE_ART_NONE,  # type: ignore[attr-defined]

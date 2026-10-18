@@ -353,3 +353,27 @@ def test_edit_after_insert_pdf_and_font_subsetting(tmp_path):
     with pymupdf.open(ridotto) as letto:
         testo = letto[0].get_text()
         assert "13.950" in testo and "12.400" not in testo
+
+
+# --- the lines around the edited one ----------------------------------------
+
+
+@pytest.mark.parametrize("font", ["helv", "tiro"])
+@pytest.mark.parametrize("leading", [1.0, 1.15, 1.2])
+def test_editing_a_line_leaves_the_lines_around_it_whole(no_system_fonts, leading, font):
+    """A span's box runs from ascender to descender, so at ordinary single
+    spacing it reaches the lines above and below: redacting it used to delete
+    «Seconda riga T» together with the line actually edited."""
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((72, 100 - 12 * leading), "Riga sopra yyy", fontsize=12, fontname=font)
+    page.insert_text((72, 100), "Prima riga gjpq", fontsize=12, fontname=font)
+    page.insert_text((72, 100 + 12 * leading), "Seconda riga TALL", fontsize=12, fontname=font)
+
+    apply_edit(page, _span(page, "Prima riga"), "Riga nuova")
+
+    text = _reopened(doc)[0].get_text()
+    assert "Prima riga" not in text and "gjpq" not in text
+    assert "Riga nuova" in text
+    assert "Riga sopra yyy" in text
+    assert "Seconda riga TALL" in text

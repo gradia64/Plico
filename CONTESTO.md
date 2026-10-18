@@ -727,6 +727,28 @@ sbagliare di nuovo.
 - l'ancoraggio tiene la distanza dal punto preso, non dall'angolo: il segno
   segue il mouse com'era stato afferrato.
 
+**Un segno fatto di parole non tocca le righe vicine.** MuPDF cancella ogni
+glifo il cui riquadro *tocca* la redazione, e il riquadro di un glifo va
+dall'ascendente al discendente: con l'interlinea singola (1,0 – 1,2, misurato
+con Helvetica e Times) entra nelle righe sopra e sotto. Cercare «SEGRETO»
+trasformava la riga sotto da «Riga sotto innocente» in «Riga sott».
+
+- `RedactionRect.snug` dice che il rettangolo è quello di parole su una riga:
+  lo mettono `find_text()` e `words_on()` (ricerca e selezione), non la zona
+  disegnata, che cancella tutto ciò che tocca perché è quello che l'utente ha
+  disegnato;
+- `_redact()` lavora in **due passate**: la prima toglie immagini e grafica
+  sotto il segno intero (`text=PDF_REDACT_TEXT_NONE`), la seconda il testo
+  attraverso `text_band()`, che per un segno *snug* è la fascia fra il 40% e
+  il 60% dell'altezza — ogni glifo della riga la attraversa, nessuno della
+  riga accanto ci arriva. Sopra una scansione i pixel della parola spariscono
+  comunque tutti;
+- un segno **spostato o ridimensionato** torna una zona disegnata
+  (`translated()` e `with_corner()` non portano `snug`): a cavallo di due
+  mezze righe la fascia cadrebbe nello spazio fra le due e non cancellerebbe
+  niente di ciò che copre. Cancellare troppo è un difetto, cancellare troppo
+  poco in una redazione è il difetto.
+
 Limiti da conoscere: `apply_redactions()` con i valori di default
 (`images=2`, `graphics=1`) elimina anche la **grafica vettoriale** che tocca il
 rettangolo — un bordo o una tabella a cavallo del segno possono sparire.
@@ -821,6 +843,11 @@ commerciale con testo bianco su sfondo, un PDF con font Type3).
   il testo: `fill=None` (misurato: lo sfondo di una cella colorata resta),
   `images=PDF_REDACT_IMAGE_NONE`, `graphics=PDF_REDACT_LINE_ART_NONE`. Con i
   default di `apply_redactions()` sparirebbero i bordi della tabella.
+  La redazione **non** è il riquadro dello span: quel riquadro, dall'ascendente
+  al discendente, con l'interlinea singola tocca le righe sopra e sotto, e
+  MuPDF cancellava lettere anche da quelle (misurato a 1,0 / 1,15 / 1,2). Si
+  redige la fascia fra metà e un quinto del corpo sopra la baseline
+  (`_removal_band`), che attraversa ogni glifo dello span e nessun altro.
 - **Il font: tre fonti, in quest'ordine.**
   1. Quello incorporato, se ha una mappa dei caratteri. **Quasi mai:**
      LibreOffice incorpora sottoinsiemi indicizzati per glifo (14-33 glifi,

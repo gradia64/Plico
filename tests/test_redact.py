@@ -552,3 +552,128 @@ def test_find_text_also_holds_with_a_rotated_page(tmp_path, rotation: int) -> No
         assert doc[0].rotation == rotation
         assert SEGRETO not in doc[0].get_text()
         assert PUBBLICO in doc[0].get_text()
+
+
+# --------------------------------------------------------------------- #
+#  Marks fitted to words: the lines around them stay whole
+# --------------------------------------------------------------------- #
+
+
+def _three_lines(path: str, leading: float, font: str) -> None:
+    """A word to redact on the middle line, at ordinary single spacing."""
+    with pymupdf.open() as doc:
+        page = doc.new_page(width=595, height=842)
+        size = 12
+        page.insert_text((72, 300 - size * leading), "Riga sopra yyy", fontsize=size, fontname=font)
+        page.insert_text((72, 300), f"Il codice {SEGRETO} qui", fontsize=size, fontname=font)
+        page.insert_text((72, 300 + size * leading), "Riga sotto innocente", fontsize=size, fontname=font)
+        doc.save(path)
+
+
+@pytest.mark.parametrize("font", ["helv", "tiro"])
+@pytest.mark.parametrize("leading", [1.0, 1.15, 1.2])
+def test_a_searched_word_goes_without_touching_the_lines_around_it(
+    tmp_path, leading: float, font: str
+) -> None:
+    """A glyph box reaches into the next line at single spacing: the search
+    hit used to take «o innocente» off the line below together with the word."""
+    src = str(tmp_path / "doc.pdf")
+    out = str(tmp_path / "out.pdf")
+    _three_lines(src, leading, font)
+
+    model = DocumentModel()
+    model.open(src)
+    model.pages[0].redactions.extend(model.find_text(SEGRETO)[0])
+    save_as(model, out)
+
+    with pymupdf.open(out) as doc:
+        text = doc[0].get_text()
+    assert SEGRETO not in text
+    assert "Riga sopra yyy" in text
+    assert "Riga sotto innocente" in text
+    assert "Il codice" in text and "qui" in text
+
+
+@pytest.mark.parametrize("leading", [1.0, 1.15, 1.2])
+def test_a_selected_word_goes_without_touching_the_lines_around_it(
+    tmp_path, leading: float
+) -> None:
+    """The same for the words a selection picks (``words_on``)."""
+    src = str(tmp_path / "doc.pdf")
+    out = str(tmp_path / "out.pdf")
+    _three_lines(src, leading, "helv")
+
+    model = DocumentModel()
+    model.open(src)
+    with pymupdf.open(src) as doc:
+        hit = doc[0].search_for(SEGRETO)[0]
+    word = next(
+        rect
+        for rect in model.words_on(0)
+        if rect.x0 <= (hit.x0 + hit.x1) / 2 <= rect.x1 and rect.y0 <= hit.y1 and hit.y0 <= rect.y1
+        and rect.y0 < 300 < rect.y1
+    )
+    assert word.snug
+    model.pages[0].redactions.append(word)
+    save_as(model, out)
+
+    with pymupdf.open(out) as doc:
+        text = doc[0].get_text()
+    assert SEGRETO not in text
+    assert "Riga sopra yyy" in text
+    assert "Riga sotto innocente" in text
+
+
+def test_a_drawn_zone_still_deletes_everything_it_touches(tmp_path) -> None:
+    """Only marks fitted to words are narrowed: a zone means what was drawn."""
+    src = str(tmp_path / "doc.pdf")
+    out = str(tmp_path / "out.pdf")
+    _three_lines(src, 1.2, "helv")
+
+    model = DocumentModel()
+    model.open(src)
+    zone = RedactionRect.from_corners(60, 300 - 12 * 1.2 - 10, 400, 300 + 12 * 1.2 + 3)
+    assert not zone.snug
+    model.pages[0].redactions.append(zone)
+    save_as(model, out)
+
+    with pymupdf.open(out) as doc:
+        text = doc[0].get_text()
+    assert "Riga sopra" not in text
+    assert SEGRETO not in text
+    assert "innocente" not in text
+
+
+def test_a_mark_moved_or_resized_is_a_drawn_zone() -> None:
+    """A word box nudged across two half lines would put its band in the gap
+    between them and delete nothing: once touched, it deletes all it covers."""
+    word = RedactionRect.from_corners(10, 10, 50, 26, snug=True)
+    assert word.clamped_to(595, 842).snug
+    assert not word.translated(0, 8).snug
+    assert not word.with_corner("br", 60, 40).snug
+    assert word.text_band().y0 > word.y0 and word.text_band().y1 < word.y1
+    zone = RedactionRect.from_corners(10, 10, 50, 26)
+    assert zone.text_band() == zone
+
+
+def test_a_mark_fitted_to_words_still_blanks_the_picture_under_it(tmp_path) -> None:
+    """On a scan the word is pixels as well: the narrow band is for the text
+    only, the image under the whole mark is still wiped."""
+    src = str(tmp_path / "scan.pdf")
+    out = str(tmp_path / "out.pdf")
+    with pymupdf.open() as doc:
+        page = doc.new_page(width=200, height=200)
+        black = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 20, 20))
+        black.clear_with(0)
+        page.insert_image(page.rect, pixmap=black)
+        doc.save(src)
+
+    model = DocumentModel()
+    model.open(src)
+    model.pages[0].redactions.append(RedactionRect.from_corners(50, 50, 150, 70, snug=True))
+    save_as(model, out)
+
+    with pymupdf.open(out) as doc:
+        pixmap = doc[0].get_pixmap(clip=pymupdf.Rect(100, 52, 101, 53))
+    # Near the edge of the mark, outside the text band: white, not the scan.
+    assert pixmap.pixel(0, 0) != (0, 0, 0)
