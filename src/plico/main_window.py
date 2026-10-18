@@ -68,6 +68,23 @@ from .widgets.form_panel import FormPanel
 from .widgets.ocr import OcrDialog, OcrTask
 from .widgets.page_view import PageView
 from .widgets.sign import SignatureDialog, SignDialog
+
+
+def _host_path(path: str) -> str:
+    """The path *path* has outside the Flatpak sandbox, when it has another.
+
+    Without ``--filesystem=home`` every file comes in through the document
+    portal and is seen as ``/run/user/<uid>/doc/<id>/name``: fine to read and
+    to write, useless as a place to propose in a file dialog, which runs
+    outside the sandbox and would open on a directory holding one file. The
+    portal records the real path in an extended attribute; anywhere else
+    (no portal, an old portal, a plain filesystem) the path is already the
+    real one.
+    """
+    try:
+        return os.fsdecode(os.getxattr(path, "user.document-portal.host-path"))
+    except (OSError, AttributeError):
+        return path
 from .widgets.thumbnail_bar import ThumbnailBar, ThumbnailCache
 
 
@@ -794,7 +811,7 @@ class MainWindow(QMainWindow):
         self._save_target = None
         first = paths[0]
         self._save_suggestion = os.path.join(
-            os.path.dirname(first), os.path.splitext(os.path.basename(first))[0] + ".pdf"
+            os.path.dirname(_host_path(first)), os.path.splitext(os.path.basename(first))[0] + ".pdf"
         )
         # Nothing of this exists on disk except a temporary: closing now
         # would lose it, so the document starts out as unsaved.
@@ -849,7 +866,7 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getSaveFileName(
             self,
             self.tr("Salva con nome"),
-            self._save_target or self._save_suggestion or "",
+            self._proposal_origin(),
             self.tr("File PDF (*.pdf)"),
         )
         if not path:
@@ -1101,9 +1118,15 @@ class MainWindow(QMainWindow):
         self._update_title()
         self._status.setText(self.tr("Documento firmato: {0}").format(path))
 
+    def _proposal_origin(self) -> str:
+        """The path the save dialogs start from, as the user knows it."""
+        if self._save_target:
+            return _host_path(self._save_target)
+        return self._save_suggestion or ""
+
     def _proposed_signed_path(self) -> str:
         """``documento.pdf`` -> ``documento-firmato.pdf``."""
-        origin = self._save_target or self._save_suggestion or ""
+        origin = self._proposal_origin()
         stem, extension = os.path.splitext(origin)
         if not stem:
             return ""
@@ -1196,7 +1219,7 @@ class MainWindow(QMainWindow):
         """``documento.pdf`` -> ``documento-compresso.pdf``."""
         # The file the document will be saved as, not the model's path: for a
         # document made from images that is a temporary nobody should see.
-        origin = self._save_target or self._save_suggestion or ""
+        origin = self._proposal_origin()
         stem, extension = os.path.splitext(origin)
         if not stem:
             return str(os.path.expanduser("~"))

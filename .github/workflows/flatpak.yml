@@ -80,9 +80,7 @@ jobs:
             "$WORK/build" "$MANIFEST"
 
       - name: Lint the build
-        # Known so far: finish-args-home-filesystem-access (needs an exception
-        # from Flathub or a portal-only save), and the screenshot and icon
-        # mirroring errors, which concern Flathub's own media hosting and stay
+        # Known so far: the screenshot and icon mirroring errors, which concern Flathub's own media hosting and stay
         # even with --mirror-screenshots-url (see CONTESTO.md §11).
         continue-on-error: true
         run: |

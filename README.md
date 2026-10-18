@@ -398,7 +398,7 @@ Il packaging è in `flatpak/` ed è pensato per essere pubblicabile su Flathub.
 | `io.github.gradia64.plico.metainfo.xml` | metadati AppStream |
 | `io.github.gradia64.plico.svg` | icona |
 
-Sei scelte non ovvie:
+Sette scelte non ovvie:
 
 - **`base: io.qt.PySide.BaseApp`** invece di installare PySide6 con pip. La
   BaseApp di Flathub contiene già PySide6 compilato e allineato al Qt di
@@ -427,6 +427,15 @@ Sei scelte non ovvie:
   li compila in `/app/share/plico/translations`, così nel bundle non finisce
   anche il compilatore.
 - **`cleanup-commands: /app/cleanup-BaseApp.sh`**, richiesto dalla BaseApp.
+- **Nessun accesso alla home** (niente `--filesystem`): ogni file passa dal
+  selettore di file del portal (`org.freedesktop.portal.FileChooser`), che
+  Qt usa da solo dentro Flatpak. Plico vede il documento come
+  `/run/user/<uid>/doc/<id>/nome.pdf` e lo legge e lo scrive lì, salvataggio
+  atomico compreso (il temporaneo nella stessa cartella e `os.replace`
+  funzionano anche nel document portal); per proporre un percorso nei
+  dialoghi usa invece quello vero, che il portal espone nell'attributo
+  esteso `user.document-portal.host-path`. Il launcher usa `%F`, così un
+  doppio clic arriva già come percorso esportato nel portal.
 
 Costruire e installare nella propria utenza:
 

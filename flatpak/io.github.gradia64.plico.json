@@ -10,8 +10,7 @@
     "--share=ipc",
     "--socket=wayland",
     "--socket=fallback-x11",
-    "--device=dri",
-    "--filesystem=home"
+    "--device=dri"
   ],
   "build-options": {
     "env": {

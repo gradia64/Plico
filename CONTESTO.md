@@ -1644,6 +1644,20 @@ Scelte non ovvie (documentate anche nel README):
   PyPI. La firma è la parte del programma in cui «più o meno quella versione»
   non è una risposta accettabile.
 
+- **Niente `--filesystem=home`**: l'unico accesso ai file è il portal. Qt
+  dentro Flatpak apre da solo i dialoghi di `org.freedesktop.portal.FileChooser`
+  e Plico riceve percorsi `/run/user/<uid>/doc/<id>/nome.pdf`. Verificato con
+  `flatpak document-export`: `mkstemp` nella cartella del documento, `chmod`
+  e `os.replace` funzionano lì, quindi il salvataggio atomico (`save.py`,
+  `optimize.py`, `sign.py`) non è cambiato. Cambiano due cose: i percorsi
+  *proposti* nei dialoghi passano da `_host_path()` (`main_window.py`, legge
+  l'xattr `user.document-portal.host-path`, altrimenti restituisce il percorso
+  così com'è), perché il dialogo gira fuori dalla sandbox e una cartella
+  `/run/user/.../doc/<id>` non dice niente all'utente. Il `.desktop` con
+  `Exec=plico %F` fa sì che `--file-forwarding` esporti nel portal il file del
+  doppio clic. I dati utente di Tesseract stanno in `$XDG_DATA_HOME`, che nel
+  Flatpak è `~/.var/app/io.github.gradia64.plico/data`.
+
 - **Le traduzioni si compilano nella build** (`lrelease`): il modulo `plico`
   installa i `.ts` con il pacchetto e poi, con
   `for ts in src/plico/translations/*.ts; do lrelease "$ts" -qm
@@ -1714,10 +1728,9 @@ Python 3.11 e 3.13 (le librerie di sistema di §9 più Tesseract, e PyQt6 per
 vera con `org.flatpak.Builder`, `flatpak-builder-lint` sul manifest e sul repo
 (per ora **non bloccante**, finché il modulo `plico` resta `type: dir`), e il
 bundle `plico.flatpak` come artefatto. Esito delle prime build riuscite (ottobre
-2026): sul manifest il linter segnala solo `finish-args-home-filesystem-access`
-— il `--filesystem=home` di §11, che su Flathub richiede un'eccezione motivata
-oppure un salvataggio che passi solo dai portali. Sul pacchetto costruito
-segnala in più `appstream-external-screenshot-url` e
+2026): sul manifest il linter segnalava solo `finish-args-home-filesystem-access`,
+cioè il `--filesystem=home` che allora c'era. Ora non c'è più: i file passano
+solo dai portali (§11). Sul pacchetto costruito segnala in più `appstream-external-screenshot-url` e
 `appstream-remote-icon-not-mirrored`: riguardano la copia di screenshot e
 icone sui server di Flathub, che fa la loro infrastruttura di build.
 `--mirror-screenshots-url` copia gli screenshot nel pacchetto (il log dice
