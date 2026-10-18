@@ -74,21 +74,24 @@ plico/
     ├── test_model.py         # modello, comandi, salvataggio, parse_page_ranges (45)
     ├── test_worker.py        # il worker di rendering in isolamento (11)
     ├── test_optimize.py      # i livelli di compressione e optimize_in_place (16)
-    ├── test_redact.py        # rotazione e redazione vera, zone ritoccabili (47)
-    ├── test_forms.py         # campi AcroForm: letti, scritti, riletti dal file (29)
-    ├── test_textedit.py      # uno span sostituito: testo, sfondo, font, spazio (23)
+    ├── test_redact.py        # redazione vera, zone ritoccabili, righe vicine, OCR (61)
+    ├── test_forms.py         # campi AcroForm: letti, scritti, riletti, redatti (30)
+    ├── test_textedit.py      # uno span sostituito: testo, sfondo, font, spazio (33)
     ├── test_images.py        # immagini → PDF: DPI, foto ridotte, EXIF, JPEG intatti (13)
-    ├── test_ocr.py           # OCR: spazio pagina, strato invisibile, undo (12)
-    ├── test_sign.py          # certificati, firma, verdetto, secondo salvataggio (26)
+    ├── test_ocr.py           # OCR: spazio pagina, strato invisibile, undo (13)
+    ├── test_sign.py          # certificati, firma, seconda firma, verdetto (30)
     ├── test_edit_text.py     # EditText e salvataggio: undo, redazioni, estrai, comprimi (21)
     ├── test_i18n.py          # cataloghi: estrazione, nomi, caricamento, traduzione (8)
-    └── test_integration.py   # MainWindow vera, offscreen: 153 test end-to-end
+    └── test_integration.py   # MainWindow vera, offscreen: 160 test end-to-end
 ```
 
-Gate di qualità attuale: **437 passed, 4 skipped**, `ruff` pulito, `mypy` pulito
-(24 file sorgente). Gli `skip` dipendono dall'ambiente: il giro `.ts` → `.qm`
-(`lrelease` sta solo nell'SDK di Qt) e l'estrazione con `pylupdate6`
-(`tests/test_i18n.py`).
+Gate di qualità attuale: **440 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
+(24 file sorgente). Lo `skip` è il test delle icone, che vuole un tema che
+fornisca `object-rotate-*`. Gli altri tre `skip` possibili dipendono da
+strumenti che mancano (§9): `pylupdate6` e `lrelease`/`pyside6-lrelease` in
+`tests/test_i18n.py`. **Uno skip lì non è innocuo**: è il test che avvisa
+quando una stringa nuova manca dal catalogo, e durante la review di ottobre
+2026 il catalogo è rimasto indietro proprio perché era saltato.
 
 ---
 
@@ -1200,6 +1203,22 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
   `jsonschema`) vanno creati e usati **nella stessa invocazione**: `/tmp` non
   sopravvive fra un comando e l'altro.
 
+Su una macchina **senza desktop** (un container, la CI) servono altre cose,
+tutte scoperte perché qualcosa saltava o falliva in silenzio:
+
+- **le librerie di sistema di Qt**: senza `libEGL.so.1` pytest non parte
+  nemmeno (`INTERNALERROR … ImportError: libEGL.so.1`, da `pytest-qt`). Su
+  Debian/Ubuntu: `libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3`;
+- **Tesseract e almeno una lingua** (`tesseract-ocr tesseract-ocr-ita`), o i
+  test dell'OCR vengono saltati;
+- **`pylupdate6`**, che non viene con PySide6 ma con PyQt6: `pip install
+  PyQt6` nel venv basta, serve solo lo strumento. `pyside6-lrelease` arriva
+  invece con PySide6 da pip. Entrambi vanno trovati nel `PATH`, quindi la
+  `bin/` del venv va messa lì (`PATH=.venv/bin:$PATH`), non basta lanciare
+  `.venv/bin/python -m pytest`;
+- `fc-match` (fontconfig) per i font di sistema della modifica del testo:
+  senza, si scende ai sosia Base-14.
+
 ---
 
 ## 10. Insidie già pagate (leggere prima di scrivere codice)
@@ -1376,6 +1395,13 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
   esistente compreso: la scorciatoia diretta era un buco (un errore a metà
   troncava la destinazione) e perdeva anche i permessi, perché PyMuPDF ricrea
   il file con l'umask (`0o640` tornava `0o664`).
+- **Una redazione cancella ogni glifo il cui riquadro la tocca**, e il
+  riquadro di un glifo va dall'ascendente al discendente: con l'interlinea
+  singola (1,0 – 1,2) entra nelle righe sopra e sotto. Il riquadro di uno span
+  o di una parola non è quindi un rettangolo da redigere così com'è: la
+  modifica del testo usa una fascia attorno alla baseline, i segni fatti di
+  parole una fascia a metà riga (§8). E `page.annots()` **non elenca i
+  widget**: un campo del modulo sotto una redazione va tolto a parte.
 - `pymupdf.Matrix` non ha attributi `x0` / `xy`: per le rotazioni si usa
   `prerotate()`.
 - `pymupdf.Pixmap(csRGB, w, h, bytes)` **non è una firma valida** in 1.28.
@@ -1715,6 +1741,57 @@ eliminate insieme al contenuto, nomi dei comandi via
 (`fitz` → `pymupdf`) e in §10 (le insidie corrispondenti, l'handle bloccato
 compreso). Il codice — docstring, commenti, nomi di variabile e nomi dei test
 compresi — è tutto in inglese.
+
+### La seconda review (ottobre 2026)
+
+«Punti aperti: nessuno» era vero per le voci note, non per il programma: una
+seconda review, fatta **verificando ogni sospetto con uno script su PDF veri**
+invece che leggendo, ha trovato otto difetti che i test non coprivano, quattro
+dei quali gravi. Sono tutti corretti, un commit e un test di regressione per
+ciascuno, e ogni test è stato visto fallire senza la correzione:
+
+1. *Modifica testo* cancellava lettere dalle righe sopra e sotto con
+   l'interlinea singola, e *Cancella parola* / *Cancella selezione* facevano lo
+   stesso (`a94b1dc`, §8);
+2. una redazione lasciava nel file i **campi del modulo** che copriva, valore
+   compreso (`8ab9d91`, §8) — §8 diceva il contrario;
+3. una **seconda firma** dalla finestra rompeva la prima, e il verdetto
+   chiamava «integra» una firma rotta (`b44033e`, §8);
+4. dopo un'unione annullata, l'unione successiva veniva **mostrata** con le
+   pagine del file tolto, mentre il salvataggio scriveva quelle giuste
+   (`a85cc1d`, §8);
+5. *Cancella parola* non trovava le parole dell'OCR prima del salvataggio
+   (`45671d6`) — §8 diceva di sì;
+6. sulle pagine con `/Rotate` 90 o 270 il testo modificato poteva uscire dal
+   foglio (`7ee1126`);
+7. `Exec=plico %U` faceva arrivare URL che `pymupdf.open` non apre
+   (`0ae2082`, §11);
+
+e sei minori (`23a36e8` … `b3f0de9`): un modulo mai firmato letto come
+firmato, un clic incerto che spostava un segno fuori dall'undo, il dialogo
+dell'OCR modale solo dopo mezzo secondo, lo scambio del file compresso che
+falliva senza messaggio, le immagini da riga di comando, e la nota sui thread
+di PyMuPDF in §10.
+
+La lezione, per la prossima review: **un'affermazione di questo documento non
+è una prova**. Due delle otto voci contraddicevano frasi scritte qui, e una
+terza (le chiamate a PyMuPDF serializzate dal GIL) è stata smentita misurando
+prima di scriverla. Prima di fidarsi di una frase che dice «verificato»,
+cercare il test che la verifica.
+
+**Limiti noti che restano, scritti come tali:**
+
+- dopo un'unione annullata, un render **ancora in corso** del file tolto può
+  arrivare quando l'unione successiva ha già chiesto la stessa chiave, e
+  mostrarsi una volta: dall'interfaccia non succede (fra le due unioni c'è un
+  dialogo di scelta file), e la correzione completa è non riusare mai un
+  `source_id`, che cambia il modello;
+- firmando un documento firmato **con modifiche non salvate** il campo della
+  firma vecchia resta nel file e chi lo verifica la vede rotta: la domanda lo
+  dice prima, ma un file ricostruito potrebbe anche toglierlo;
+- `insert_pdf()` rinomina i campi omonimi (`nome` → `nome [12]`) quando le
+  pagine che li portano vengono copiate in blocchi diversi: i valori arrivano
+  giusti (§8), ma nel file salvato i nomi dei campi possono cambiare.
 
 ---
 
