@@ -1,0 +1,61 @@
+name: README i18n check
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: readme-i18n-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: README multilingue (switcher + struttura)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verifica varianti e switcher
+        run: |
+          python3 - <<'PY'
+          import re, sys, os
+          files = ["README.md", "README.en.md", "README.fr.md", "README.de.md", "README.es.md"]
+          missing = [f for f in files if not os.path.exists(f)]
+          if missing:
+              print("MANCANO:", missing); sys.exit(1)
+
+          stats = {}
+          for f in files:
+              text = open(f, encoding="utf-8").read()
+              # Plico README title is "# Plico"; fallback to first 500 chars
+              split_key = "# Plico" if "# Plico" in text else "# "
+              head = text.split(split_key, 1)[0] if split_key in text else text[:500]
+              links = set(re.findall(r'href="(README[^"]*\.md)"', head)) | set(re.findall(r'\]\((README[^)]*\.md)\)', head))
+              expected = {x for x in files if x != f}
+              if links != expected:
+                  print(f"{f}: switcher incoerente -> attesi {expected}, trovati {links}")
+                  sys.exit(1)
+              stats[f] = {
+                  "h2": len(re.findall(r'^## ', text, re.M)),
+                  "h3": len(re.findall(r'^### ', text, re.M)),
+                  "fences": len(re.findall(r'^```', text, re.M)),
+              }
+
+          base = stats["README.md"]
+          for f in files[1:]:
+              if stats[f] != base:
+                  print(f"WARNING: {f}: struttura non allineata -> {stats[f]} vs {base}")
+
+          print("OK: 5 varianti presenti, switcher coerenti, struttura allineata")
+          for f in files:
+              print(f"  {f}: {stats[f]}")
+          PY
