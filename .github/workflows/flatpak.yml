@@ -70,11 +70,14 @@ jobs:
         # builds from a git tag instead, where the question does not arise.
         run: |
           dbus-run-session -- flatpak run org.flatpak.Builder --user --force-clean \
-            --ccache \
+            --ccache --mirror-screenshots-url=https://dl.flathub.org/media \
             --state-dir="$WORK/state" --repo="$WORK/repo" \
             "$WORK/build" "$MANIFEST"
 
       - name: Lint the build
+        # Screenshots are mirrored into the build above, as Flathub's own
+        # builders do; what is left is finish-args-home-filesystem-access,
+        # which needs either an exception from Flathub or a portal-only save.
         continue-on-error: true
         run: |
           flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo "$WORK/repo"
