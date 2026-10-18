@@ -1,4 +1,4 @@
-🌐 **Language:** [Italiano](README.md) | English
+🌐 **Language:** [Italiano](README.md) | English | [Español](README.es.md) | [Français](README.fr.md) | [Deutsch](README.de.md)
 
 # Plico
 
