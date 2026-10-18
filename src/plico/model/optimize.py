@@ -51,6 +51,18 @@ __all__ = [
     "optimize_in_place",
 ]
 
+def QT_TRANSLATE_NOOP(context: str, text: str) -> str:
+    """Mark *text* for the catalog without translating it here.
+
+    The level table is built at import time, before any catalog is loaded, so
+    the strings stay in the source language and are translated where they go
+    on screen. lupdate finds them by this name; PySide6 has one too, but its
+    stub returns ``object``.
+    """
+    del context
+    return text
+
+
 #: Called with an integer percentage (0-100) while compression runs.
 Progress = Callable[[int], None]
 
@@ -81,19 +93,21 @@ class CompressionLevel:
 LEVELS: tuple[CompressionLevel, ...] = (
     CompressionLevel(
         key="light",
-        label="Leggera",
-        detail=(
+        label=QT_TRANSLATE_NOOP("CompressionLevel", "Leggera"),
+        detail=QT_TRANSLATE_NOOP(
+            "CompressionLevel",
             "Senza alcuna perdita: fonde i content stream e ricompatta il file "
             "con qpdf. Le immagini non vengono toccate, quindi su una scansione "
-            "non guadagna quasi nulla."
+            "non guadagna quasi nulla.",
         ),
     ),
     CompressionLevel(
         key="medium",
-        label="Media",
-        detail=(
+        label=QT_TRANSLATE_NOOP("CompressionLevel", "Media"),
+        detail=QT_TRANSLATE_NOOP(
+            "CompressionLevel",
             "Come Leggera, e in piu` ricampiona a 150 dpi le immagini che "
-            "superano i 200 dpi, salvandole in JPEG a qualita` 80."
+            "superano i 200 dpi, salvandole in JPEG a qualita` 80.",
         ),
         image_threshold=200,
         image_target=150,
@@ -101,10 +115,11 @@ LEVELS: tuple[CompressionLevel, ...] = (
     ),
     CompressionLevel(
         key="strong",
-        label="Forte",
-        detail=(
+        label=QT_TRANSLATE_NOOP("CompressionLevel", "Forte"),
+        detail=QT_TRANSLATE_NOOP(
+            "CompressionLevel",
             "Come Media, ma scende a 96 dpi e qualita` 60: file molto piu` "
-            "piccoli, immagini visibilmente morbide."
+            "piccoli, immagini visibilmente morbide.",
         ),
         image_threshold=150,
         image_target=96,

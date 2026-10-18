@@ -20,6 +20,7 @@ from collections import OrderedDict
 
 from PySide6.QtCore import (
     QAbstractListModel,
+    QCoreApplication,
     QModelIndex,
     QSize,
     Qt,
@@ -106,7 +107,9 @@ class ThumbnailModel(QAbstractListModel):
             return None
         item = self._doc_model.pages[index.row()]
         if role == Qt.ItemDataRole.DisplayRole:
-            return f"Pagina {index.row() + 1}"
+            return QCoreApplication.translate("ThumbnailModel", "Pagina {0}").format(
+                index.row() + 1
+            )
         if role == self.SourceIndexRole:
             return item.source_index
         if role == self.SourceIdRole:

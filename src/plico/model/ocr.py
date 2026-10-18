@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from typing import cast
 
 import pymupdf
+from PySide6.QtCore import QCoreApplication
 
 # 300 dpi is the resolution Tesseract's own documentation recommends for
 # scanned office documents, and its cost here is small: a full A4 page of text
@@ -171,13 +172,12 @@ def unavailable_reason() -> str | None:
 def _check() -> str | None:
     directory = tessdata_dir()
     if directory is None:
-        return (
+        return QCoreApplication.translate(
+            "Ocr",
             "Manca il dato di lingua di Tesseract (un file .traineddata).\n"
             "Si possono installare i pacchetti tesseract-ocr-ita e tesseract-ocr-eng, "
-            "oppure copiare i file in "
-            + os.path.expanduser("~/.local/share/plico/tessdata")
-            + "."
-        )
+            "oppure copiare i file in {0}.",
+        ).format(user_tessdata_dir())
     # A picture, and not a line of text: on a page that already has text MuPDF
     # answers from the content stream alone, which would make this check pass
     # on a system where Tesseract cannot be loaded at all.
@@ -189,7 +189,7 @@ def _check() -> str | None:
             page.insert_image(page.rect, stream=pixmap.tobytes("png"))
             _run(page, default_language(), 72, directory)
     except Exception as error:  # noqa: BLE001
-        return f"Tesseract non è utilizzabile: {error}"
+        return QCoreApplication.translate("Ocr", "Tesseract non è utilizzabile: {0}").format(error)
     return None
 
 
@@ -201,7 +201,9 @@ def recognise(page: pymupdf.Page, language: str, dpi: int = DEFAULT_DPI) -> list
     """
     directory = tessdata_dir()
     if directory is None:
-        raise RuntimeError(unavailable_reason() or "Manca il dato di lingua di Tesseract.")
+        raise RuntimeError(
+            unavailable_reason() or QCoreApplication.translate("Ocr", "Manca il dato di lingua di Tesseract.")
+        )
     rotation = page.rotation
     if rotation:
         page.set_rotation(0)

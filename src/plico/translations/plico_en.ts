@@ -18,6 +18,11 @@
 </context><context>
     <name>CompressionDialog</name>
     <message>
+        <location filename="../widgets/compress.py" line="35" />
+        <source>{0} byte</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
         <location filename="../widgets/compress.py" line="61" />
         <source>Salva compresso</source>
         <translation type="unfinished" />
@@ -28,44 +33,76 @@
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/compress.py" line="73" />
+        <location filename="../widgets/compress.py" line="75" />
         <source>Solo le immagini, senza ricompattare il file</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/compress.py" line="75" />
+        <location filename="../widgets/compress.py" line="77" />
         <source>La ricompattazione non perde nulla: saltarla ha senso solo per lasciare il file com'e` dovunque non ci siano immagini.</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/compress.py" line="82" />
+        <location filename="../widgets/compress.py" line="84" />
         <source>tutte</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/compress.py" line="85" />
+        <location filename="../widgets/compress.py" line="87" />
         <source>Pagine da ricampionare:</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/compress.py" line="150" />
+        <location filename="../widgets/compress.py" line="152" />
         <source>
 Il file non viene ricompattato: cambiano solo le immagini.</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/compress.py" line="162" />
+        <location filename="../widgets/compress.py" line="164" />
         <source>Le immagini di tutte le pagine vengono ricampionate.</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/compress.py" line="175" />
+        <location filename="../widgets/compress.py" line="177" />
         <source>Le immagini di {0} pagine vengono ricampionate.</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/compress.py" line="177" />
+        <location filename="../widgets/compress.py" line="179" />
         <source>Le immagini di una pagina vengono ricampionate.</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>CompressionLevel</name>
+    <message>
+        <location filename="../model/optimize.py" line="96" />
+        <source>Leggera</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/optimize.py" line="97" />
+        <source>Senza alcuna perdita: fonde i content stream e ricompatta il file con qpdf. Le immagini non vengono toccate, quindi su una scansione non guadagna quasi nulla.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/optimize.py" line="106" />
+        <source>Media</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/optimize.py" line="107" />
+        <source>Come Leggera, e in piu` ricampiona a 150 dpi le immagini che superano i 200 dpi, salvandole in JPEG a qualita` 80.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/optimize.py" line="118" />
+        <source>Forte</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/optimize.py" line="119" />
+        <source>Come Media, ma scende a 96 dpi e qualita` 60: file molto piu` piccoli, immagini visibilmente morbide.</source>
         <translation type="unfinished" />
     </message>
 </context><context>
@@ -78,7 +115,7 @@ Il file non viene ricompattato: cambiano solo le immagini.</source>
 </context><context>
     <name>EditText</name>
     <message>
-        <location filename="../model/commands.py" line="308" />
+        <location filename="../model/commands.py" line="312" />
         <source>Modifica testo su pagina {0}</source>
         <translation type="unfinished" />
     </message>
@@ -92,6 +129,23 @@ Il file non viene ricompattato: cambiano solo le immagini.</source>
     <message>
         <location filename="../widgets/form_panel.py" line="107" />
         <source>(senza nome)</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>Images</name>
+    <message>
+        <location filename="../model/images.py" line="72" />
+        <source>«{0}» è già un PDF: aprilo, oppure aggiungilo con Unisci.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/images.py" line="84" />
+        <source>«{0}» non è un'immagine che si possa leggere.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/images.py" line="98" />
+        <source>Nessuna immagine da convertire.</source>
         <translation type="unfinished" />
     </message>
 </context><context>
@@ -744,6 +798,31 @@ Risparmiato: {3} ({4}%)</source>
         <translation type="unfinished" />
     </message>
 </context><context>
+    <name>MoveRedaction</name>
+    <message>
+        <location filename="../model/commands.py" line="217" />
+        <source>Sposta zona su pagina {0}</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>Ocr</name>
+    <message>
+        <location filename="../model/ocr.py" line="175" />
+        <source>Manca il dato di lingua di Tesseract (un file .traineddata).
+Si possono installare i pacchetti tesseract-ocr-ita e tesseract-ocr-eng, oppure copiare i file in {0}.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/ocr.py" line="192" />
+        <source>Tesseract non è utilizzabile: {0}</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/ocr.py" line="205" />
+        <source>Manca il dato di lingua di Tesseract.</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
     <name>OcrDialog</name>
     <message>
         <location filename="../widgets/ocr.py" line="77" />
@@ -790,8 +869,35 @@ Entra nel file solo al salvataggio, come ogni altra modifica.</source>
 </context><context>
     <name>OcrPage</name>
     <message>
-        <location filename="../model/commands.py" line="380" />
+        <location filename="../model/commands.py" line="384" />
         <source>Riconosci testo su pagina {0}</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>PageRanges</name>
+    <message>
+        <location filename="../model/save.py" line="500" />
+        <source>La pagina {0} non esiste: il documento ne ha {1}.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/save.py" line="514" />
+        <source>Intervallo non valido: «{0}»</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/save.py" line="517" />
+        <source>Intervallo al contrario: «{0}»</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/save.py" line="530" />
+        <source>Indicazione di pagina non valida: «{0}»</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/save.py" line="534" />
+        <source>Nessuna pagina indicata.</source>
         <translation type="unfinished" />
     </message>
 </context><context>
@@ -799,6 +905,11 @@ Entra nel file solo al salvataggio, come ogni altra modifica.</source>
     <message>
         <location filename="../widgets/page_view.py" line="1294" />
         <source>Nessuna parola nella selezione.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../widgets/page_view.py" line="901" />
+        <source>Caricamento…</source>
         <translation type="unfinished" />
     </message>
     <message>
@@ -829,6 +940,13 @@ Entra nel file solo al salvataggio, come ogni altra modifica.</source>
         <translation type="unfinished" />
     </message>
 </context><context>
+    <name>ResizeRedaction</name>
+    <message>
+        <location filename="../model/commands.py" line="219" />
+        <source>Ridimensiona zona su pagina {0}</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
     <name>RotatePage</name>
     <message>
         <location filename="../model/commands.py" line="25" />
@@ -836,81 +954,98 @@ Entra nel file solo al salvataggio, come ogni altra modifica.</source>
         <translation type="unfinished" />
     </message>
 </context><context>
+    <name>Save</name>
+    <message>
+        <location filename="../model/save.py" line="201" />
+        <source>Il documento non contiene pagine da salvare.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/save.py" line="474" />
+        <source>Nessuna pagina da estrarre.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/save.py" line="478" />
+        <source>Non si possono estrarre pagine sopra un documento aperto: scegli un altro file.</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
     <name>SetFieldValue</name>
     <message>
-        <location filename="../model/commands.py" line="248" />
+        <location filename="../model/commands.py" line="252" />
         <source>Campo «{0}» su pagina {1}</source>
         <translation type="unfinished" />
     </message>
 </context><context>
     <name>SignDialog</name>
     <message>
-        <location filename="../widgets/sign.py" line="61" />
+        <location filename="../widgets/sign.py" line="60" />
         <source>Firma il documento</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="66" />
+        <location filename="../widgets/sign.py" line="65" />
         <source>File del certificato (.p12)</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="67" />
+        <location filename="../widgets/sign.py" line="66" />
         <source>Sfoglia…</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="75" />
+        <location filename="../widgets/sign.py" line="74" />
         <source>Password del certificato</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="81" />
+        <location filename="../widgets/sign.py" line="80" />
         <source>Perché firmi (facoltativo)</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="83" />
+        <location filename="../widgets/sign.py" line="82" />
         <source>Dove (facoltativo)</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="85" />
+        <location filename="../widgets/sign.py" line="84" />
         <source>Riquadro visibile sulla pagina</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="92" />
+        <location filename="../widgets/sign.py" line="91" />
         <source>pagina</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="97" />
+        <location filename="../widgets/sign.py" line="96" />
         <source>Certificato</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="98" />
+        <location filename="../widgets/sign.py" line="97" />
         <source>Password</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="100" />
+        <location filename="../widgets/sign.py" line="99" />
         <source>Motivo</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="101" />
+        <location filename="../widgets/sign.py" line="100" />
         <source>Luogo</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="105" />
+        <location filename="../widgets/sign.py" line="104" />
         <source>La firma copre il file appena salvato: il documento si riapre dalla copia firmata e ogni modifica successiva la annulla.</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="116" />
+        <location filename="../widgets/sign.py" line="115" />
         <source>Firma</source>
         <translation type="unfinished" />
     </message>
@@ -920,12 +1055,17 @@ Entra nel file solo al salvataggio, come ogni altra modifica.</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="161" />
+        <location filename="../widgets/sign.py" line="139" />
+        <source>Certificati (*.p12 *.pfx *.pem);;Tutti i file (*)</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../widgets/sign.py" line="163" />
         <source>Il certificato è scaduto il {0}.</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="166" />
+        <location filename="../widgets/sign.py" line="168" />
         <source>{0}
 valido fino al {1}</source>
         <translation type="unfinished" />
@@ -933,28 +1073,126 @@ valido fino al {1}</source>
 </context><context>
     <name>SignatureDialog</name>
     <message>
-        <location filename="../widgets/sign.py" line="207" />
+        <location filename="../widgets/sign.py" line="209" />
         <source>Firme del documento</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="217" />
+        <location filename="../widgets/sign.py" line="219" />
         <source>Aggiungi un certificato fidato…</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="219" />
+        <location filename="../widgets/sign.py" line="221" />
         <source>Chiudi</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="234" />
+        <location filename="../widgets/sign.py" line="236" />
         <source>Scegli un certificato da considerare fidato</source>
         <translation type="unfinished" />
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="260" />
+        <location filename="../widgets/sign.py" line="262" />
         <source>Il documento non contiene firme.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../widgets/sign.py" line="312" />
+        <source>La firma è rotta: il contenuto che copriva è stato cambiato dopo la firma.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../widgets/sign.py" line="320" />
+        <source>La firma è integra, ma il documento è stato modificato dopo: vale solo per la versione che è stata firmata.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../widgets/sign.py" line="329" />
+        <source>La firma non è valida: non corrisponde al certificato che la porta.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../widgets/sign.py" line="337" />
+        <source>Firma integra e valida. Il certificato però non è fra quelli che consideri fidati: aggiungi la sua autorità per sapere chi ha firmato.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../widgets/sign.py" line="345" />
+        <source>Firma valida e firmatario attendibile.</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>Signing</name>
+    <message>
+        <location filename="../model/sign.py" line="460" />
+        <location filename="../model/sign.py" line="397" />
+        <location filename="../model/sign.py" line="155" />
+        <source>Non riesco a leggere «{0}»: {1}</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/sign.py" line="165" />
+        <source>Password errata, oppure «{0}» non è un file PKCS#12.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/sign.py" line="171" />
+        <source>«{0}» non contiene una chiave privata con il suo certificato.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/sign.py" line="221" />
+        <source>Firmato da %(name)s</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/sign.py" line="358" />
+        <source>Non riesco a firmare il documento: {0}</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/sign.py" line="406" />
+        <source>«{0}» non è un PDF leggibile: {1}</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/sign.py" line="425" />
+        <source>Firma illeggibile: {0}</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/sign.py" line="468" />
+        <source>«{0}» non contiene certificati PEM.</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>TextEdit</name>
+    <message>
+        <location filename="../model/textedit.py" line="284" />
+        <source>Si può modificare solo testo orizzontale.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/textedit.py" line="289" />
+        <source>Questo testo usa un font Type3 e non si può modificare.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/textedit.py" line="303" />
+        <source>Nessun font disponibile contiene questi caratteri.</source>
+        <translation type="unfinished" />
+    </message>
+    <message>
+        <location filename="../model/textedit.py" line="311" />
+        <source>Il testo nuovo non ci sta: andrebbe rimpicciolito al {0}%.</source>
+        <translation type="unfinished" />
+    </message>
+</context><context>
+    <name>ThumbnailModel</name>
+    <message>
+        <location filename="../widgets/thumbnail_bar.py" line="110" />
+        <source>Pagina {0}</source>
         <translation type="unfinished" />
     </message>
 </context></TS>

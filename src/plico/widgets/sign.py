@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QCoreApplication, Qt, QTimer
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -44,7 +44,6 @@ _GOOD = "color: #1b5e20"
 _WARN = "color: #8a5300"
 _BAD = "color: #b00020"
 
-_CERTIFICATE_FILTER = "Certificati (*.p12 *.pfx *.pem);;Tutti i file (*)"
 
 
 def _date(moment: datetime | None) -> str:
@@ -134,7 +133,10 @@ class SignDialog(QDialog):
 
     def _browse(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
-            self, self.tr("Scegli il certificato"), "", _CERTIFICATE_FILTER
+            self,
+            self.tr("Scegli il certificato"),
+            "",
+            self.tr("Certificati (*.p12 *.pfx *.pem);;Tutti i file (*)"),
         )
         if path:
             self._certificate.setText(path)
@@ -307,25 +309,39 @@ def _verdict(signature: Signature) -> tuple[str, str]:
     # one reassurance this dialog must never give.
     if not signature.intact:
         return (
-            "La firma è rotta: il contenuto che copriva è stato cambiato dopo la firma.",
+            QCoreApplication.translate(
+                "SignatureDialog",
+                "La firma è rotta: il contenuto che copriva è stato cambiato dopo la firma."
+            ),
             _BAD,
         )
     if signature.changed:
         return (
-            (
+            QCoreApplication.translate(
+                "SignatureDialog",
                 "La firma è integra, ma il documento è stato modificato dopo: "
                 "vale solo per la versione che è stata firmata."
             ),
             _WARN,
         )
     if not signature.valid:
-        return "La firma non è valida: non corrisponde al certificato che la porta.", _BAD
+        return (
+            QCoreApplication.translate(
+                "SignatureDialog",
+                "La firma non è valida: non corrisponde al certificato che la porta.",
+            ),
+            _BAD,
+        )
     if not signature.trusted:
         return (
-            (
+            QCoreApplication.translate(
+                "SignatureDialog",
                 "Firma integra e valida. Il certificato però non è fra quelli che "
                 "consideri fidati: aggiungi la sua autorità per sapere chi ha firmato."
             ),
             _WARN,
         )
-    return "Firma valida e firmatario attendibile.", _GOOD
+    return (
+        QCoreApplication.translate("SignatureDialog", "Firma valida e firmatario attendibile."),
+        _GOOD,
+    )

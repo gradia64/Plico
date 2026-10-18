@@ -21,6 +21,7 @@ Measured on MuPDF 1.28, and the reason the code below is this short:
 import os
 
 import pymupdf
+from PySide6.QtCore import QCoreApplication
 
 # The formats offered in the file dialogs, all checked against MuPDF.
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif")
@@ -68,7 +69,10 @@ def images_to_pdf(paths: list[str], out_path: str) -> int:
                 with pymupdf.open(path) as image:
                     if image.is_pdf:
                         raise ValueError(
-                            f"«{name}» è già un PDF: aprilo, oppure aggiungilo con Unisci."
+                            QCoreApplication.translate(
+                                "Images",
+                                "«{0}» è già un PDF: aprilo, oppure aggiungilo con Unisci.",
+                            ).format(name)
                         )
                     converted = pymupdf.open("pdf", image.convert_to_pdf())
             except ValueError:
@@ -76,7 +80,9 @@ def images_to_pdf(paths: list[str], out_path: str) -> int:
             # MuPDF's own errors do not derive from RuntimeError (§6): a file
             # it cannot decode is reported to the user, whatever it raises.
             except Exception as error:
-                raise ValueError(f"«{name}» non è un'immagine che si possa leggere.") from error
+                raise ValueError(
+                    QCoreApplication.translate("Images", "«{0}» non è un'immagine che si possa leggere.").format(name)
+                ) from error
             with converted:
                 for index in range(converted.page_count):
                     rect = converted[index].rect
@@ -89,6 +95,6 @@ def images_to_pdf(paths: list[str], out_path: str) -> int:
                         page = out.new_page(width=width, height=height)
                         page.show_pdf_page(page.rect, converted, index)
         if out.page_count == 0:
-            raise ValueError("Nessuna immagine da convertire.")
+            raise ValueError(QCoreApplication.translate("Images", "Nessuna immagine da convertire."))
         out.save(out_path, garbage=4, deflate=True)
         return int(out.page_count)

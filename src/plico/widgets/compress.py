@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, QRunnable, Signal
+from PySide6.QtCore import QCoreApplication, QLocale, QObject, QRunnable, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -30,16 +30,16 @@ __all__ = ["CompressionDialog", "CompressionTask", "format_size"]
 
 
 def format_size(size: int) -> str:
-    """A readable size, with the Italian decimal comma."""
+    """A readable size, with the decimal separator of the user's language."""
     if size < 1024:
-        return f"{size} byte"
+        return QCoreApplication.translate("CompressionDialog", "{0} byte").format(size)
     if size < 1024 * 1024:
         value, suffix = size / 1024, "KB"
     elif size < 1024 * 1024 * 1024:
         value, suffix = size / (1024 * 1024), "MB"
     else:
         value, suffix = size / (1024 * 1024 * 1024), "GB"
-    return f"{value:.1f}".replace(".", ",") + f" {suffix}"
+    return f"{QLocale().toString(value, 'f', 1)} {suffix}"
 
 
 class CompressionDialog(QDialog):
@@ -67,7 +67,9 @@ class CompressionDialog(QDialog):
         for level in LEVELS:
             # The level table carries source-language text; it is translated
             # here, where it actually goes on screen.
-            self._choice.addItem(self.tr(level.label), level.key)
+            self._choice.addItem(
+                QCoreApplication.translate("CompressionLevel", level.label), level.key
+            )
         self._choice.setCurrentIndex(LEVELS.index(LEVELS_BY_KEY["medium"]))
 
         self._images_only = QCheckBox(self.tr("Solo le immagini, senza ricompattare il file"))
@@ -145,7 +147,7 @@ class CompressionDialog(QDialog):
             self._images_only.setChecked(False)
             return
 
-        text = self.tr(level.detail)
+        text = QCoreApplication.translate("CompressionLevel", level.detail)
         if images and self._images_only.isChecked():
             text += self.tr("\nIl file non viene ricompattato: cambiano solo le immagini.")
         self._explanation.setText(text)

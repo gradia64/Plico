@@ -47,6 +47,7 @@ from pyhanko.sign.validation.status import ModificationLevel, SignatureCoverageL
 from pyhanko.stamp import TextStampStyle
 from pyhanko_certvalidator import ValidationContext
 from pyhanko_certvalidator.registry import SimpleCertificateStore
+from PySide6.QtCore import QCoreApplication
 
 from .document import open_for_reading
 
@@ -151,7 +152,9 @@ def _credentials(path: str, password: str) -> tuple[Any, Any, list[Any]]:
         raw = Path(path).read_bytes()
     except OSError as error:
         raise SigningError(
-            f"Non riesco a leggere «{_name_of(path)}»: {error.strerror or error}"
+            QCoreApplication.translate("Signing", "Non riesco a leggere «{0}»: {1}").format(
+                _name_of(path), error.strerror or error
+            )
         ) from error
     try:
         key, certificate, chain = pkcs12.load_key_and_certificates(
@@ -159,11 +162,15 @@ def _credentials(path: str, password: str) -> tuple[Any, Any, list[Any]]:
         )
     except ValueError as error:
         raise SigningError(
-            f"Password errata, oppure «{_name_of(path)}» non è un file PKCS#12."
+            QCoreApplication.translate(
+                "Signing", "Password errata, oppure «{0}» non è un file PKCS#12."
+            ).format(_name_of(path))
         ) from error
     if key is None or certificate is None:
         raise SigningError(
-            f"«{_name_of(path)}» non contiene una chiave privata con il suo certificato."
+            QCoreApplication.translate(
+                "Signing", "«{0}» non contiene una chiave privata con il suo certificato."
+            ).format(_name_of(path))
         )
     return key, certificate, list(chain or [])
 
@@ -211,7 +218,7 @@ def stamp_text(reason: str) -> str:
     by :func:`sign_in_place`; ``%(ts)s`` is the stamping time, which pyHanko
     interpolates itself.
     """
-    lines = ["Firmato da %(name)s", "%(ts)s"]
+    lines = [QCoreApplication.translate("Signing", "Firmato da %(name)s"), "%(ts)s"]
     if reason.strip():
         lines.append("%(reason)s")
     return "\n".join(lines)
@@ -347,7 +354,9 @@ def _sign_bytes(data: bytes, request: SignatureRequest) -> bytes:
             writer, bytes_reserved=RESERVED, appearance_text_params=params
         )
     except Exception as error:
-        raise SigningError(f"Non riesco a firmare il documento: {error}") from error
+        raise SigningError(
+            QCoreApplication.translate("Signing", "Non riesco a firmare il documento: {0}").format(error)
+        ) from error
     return output.getvalue()  # type: ignore[no-any-return]
 
 
@@ -385,13 +394,17 @@ def read_signatures(
         data = Path(path).read_bytes()
     except OSError as error:
         raise SigningError(
-            f"Non riesco a leggere «{_name_of(path)}»: {error.strerror or error}"
+            QCoreApplication.translate("Signing", "Non riesco a leggere «{0}»: {1}").format(
+                _name_of(path), error.strerror or error
+            )
         ) from error
     context = _validation_context(roots)
     try:
         reader = PdfFileReader(io.BytesIO(data), strict=False)
     except Exception as error:
-        raise SigningError(f"«{_name_of(path)}» non è un PDF leggibile: {error}") from error
+        raise SigningError(
+            QCoreApplication.translate("Signing", "«{0}» non è un PDF leggibile: {1}").format(_name_of(path), error)
+        ) from error
     return [_describe(signature, context) for signature in reader.embedded_signatures]
 
 
@@ -409,7 +422,7 @@ def _describe(embedded: Any, context: ValidationContext) -> Signature:
             valid=False,
             trusted=False,
             changed=False,
-            error=f"Firma illeggibile: {error}",
+            error=QCoreApplication.translate("Signing", "Firma illeggibile: {0}").format(error),
         )
     certificate = embedded.signer_cert
     covers = status.coverage == SignatureCoverageLevel.ENTIRE_FILE
@@ -444,12 +457,16 @@ def _certificates_in(path: str) -> list[asn1x509.Certificate]:
         data = Path(path).read_bytes()
     except OSError as error:
         raise SigningError(
-            f"Non riesco a leggere «{_name_of(path)}»: {error.strerror or error}"
+            QCoreApplication.translate("Signing", "Non riesco a leggere «{0}»: {1}").format(
+                _name_of(path), error.strerror or error
+            )
         ) from error
     try:
         certificates = x509.load_pem_x509_certificates(data)
     except ValueError as error:
-        raise SigningError(f"«{_name_of(path)}» non contiene certificati PEM.") from error
+        raise SigningError(
+            QCoreApplication.translate("Signing", "«{0}» non contiene certificati PEM.").format(_name_of(path))
+        ) from error
     return [
         asn1x509.Certificate.load(certificate.public_bytes(Encoding.DER))
         for certificate in certificates

@@ -211,9 +211,13 @@ class AdjustRedaction(QUndoCommand):
         after: RedactionRect,
         moved: bool,
     ) -> None:
-        source = "MoveRedaction" if moved else "ResizeRedaction"
-        text = "Sposta zona su pagina {0}" if moved else "Ridimensiona zona su pagina {0}"
-        super().__init__(QCoreApplication.translate(source, text).format(index + 1))
+        # Two literal calls, not one with variables: lupdate only extracts
+        # the strings it can read in the source.
+        if moved:
+            name = QCoreApplication.translate("MoveRedaction", "Sposta zona su pagina {0}")
+        else:
+            name = QCoreApplication.translate("ResizeRedaction", "Ridimensiona zona su pagina {0}")
+        super().__init__(name.format(index + 1))
         self._model = model
         self._index = index
         self._position = position

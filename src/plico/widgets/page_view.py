@@ -898,7 +898,7 @@ class PageView(QScrollArea):
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label.setBackgroundRole(QPaletteColor.ColorRole.Base)
         label.setAutoFillBackground(True)
-        label.setText("Caricamento…")
+        label.setText(self.tr("Caricamento…"))
         label.setStyleSheet("background-color: #f0f0f0;")
         label.setCursor(self._tool_cursor())
         return label

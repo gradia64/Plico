@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import TypeVar
 
 import pymupdf
+from PySide6.QtCore import QCoreApplication
 
 from .assemble import acroform_key, assemble
 from .document import DocumentModel, PageItem, open_for_reading
@@ -197,7 +198,7 @@ def _write_pdf(
     if not items:
         # A PDF with zero pages is not a useful artefact; fail loudly rather
         # than writing a file the user cannot open.
-        raise ValueError("Il documento non contiene pagine da salvare.")
+        raise ValueError(QCoreApplication.translate("Save", "Il documento non contiene pagine da salvare."))
     # One handle per source document: a merged document can interleave pages
     # from several files, and each is copied from its own.
     sources: dict[int, pymupdf.Document] = {}
@@ -470,12 +471,15 @@ def extract_pages(model: DocumentModel, out_path: str, indices: list[int]) -> No
     """
     assert model.sources, "No document open"
     if not indices:
-        raise ValueError("Nessuna pagina da estrarre.")
+        raise ValueError(QCoreApplication.translate("Save", "Nessuna pagina da estrarre."))
     target = os.path.abspath(out_path)
     if model.sources_at(target):
         raise ValueError(
-            "Non si possono estrarre pagine sopra un documento aperto: "
-            "scegli un altro file."
+            QCoreApplication.translate(
+                "Save",
+                "Non si possono estrarre pagine sopra un documento aperto: "
+                "scegli un altro file.",
+            )
         )
     _write_atomically(model, target, indices)
 
@@ -493,7 +497,9 @@ def parse_page_ranges(spec: str, page_count: int) -> list[int]:
     def checked(number: int) -> int:
         if not 1 <= number <= page_count:
             raise ValueError(
-                f"La pagina {number} non esiste: il documento ne ha {page_count}."
+                QCoreApplication.translate(
+                    "PageRanges", "La pagina {0} non esiste: il documento ne ha {1}."
+                ).format(number, page_count)
             )
         return number
 
@@ -505,10 +511,10 @@ def parse_page_ranges(spec: str, page_count: int) -> list[int]:
         if "-" in token:
             low, _, high = token.partition("-")
             if not (low.isdigit() and high.isdigit()):
-                raise ValueError(f"Intervallo non valido: «{token}»")
+                raise ValueError(QCoreApplication.translate("PageRanges", "Intervallo non valido: «{0}»").format(token))
             start, end = int(low), int(high)
             if start > end:
-                raise ValueError(f"Intervallo al contrario: «{token}»")
+                raise ValueError(QCoreApplication.translate("PageRanges", "Intervallo al contrario: «{0}»").format(token))
             # Check the bounds BEFORE building the range. A spec such as
             # "1-5000000" used to materialise five million integers and only
             # then discover that the document has three pages -- an
@@ -520,9 +526,11 @@ def parse_page_ranges(spec: str, page_count: int) -> list[int]:
         elif token.isdigit():
             indices.append(checked(int(token)))
         else:
-            raise ValueError(f"Indicazione di pagina non valida: «{token}»")
+            raise ValueError(
+                QCoreApplication.translate("PageRanges", "Indicazione di pagina non valida: «{0}»").format(token)
+            )
 
     if not indices:
-        raise ValueError("Nessuna pagina indicata.")
+        raise ValueError(QCoreApplication.translate("PageRanges", "Nessuna pagina indicata."))
 
     return [number - 1 for number in indices]

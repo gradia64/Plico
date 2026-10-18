@@ -33,6 +33,7 @@ import subprocess
 from dataclasses import dataclass
 
 import pymupdf
+from PySide6.QtCore import QCoreApplication
 
 # get_text("dict") span flags
 _ITALIC = 1 << 1
@@ -280,11 +281,13 @@ def _covers(font: pymupdf.Font, text: str) -> bool:
 def _resolve(page: pymupdf.Page, span: TextSpan, new_text: str) -> tuple[pymupdf.Font, FontChoice]:
     """Pick the font and size for *new_text*, or explain why it cannot be done."""
     if not span.horizontal:
-        raise ValueError("Si può modificare solo testo orizzontale.")
+        raise ValueError(QCoreApplication.translate("TextEdit", "Si può modificare solo testo orizzontale."))
     if span.type3:
         # Type3 glyphs are drawings: the colour lives inside each glyph (the
         # span reports black), and redacting them leaves visible remnants.
-        raise ValueError("Questo testo usa un font Type3 e non si può modificare.")
+        raise ValueError(
+            QCoreApplication.translate("TextEdit", "Questo testo usa un font Type3 e non si può modificare.")
+        )
 
     candidates = (
         (lambda: _embedded_font(page, span.font), FROM_DOCUMENT),
@@ -296,14 +299,18 @@ def _resolve(page: pymupdf.Page, span: TextSpan, new_text: str) -> tuple[pymupdf
         if font is not None and _covers(font, new_text):
             break
     else:
-        raise ValueError("Nessun font disponibile contiene questi caratteri.")
+        raise ValueError(
+            QCoreApplication.translate("TextEdit", "Nessun font disponibile contiene questi caratteri.")
+        )
 
     needed = font.text_length(new_text, fontsize=span.size)
     available = span.width + span.room
     scale = min(1.0, available / needed) if needed > 0 else 1.0
     if scale < MIN_SCALE:
         raise ValueError(
-            f"Il testo nuovo non ci sta: andrebbe rimpicciolito al {scale:.0%}."
+            QCoreApplication.translate(
+                "TextEdit", "Il testo nuovo non ci sta: andrebbe rimpicciolito al {0}%."
+            ).format(round(scale * 100))
         )
     return font, FontChoice(font_name=font.name, source=source, scale=scale)
 

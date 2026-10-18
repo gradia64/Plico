@@ -5,7 +5,7 @@ import sys
 from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import QApplication
 
-from .i18n import install_translators
+from .i18n import install_qt_translator, install_translators
 from .main_window import MainWindow
 from .model import is_image
 
@@ -52,6 +52,7 @@ def main() -> int:
 
     app = QApplication.instance() or QApplication(sys.argv)
     # Before the first window: the strings are read while it is built.
+    install_qt_translator(app)
     install_translators(app)
     window = MainWindow()
     window.show()
