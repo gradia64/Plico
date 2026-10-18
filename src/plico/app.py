@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QApplication
 
 from .i18n import install_translators
 from .main_window import MainWindow
+from .model import is_image
 
 
 def local_path(argument: str) -> str:
@@ -23,6 +24,23 @@ def local_path(argument: str) -> str:
         if url.isLocalFile():
             return url.toLocalFile()
     return argument
+
+
+def open_arguments(window: MainWindow, paths: list[str]) -> None:
+    """Open the first file and append the others, as "Unisci" would.
+
+    A first argument that is a photo or a scan starts a document from it,
+    exactly like *File → Crea da immagini*: opened as it was, MuPDF would
+    read it as an image document and the first save would fail on it.
+    The others can be images too, which "Unisci" already converts.
+    """
+    if not paths:
+        return
+    first = paths[0]
+    opened = window.create_from_images([first]) if is_image(first) else window.open_path(first)
+    if opened:
+        for extra in paths[1:]:
+            window.merge_path(extra)
 
 
 def main() -> int:
@@ -43,10 +61,7 @@ def main() -> int:
     # its own options from ``QApplication.arguments()``, leaving the file
     # names; several of them mean "open the first, append the rest", which is
     # exactly what "Unisci" does.
-    paths = [local_path(argument) for argument in app.arguments()[1:]]
-    if paths and window.open_path(paths[0]):
-        for extra in paths[1:]:
-            window.merge_path(extra)
+    open_arguments(window, [local_path(argument) for argument in app.arguments()[1:]])
 
     return app.exec()
 

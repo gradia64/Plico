@@ -3658,3 +3658,39 @@ def test_the_desktop_entry_asks_for_paths():
         line for line in desktop.read_text().splitlines() if line.startswith("Exec=")
     )
     assert exec_line == "Exec=plico %F"
+
+
+def test_an_image_on_the_command_line_starts_a_document(windows, tmp_path):
+    """``plico foto.png`` builds a document from the photo, like Crea da
+    immagini; opened as it was, it became an image source no save could copy."""
+    from plico.app import open_arguments
+
+    pdf = str(tmp_path / "doc.pdf")
+    _make_pdf(pdf, pages=2)
+    photo = _photo(tmp_path / "foto.png")
+    mw = windows()
+
+    open_arguments(mw, [photo, pdf])
+    _pump(0.3)
+
+    assert mw._doc_model.page_count == 3
+    assert mw.windowTitle() == "Senza titolo[*]"
+    assert mw._save_suggestion == str(tmp_path / "foto.pdf")
+    out = str(tmp_path / "out.pdf")
+    save_as(mw._doc_model, out)
+    with pymupdf.open(out) as doc:
+        assert doc.page_count == 3
+
+
+def test_a_pdf_on_the_command_line_opens_and_the_rest_is_merged(windows, tmp_path):
+    from plico.app import open_arguments
+
+    first, second = str(tmp_path / "a.pdf"), str(tmp_path / "b.pdf")
+    _make_pdf(first, pages=2)
+    _make_pdf(second, pages=1)
+    mw = windows()
+
+    open_arguments(mw, [first, _photo(tmp_path / "foto.png"), second])
+
+    assert mw._doc_model.page_count == 4
+    assert mw._save_target == first
