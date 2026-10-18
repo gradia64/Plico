@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Ubuntu 24.04 forbids unprivileged user namespaces through AppArmor,
       # and bubblewrap -- the sandbox flatpak-builder builds in -- needs them.
@@ -35,10 +35,18 @@ jobs:
       - name: Flatpak and the builder
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends flatpak
+          sudo apt-get install -y -q --no-install-recommends flatpak dbus
           flatpak remote-add --user --if-not-exists flathub \
             https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y --noninteractive flathub org.flatpak.Builder
+          # Installed here, from the manifest's own versions, rather than by
+          # --install-deps-from: from inside the builder flatpak wants a D-Bus
+          # session the runner does not have ("Cannot autolaunch D-Bus").
+          version=$(python3 -c "import json; print(json.load(open('$MANIFEST'))['runtime-version'])")
+          base=$(python3 -c "import json; print(json.load(open('$MANIFEST'))['base-version'])")
+          flatpak install --user -y --noninteractive flathub \
+            "org.kde.Platform//$version" "org.kde.Sdk//$version" \
+            "io.qt.PySide.BaseApp//$base"
 
       - name: Cache of the builder
         uses: actions/cache@v4
@@ -58,8 +66,8 @@ jobs:
 
       - name: Build
         run: |
-          flatpak run org.flatpak.Builder --user --force-clean --sandbox \
-            --install-deps-from=flathub --ccache \
+          dbus-run-session -- flatpak run org.flatpak.Builder --user --force-clean --sandbox \
+            --ccache \
             --state-dir="$WORK/state" --repo="$WORK/repo" \
             "$WORK/build" "$MANIFEST"
 
