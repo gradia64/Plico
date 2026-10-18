@@ -85,7 +85,7 @@ plico/
     └── test_integration.py   # MainWindow vera, offscreen: 153 test end-to-end
 ```
 
-Gate di qualità attuale: **431 passed, 4 skipped**, `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **437 passed, 4 skipped**, `ruff` pulito, `mypy` pulito
 (24 file sorgente). Gli `skip` dipendono dall'ambiente: il giro `.ts` → `.qm`
 (`lrelease` sta solo nell'SDK di Qt) e l'estrazione con `pylupdate6`
 (`tests/test_i18n.py`).
@@ -627,7 +627,10 @@ La compressione gira su `QThreadPool` con un `QRunnable`, non sul thread dei
 render: sono due lavori indipendenti e un PDF grande non deve congelare la
 finestra. I segnali sono connessi **solo a metodi legati di QObject** — un
 lambda verrebbe eseguito nel thread emittente e toccherebbe widget dalla
-thread sbagliata.
+thread sbagliata. Anche lo scambio finale (`preview.keep()`) può fallire —
+destinazione diventata in sola lettura, cartella sparita — e allora il
+temporaneo si cancella e l'errore arriva in un dialogo, invece di uscire dallo
+slot lasciando un `.pdf.tmp` accanto alla destinazione.
 
 ### Redazione vera (`model/redact.py`)
 
@@ -735,7 +738,12 @@ sbagliare di nuovo.
 - l'hit test degli angoli lavora in **pixel** (`MARK_HANDLE`, 8 px): un
   bersaglio per il mouse non deve rimpicciolirsi con la pagina;
 - l'ancoraggio tiene la distanza dal punto preso, non dall'angolo: il segno
-  segue il mouse com'era stato afferrato.
+  segue il mouse com'era stato afferrato;
+- un **clic incerto** (meno di `CLICK_SLOP` pixel di movimento) resta un clic
+  e toglie il segno, ma il trascinamento l'ha già spostato di quei pixel: il
+  rettangolo provvisorio si legge *prima* che `forget_drag()` rimetta quello
+  di partenza, altrimenti l'undo rimetteva il segno spostato — uno stato che
+  nessun comando aveva prodotto.
 
 **Un segno fatto di parole non tocca le righe vicine.** MuPDF cancella ogni
 glifo il cui riquadro *tocca* la redazione, e il riquadro di un glifo va
@@ -1017,7 +1025,10 @@ si può selezionare, cercare con Ctrl+F, copiare — e la redazione per parola
   testo scritto due volte — e poi letto, copiato e trovato due volte. Le parole
   il cui centro cade dentro un rettangolo di `get_text("words")` si scartano.
 - **Nel thread pool, non nella coda dei render** (`OcrTask`, con
-  `QProgressDialog` annullabile), e al termine **un solo** `beginMacro`: un
+  `QProgressDialog` annullabile e mostrato **subito**: con il ritardo
+  predefinito di mezzo secondo il dialogo non era ancora a schermo, quindi
+  non ancora modale, e la finestra accettava Canc o un trascinamento mentre il
+  task leggeva la lista delle pagine), e al termine **un solo** `beginMacro`: un
   comando `OcrPage` per pagina, così un Ctrl+Z disfa tutto il giro. Il
   salvataggio scrive lo strato **prima** degli edit di testo e delle redazioni:
   il primo cambia il testo sotto (uno strato vecchio resterebbe lì), il secondo
@@ -1127,6 +1138,10 @@ esso, ed è l'unica cosa nel processo che sa leggere ciò che ha prodotto.
   salvataggio. Il titolo prende «— firmato», e `_signed_on_disk` (rinfrescato
   all'apertura, alla chiusura e a ogni salvataggio) è quello che fa chiedere
   conferma prima di un salvataggio che riscriverebbe il file senza firma.
+  `is_signed()` guarda il **bit 1** di `/SigFlags` (*SignaturesExist*), non il
+  numero: `get_sigflags()` dà `-1` senza modulo e `0` per un modulo mai
+  firmato, e con `>= 0` ogni modulo con `/SigFlags 0` risultava firmato.
+  Attenzione al `-1`: in Python `-1 & 1` vale 1, quindi va escluso prima.
 - **Non decide di chi fidarsi**: `read_signatures(path, roots=[...])` accetta i
   certificati che l'utente ha scelto (PEM), e senza di essi una firma integra
   resta «valida ma non attendibile». I percorsi scelti si ricordano in
@@ -1239,6 +1254,17 @@ Note sull'ambiente in cui il progetto è stato sviluppato (Debian unstable):
   sperare.
 - Non usare `pkill -f "pytest"` per sbloccare un test appeso: il pattern
   corrisponde alla command line della shell che lo esegue e la uccide.
+- **PyMuPDF non promette di funzionare da più thread**, e Plico lo usa da tre:
+  il worker di rendering, il pool (compressione, OCR) e il thread
+  dell'interfaccia (`text_span_at`, `find_text`, `words_on`, i salvataggi).
+  Le chiamate si sovrappongono davvero: **misurato**, durante un
+  `get_pixmap` di 0,8 s in un altro thread il thread principale ha continuato
+  a girare (pausa massima 0,02 s), quindi il binding rilascia il GIL e non è
+  il GIL a serializzare MuPDF. Regge perché ogni thread apre **handle suoi**
+  (`open_for_reading` a ogni lettura, il worker con i suoi) e nessun
+  `Document` o `Page` passa da un thread all'altro: è la regola da non
+  rompere. Un crash raro e non riproducibile durante un render va cercato
+  prima qui.
 - Un **callable Python** (`lambda`, `list.append`) connesso a un segnale di un
   `QObject` che vive in un **altro thread** viene consegnato *accodato*, non
   diretto: uno spy messo nel test sul thread GUI non viene chiamato in modo
@@ -1482,7 +1508,10 @@ Scelte non ovvie (documentate anche nel README):
 - **`Exec=plico %F`, non `%U`**: `%U` chiede URL, e GIO li passa davvero
   (`file:///…/a%20b.pdf`), che `pymupdf.open` non apre. Per chi li passa lo
   stesso (script, altri launcher) `app.local_path()` converte gli URL
-  `file:` in percorsi prima di aprirli.
+  `file:` in percorsi prima di aprirli. Un primo argomento che è
+  un'**immagine** passa da *Crea da immagini* (`app.open_arguments()`): aperta
+  così com'è, MuPDF la legge come documento immagine e il salvataggio fallisce
+  con `source or target not a PDF`.
 
 - **`base: io.qt.PySide.BaseApp`** e `pip3 install --no-deps`: PySide6 arriva
   già compilato dal runtime, allineato al Qt di `org.kde.Platform`. Il bundle
