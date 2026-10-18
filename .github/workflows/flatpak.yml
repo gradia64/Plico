@@ -1,0 +1,78 @@
+name: Flatpak
+
+# The real build: KDE runtime and SDK, PySide BaseApp, Tesseract compiled from
+# source. Some tens of minutes, so not on every pull request: on main, and on
+# request from the Actions tab.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: flatpak-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_ID: io.github.gradia64.plico
+  MANIFEST: flatpak/io.github.gradia64.plico.json
+  # Outside the checkout: the plico module builds from the checkout itself,
+  # and a build directory inside it would be copied into its own sources.
+  WORK: /home/runner/flatpak-work
+
+jobs:
+  build:
+    name: Build and lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      # Ubuntu 24.04 forbids unprivileged user namespaces through AppArmor,
+      # and bubblewrap -- the sandbox flatpak-builder builds in -- needs them.
+      - name: Allow the build sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Flatpak and the builder
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends flatpak
+          flatpak remote-add --user --if-not-exists flathub \
+            https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub org.flatpak.Builder
+
+      - name: Cache of the builder
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/flatpak-work/state
+          key: flatpak-builder-${{ hashFiles('flatpak/*.json') }}
+          restore-keys: flatpak-builder-
+
+      - name: Lint the manifest
+        # The linter Flathub runs on a submission. Not blocking until the
+        # first release: the plico module still builds from the checkout
+        # (type "dir"), which Flathub accepts only as a git source with a tag.
+        continue-on-error: true
+        run: |
+          flatpak run --command=flatpak-builder-lint org.flatpak.Builder \
+            manifest "$MANIFEST"
+
+      - name: Build
+        run: |
+          flatpak run org.flatpak.Builder --user --force-clean --sandbox \
+            --install-deps-from=flathub --ccache \
+            --state-dir="$WORK/state" --repo="$WORK/repo" \
+            "$WORK/build" "$MANIFEST"
+
+      - name: Lint the build
+        continue-on-error: true
+        run: |
+          flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo "$WORK/repo"
+
+      - name: Bundle
+        run: flatpak build-bundle "$WORK/repo" plico.flatpak "$APP_ID"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plico-flatpak
+          path: plico.flatpak
+          retention-days: 14

@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # The lowest version pyproject.toml accepts, and the one of the
+        # Flatpak's BaseApp.
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      # Qt needs libEGL even offscreen (without it pytest-qt stops at import),
+      # Tesseract and a language or the OCR tests are skipped, fontconfig for
+      # the system fonts of the text editing.
+      - name: System libraries
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends \
+            libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3 \
+            fonts-dejavu-core tesseract-ocr tesseract-ocr-eng tesseract-ocr-ita
+
+      # PyQt6 only for pylupdate6, the tool the catalog test runs: without it
+      # the test that catches a string missing from the catalogs is skipped.
+      - name: Python packages
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" PyQt6
+
+      - name: Ruff
+        run: ruff check src tests tools
+
+      - name: Mypy
+        run: mypy src/plico
+
+      - name: Tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest -q -rs
+
+  metadata:
+    name: Desktop and store metadata
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends \
+            appstream desktop-file-utils python3-jsonschema
+
+      - name: AppStream metainfo
+        run: appstreamcli validate --no-net --pedantic flatpak/io.github.gradia64.plico.metainfo.xml
+
+      - name: Desktop entry
+        run: desktop-file-validate flatpak/io.github.gradia64.plico.desktop
+
+      - name: Flatpak manifest schema
+        run: |
+          curl -sSfL -o /tmp/schema.json \
+            https://raw.githubusercontent.com/flatpak/flatpak-builder/main/data/flatpak-manifest.schema.json
+          python3 -c "
+          import json, jsonschema
+          schema = json.load(open('/tmp/schema.json'))
+          for name in ('io.github.gradia64.plico.json', 'python3-pymupdf.json',
+                       'python3-pikepdf.json', 'python3-pyhanko.json'):
+              data = json.load(open('flatpak/' + name))
+              if name.startswith('io.'):
+                  jsonschema.Draft7Validator(schema).validate(data)
+              print('ok', name)
+          "

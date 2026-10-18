@@ -1695,6 +1695,29 @@ build e `flatpak run` richiedono accesso completo; `flatpak-builder-lint` (quell
 che gira sulla CI di Flathub) non è installabile da PyPI e senza un container
 runtime non si può eseguire.
 
+**Screenshot.** `tools/screenshots.py` costruisce due documenti d'esempio,
+apre la `MainWindow` vera senza schermo nella lingua chiesta (inglese di
+default, la lingua dello store) e salva quattro scene in `flatpak/screenshots/`
+(1280×800), che il metainfo elenca con didascalie nelle cinque lingue. Due cose
+servono all'ambiente: il tema di icone Breeze e, con il PySide6 di pip,
+`/usr/share/icons` fra i percorsi dei temi (lo script lo aggiunge: offscreen
+nessuno lo fa, e la barra degli strumenti usciva di sole scritte). Generarli è
+stato anche un collaudo: hanno mostrato che *adatta alla larghezza* rendeva la
+pagina allo zoom vecchio (segni e campi fuori posto) e che un campo cambiato
+mostrava il valore vecchio sotto il nuovo — tutti e due corretti, con il loro
+test. Gli URL nel metainfo puntano a `main`: al rilascio vanno fissati al tag.
+
+**CI** (`.github/workflows/`). `ci.yml`, a ogni push e pull request: test su
+Python 3.11 e 3.13 (le librerie di sistema di §9 più Tesseract, e PyQt6 per
+`pylupdate6`), `ruff`, `mypy`, e un job che valida metainfo (`--pedantic`),
+`.desktop` e lo schema del manifest. `flatpak.yml`, su `main` e a mano: la build
+vera con `org.flatpak.Builder`, `flatpak-builder-lint` sul manifest e sul repo
+(per ora **non bloccante**, finché il modulo `plico` resta `type: dir`), e il
+bundle `plico.flatpak` come artefatto. Due dettagli: su Ubuntu 24.04 serve
+`sysctl kernel.apparmor_restrict_unprivileged_userns=0`, altrimenti bubblewrap
+non può creare la sandbox della build, e state, build e repo stanno **fuori**
+dal checkout, perché il modulo `plico` si costruisce dal checkout stesso.
+
 Per una submission reale: la sorgente `type: dir` del modulo `plico` va
 sostituita con la sorgente `git` del tag di rilascio.
 

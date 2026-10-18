@@ -449,6 +449,10 @@ flatpak run org.flatpak.Builder --force-clean --user --install \
 flatpak run io.github.gradia64.plico
 ```
 
+Gli **screenshot** dello store stanno in `flatpak/screenshots/` e li produce
+`tools/screenshots.py` dall'app vera; nel metainfo puntano a `main`, e al
+rilascio vanno fissati al tag.
+
 Per pubblicare su Flathub la sorgente `type: dir` del modulo `plico` va
 sostituita con la sorgente `git` del tag di rilascio.
 
@@ -460,12 +464,22 @@ sostituita con la sorgente `git` del tag di rilascio.
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q
 
 # lint + tipi
-ruff check src/ tests/
+ruff check src/ tests/ tools/
 mypy src/plico
 
 # avvio
 plico            # oppure: python -m plico.app
+
+# screenshot per lo store (flatpak/screenshots), in inglese o in un'altra lingua
+QT_QPA_PLATFORM=offscreen python tools/screenshots.py [it|es|fr|de]
 ```
+
+La **CI** (GitHub Actions, `.github/workflows/`) fa le stesse cose a ogni push
+e pull request: `ci.yml` esegue test, `ruff` e `mypy` su Python 3.11 e 3.13 e
+valida metainfo, `.desktop` e manifest; `flatpak.yml`, su `main` e a richiesta
+dalla scheda Actions, costruisce il Flatpak vero, lo passa al linter di
+Flathub (`flatpak-builder-lint`) e lascia il pacchetto `plico.flatpak` fra gli
+artefatti della run, da installare con `flatpak install --user plico.flatpak`.
 
 ### Tradurre Plico
 
