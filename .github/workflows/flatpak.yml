@@ -65,8 +65,11 @@ jobs:
             manifest "$MANIFEST"
 
       - name: Build
+        # No --sandbox: it refuses sources outside the manifest's directory,
+        # and the plico module builds from the checkout ("path": ".."). Flathub
+        # builds from a git tag instead, where the question does not arise.
         run: |
-          dbus-run-session -- flatpak run org.flatpak.Builder --user --force-clean --sandbox \
+          dbus-run-session -- flatpak run org.flatpak.Builder --user --force-clean \
             --ccache \
             --state-dir="$WORK/state" --repo="$WORK/repo" \
             "$WORK/build" "$MANIFEST"
