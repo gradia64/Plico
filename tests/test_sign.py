@@ -578,3 +578,115 @@ def test_save_as_of_a_ready_document_matches_a_plain_save(certificate, tmp_path)
         assert one.page_count == two.page_count
         assert [page.rect for page in one] == [page.rect for page in two]
         assert one[0].get_text() == two[0].get_text()
+
+
+# --------------------------------------------------------------------- #
+#  A second signature from the window
+# --------------------------------------------------------------------- #
+
+
+def _sign_from_window(window, monkeypatch, request, target, answer) -> list[str]:
+    """Run File → Firma with the dialogs answered; return the questions asked."""
+    import plico.main_window as window_module
+
+    class FakeDialog:
+        def __init__(self, sizes, parent=None):
+            pass
+
+        def exec(self):
+            return QDialog.DialogCode.Accepted
+
+        def request(self):
+            return request
+
+    asked: list[str] = []
+
+    def question(parent, title, text, *args, **kwargs):
+        asked.append(text)
+        return answer
+
+    monkeypatch.setattr(window_module, "SignDialog", FakeDialog)
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *a, **k: (target, ""))
+    monkeypatch.setattr(QMessageBox, "question", question)
+    window._sign_file()
+    return asked
+
+
+def test_a_second_signature_from_the_window_keeps_the_first_valid(
+    window, certificate, tmp_path, monkeypatch
+) -> None:
+    """The window promises the second signature is added to the first.
+
+    It used to rebuild the file from its pages before signing, and a rebuilt
+    file is new bytes: the first signature came out with ``intact=False``.
+    """
+    source = str(tmp_path / "documento.pdf")
+    first = str(tmp_path / "firmato.pdf")
+    second = str(tmp_path / "firmato-due.pdf")
+    _plain_pdf(source)
+    window.open_document(source)
+    _sign_from_window(window, monkeypatch, _request(certificate[0]), first, None)
+    assert window._signed_on_disk
+
+    asked = _sign_from_window(
+        window,
+        monkeypatch,
+        _request(certificate[0], reason="Seconda"),
+        second,
+        QMessageBox.StandardButton.Yes,
+    )
+
+    assert any("si aggiunge alla prima" in text for text in asked)
+    signatures = read_signatures(second)
+    assert [s.field_name for s in signatures] == ["Firma", "Firma 2"]
+    assert all(s.intact and s.valid for s in signatures)
+    assert signatures[-1].covers_whole_file
+    assert window._save_target == second
+
+
+def test_signing_unsaved_changes_says_the_old_signature_goes(
+    window, certificate, tmp_path, monkeypatch
+) -> None:
+    """Changes can only be signed by rewriting the file: say what that costs."""
+    source = str(tmp_path / "documento.pdf")
+    target = str(tmp_path / "firmato.pdf")
+    _plain_pdf(source)
+    sign_in_place(source, _request(certificate[0]))
+    window.open_document(source)
+    window._rotate_cw_clicked()
+    assert window.is_modified()
+
+    asked = _sign_from_window(
+        window,
+        monkeypatch,
+        _request(certificate[0]),
+        target,
+        QMessageBox.StandardButton.Cancel,
+    )
+
+    assert any("non sarà più valida" in text for text in asked)
+    assert not os.path.exists(target)
+
+
+def test_a_broken_signature_is_never_called_intact(certificate, tmp_path) -> None:
+    """``intact`` comes first: a broken signature on a file that also has
+    later revisions used to read «La firma è integra, ma … modificato dopo»."""
+    source = str(tmp_path / "documento.pdf")
+    signed = str(tmp_path / "firmato.pdf")
+    rebuilt = str(tmp_path / "riscritto.pdf")
+    _plain_pdf(source)
+    sign_in_place(source, _request(certificate[0]))
+    model = DocumentModel()
+    model.open(source)
+    save_as(model, signed)
+    sign_in_place(signed, _request(certificate[0]))
+    model = DocumentModel()
+    model.open(signed)
+    save_signed(model, rebuilt, _request(certificate[0]))
+
+    broken = next(s for s in read_signatures(rebuilt) if not s.intact)
+    text, style = _verdict(broken)
+
+    assert "integra" not in text
+    assert "rotta" in text
+    assert style == "color: #b00020"

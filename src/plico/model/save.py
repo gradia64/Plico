@@ -2,6 +2,7 @@
 
 import contextlib
 import os
+import shutil
 import tempfile
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -411,6 +412,33 @@ def save_signed(
         None,
         optimize=lambda path: sign_in_place(path, request),
     )
+
+
+def sign_copy(source: str, out_path: str, request: SignatureRequest) -> None:
+    """Sign the file *source* exactly as it is on disk, writing *out_path*.
+
+    The way to add a signature to a file that already carries one. Going
+    through :func:`save_signed` would rebuild the file from its pages, and a
+    rebuilt file is new bytes: the signatures it had stop covering anything
+    (measured: the first one reads ``intact=False`` after the second). Here
+    the bytes are copied untouched and pyHanko appends the new signature as
+    an incremental update, which is what leaves the earlier ones valid.
+
+    Same guarantees as every other write: a temporary next to *out_path*,
+    signed there, and swapped in only once it is complete -- *source* and
+    *out_path* may be the same file.
+    """
+    target = os.path.abspath(out_path)
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(target), suffix=".pdf.tmp")
+    os.close(fd)
+    try:
+        shutil.copyfile(source, tmp_path)
+        sign_in_place(tmp_path, request)
+        _adopt(tmp_path, target)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_path)
+        raise
 
 
 def extract_pages(model: DocumentModel, out_path: str, indices: list[int]) -> None:

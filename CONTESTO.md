@@ -1091,6 +1091,17 @@ esso, ed è l'unica cosa nel processo che sa leggere ciò che ha prodotto.
   motivo; `stamp_box(width, height)` dà il rettangolo in basso a destra **in
   coordinate PDF**, e su una pagina troppo piccola rimpicciolisce il riquadro
   invece di farlo uscire dal bordo.
+- **Una seconda firma non riscrive il file.** `save_signed` ricostruisce il
+  documento dalle pagine, e un file ricostruito è fatto di byte nuovi: la
+  firma che c'era smette di coprire qualcosa (misurato: dopo la seconda, la
+  prima leggeva `intact=False`, mentre la finestra prometteva che la seconda
+  «si aggiunge alla prima»). Per un file firmato **senza modifiche non
+  salvate** `_sign_file()` usa `sign_copy(sorgente, destinazione, richiesta)`:
+  copia i byte così come sono e pyHanko accoda la firma in un aggiornamento
+  incrementale. Con modifiche non salvate la sola strada è riscrivere, e la
+  domanda lo dice («la firma che porta ora non sarà più valida»). Il test di
+  `sign_in_place` chiamato due volte non se ne accorgeva: la finestra non passa
+  di lì.
 - **La finestra adotta il file firmato** (`MainWindow._sign_file()`): dopo la
   firma il documento è il file appena scritto. Continuare a lavorare sulla lista
   di pagine che l'ha prodotto significherebbe perdere la firma al primo
@@ -1105,7 +1116,9 @@ esso, ed è l'unica cosa nel processo che sa leggere ciò che ha prodotto.
   modifiche non salvate non sono nei byte) e distingue quattro casi: integra e
   attendibile, integra ma di un certificato sconosciuto (ambra, non rosso),
   integra ma su un documento modificato dopo la firma, e firma rotta o
-  certificato scaduto. `MainWindow._verify_signatures()` avvisa se ci sono
+  certificato scaduto. `_verdict()` guarda **prima** `intact`: una firma
+  rotta su un file che ha anche revisioni successive ha `changed` vero, e con
+  l'ordine vecchio veniva presentata in ambra come «La firma è integra, ma…». `MainWindow._verify_signatures()` avvisa se ci sono
   modifiche non salvate prima di dare un verdetto.
 - **`pyhanko` e `pyhanko_certvalidator` sono messi a tacere**:
   `logging.getLogger("pyhanko").setLevel(logging.CRITICAL)` in testa al modulo.

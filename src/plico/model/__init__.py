@@ -39,6 +39,7 @@ from .save import (
     save_as,
     save_compressed,
     save_signed,
+    sign_copy,
 )
 from .sign import (
     DEFAULT_FIELD,
@@ -107,6 +108,7 @@ __all__ = [
     "save_as",
     "save_compressed",
     "save_signed",
+    "sign_copy",
     "sign_in_place",
     "span_at",
     "stamp_box",

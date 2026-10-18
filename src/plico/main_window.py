@@ -60,6 +60,7 @@ from .model import (
     parse_page_ranges,
     save_as,
     save_signed,
+    sign_copy,
 )
 from .rendering import RenderWorker
 from .widgets.compress import CompressionDialog, CompressionTask, format_size
@@ -1029,14 +1030,30 @@ class MainWindow(QMainWindow):
                 self, self.tr("Attenzione"), self.tr("Nessun documento aperto.")
             )
             return
+        # A signed file with nothing changed is signed as it is on disk, with
+        # the new signature appended: only that keeps the first one valid.
+        # Unsaved changes can only be signed by rebuilding the file, and a
+        # rebuilt file is new bytes the old signature does not cover.
+        self._page_view.finish_text_edit()
+        self._page_view.finish_field_edit()
+        on_disk = self._signed_on_disk and not self.is_modified() and bool(self._save_target)
         if self._signed_on_disk:
+            name = os.path.basename(self._save_target or "")
+            if on_disk:
+                text = self.tr(
+                    "«{0}» è già firmato.\n\nUna seconda firma si aggiunge alla "
+                    "prima, non la sostituisce: vuoi continuare?"
+                ).format(name)
+            else:
+                text = self.tr(
+                    "«{0}» è firmato, ma ha modifiche non salvate.\n\nPer firmarle il "
+                    "file va riscritto, e la firma che porta ora non sarà più valida. "
+                    "Vuoi continuare?"
+                ).format(name)
             choice = QMessageBox.question(
                 self,
                 self.tr("Documento già firmato"),
-                self.tr(
-                    "«{0}» è già firmato.\n\nUna seconda firma si aggiunge alla "
-                    "prima, non la sostituisce: vuoi continuare?"
-                ).format(os.path.basename(self._save_target or "")),
+                text,
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
                 QMessageBox.StandardButton.Cancel,
             )
@@ -1057,8 +1074,15 @@ class MainWindow(QMainWindow):
         )
         if not path:
             return
+        # Computed BEFORE writing, as in _save_to: the swap gives the target a
+        # new inode.
+        overwritten = self._doc_model.sources_at(path)
         try:
-            save_signed(self._doc_model, path, request)
+            if on_disk:
+                assert self._save_target is not None
+                sign_copy(self._save_target, path, request)
+            else:
+                save_signed(self._doc_model, path, request)
         # MuPDF, pyHanko and the filesystem all have their own exception types
         # here; what the user needs is the reason, not the class.
         except Exception as error:  # noqa: BLE001
@@ -1069,7 +1093,6 @@ class MainWindow(QMainWindow):
 
         # The signed file IS the document now: the pages on screen describe
         # the unsigned version, and any later save would drop the signature.
-        overwritten = self._doc_model.sources_at(path)
         for source in overwritten:
             self._worker.evict_requested.emit(source)
         if not self.open_path(path):

@@ -302,6 +302,14 @@ def _verdict(signature: Signature) -> tuple[str, str]:
     """What to say about one signature, and how loudly."""
     if signature.error:
         return signature.error, _BAD
+    # First, before "changed": a broken signature over a file that also has
+    # later revisions is still broken, and calling it "integra" would be the
+    # one reassurance this dialog must never give.
+    if not signature.intact:
+        return (
+            "La firma è rotta: il contenuto che copriva è stato cambiato dopo la firma.",
+            _BAD,
+        )
     if signature.changed:
         return (
             (
@@ -311,7 +319,7 @@ def _verdict(signature: Signature) -> tuple[str, str]:
             _WARN,
         )
     if not signature.valid:
-        return "La firma non è valida: il contenuto sotto di essa è cambiato.", _BAD
+        return "La firma non è valida: non corrisponde al certificato che la porta.", _BAD
     if not signature.trusted:
         return (
             (
