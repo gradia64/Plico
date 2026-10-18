@@ -1253,7 +1253,19 @@ class MainWindow(QMainWindow):
             )
             return
 
-        preview.keep()
+        try:
+            preview.keep()
+        # The swap can still fail here -- the destination became read-only,
+        # or its directory went away while the passes ran. Said in a dialog,
+        # and the temporary is not left next to it: nobody would ever claim it.
+        except OSError as error:
+            preview.drop()
+            QMessageBox.critical(
+                self,
+                self.tr("Errore"),
+                self.tr("Impossibile salvare il file compresso:\n{0}").format(error),
+            )
+            return
         path = preview.target
 
         # Same as _save_file: a compressed copy written over a source has

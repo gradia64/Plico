@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 from radio_forms import radio_pdf
 
 import plico.main_window
+import plico.model.save
 from plico.main_window import MainWindow
 from plico.model import LEVELS, LEVELS_BY_KEY, CompressionOptions, parse_page_ranges
 from plico.model.commands import DeletePage, RotatePage
@@ -1307,6 +1308,39 @@ def test_compress_writes_a_smaller_copy_and_leaves_the_source_alone(
     assert messaggi and "Prima:" in messaggi[0], f"il guadagno va raccontato: {messaggi}"
     assert mw._progress is None, "il dialogo di avanzamento deve sparire"
     assert mw._compression_task is None
+
+
+def test_a_compressed_file_that_cannot_be_kept_is_reported_and_cleaned_up(
+    qapp, tmp_path, monkeypatch, windows
+):
+    """The swap after the passes can fail too: it used to raise out of the
+    slot, with no dialog and the temporary left next to the destination."""
+    pdf = str(tmp_path / "doc.pdf")
+    _fragmented(pdf)
+    out = str(tmp_path / "doc-compresso.pdf")
+
+    mw = windows()
+    _open(mw, pdf)
+    errors: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox, "critical", staticmethod(lambda _p, _t, text, *a, **k: errors.append(text))
+    )
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (out, "")))
+
+    def refuse(preview):
+        # The passes are done; only the swap into place fails.
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(plico.model.save.CompressionPreview, "keep", refuse)
+    _chosen_level(monkeypatch, "light")
+
+    mw._compress_file()
+    _wait_for_compression(mw)
+
+    assert errors and "Permission denied" in errors[0]
+    assert not os.path.exists(out)
+    assert [name for name in os.listdir(tmp_path) if name.endswith(".tmp")] == []
 
 
 def test_compress_writes_the_virtual_document(qapp, tmp_path, monkeypatch, windows):
