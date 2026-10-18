@@ -110,7 +110,10 @@ def _room(page: pymupdf.Page, spans: list[dict], rect: pymupdf.Rect) -> float:
     are invisible to the line -- the prototype let a longer text run straight
     through both.
     """
-    right = page.rect.x1 - _PAGE_MARGIN
+    # The page edge in PAGE space. ``page.rect`` is already turned by /Rotate,
+    # so on a quarter-turned A4 it is 842 wide while the spans live in a space
+    # 595 wide, and a longer text was let run 210 points off the page.
+    right = (page.rect * page.derotation_matrix).x1 - _PAGE_MARGIN
     for other in spans:
         o = pymupdf.Rect(other["bbox"])
         if o.x0 >= rect.x1 - 0.5 and o.y0 < rect.y1 and o.y1 > rect.y0:

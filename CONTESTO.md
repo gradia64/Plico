@@ -880,7 +880,10 @@ commerciale con testo bianco su sfondo, un PDF con font Type3).
   invisibili alla riga, e il prototipo scriveva «Licenze software» dentro la
   cella dell'importo. `_room()` guarda il testo di **tutti** i blocchi alla
   stessa altezza e le **linee verticali** (anche i rettangoli sottili, che
-  molti produttori usano come filetti). Oltre lo spazio il testo si
+  molti produttori usano come filetti). Il bordo della pagina si prende in
+  spazio pagina (`page.rect * page.derotation_matrix`), non da `page.rect`:
+  quello è già ruotato, e su un A4 con `/Rotate 90` lasciava correre il testo
+  fino a 806 pt su una pagina larga 595. Oltre lo spazio il testo si
   rimpicciolisce fino a `MIN_SCALE = 0.8`, sotto si rifiuta.
 - **Rifiutati, con un messaggio:** testo non orizzontale e font **Type3** (i
   glifi sono disegni: il colore sta nel glifo, quindi lo span dice «nero», e

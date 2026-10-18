@@ -377,3 +377,17 @@ def test_editing_a_line_leaves_the_lines_around_it_whole(no_system_fonts, leadin
     assert "Riga nuova" in text
     assert "Riga sopra yyy" in text
     assert "Seconda riga TALL" in text
+
+
+@pytest.mark.parametrize("rotation", [0, 90, 180, 270])
+def test_the_room_ends_at_the_page_edge_on_a_rotated_page(rotation):
+    """``page.rect`` is turned by /Rotate, the spans are not: on a quarter
+    turn the right edge was taken from the page's height, 842 instead of 595."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=595, height=842)
+    page.insert_text((400, 100), "Corto", fontsize=12)
+    page.set_rotation(rotation)
+
+    span = _span(page, "Corto")
+
+    assert span.bbox[2] + span.room <= 595 - 36
