@@ -258,6 +258,26 @@ def test_fields_survive_a_redaction_elsewhere(tmp_path):
     assert _values(output)["nome"] == "Anna"
 
 
+def test_a_redaction_over_a_field_takes_the_field_away(tmp_path):
+    """A field is a widget, not content: apply_redactions() leaves it alone,
+    and the value typed into it came out of the save intact (measured)."""
+    model, _ = _opened(tmp_path)
+    output = str(tmp_path / "out.pdf")
+
+    model.pages[0].form_values["nome"] = "Mario Rossi"
+    model.pages[0].redactions.append(RedactionRect.from_corners(60, 95, 320, 132))
+    save_as(model, output)
+
+    values = _values(output)
+    assert "nome" not in values
+    assert "Mario Rossi" not in values.values()
+    # The fields away from the mark stay, value and all.
+    assert {"nota", "accetto", "colore"} <= set(values)
+    assert values["colore"] == "rosso"
+    with pymupdf.open(output) as doc:
+        assert "Mario Rossi" not in doc[0].get_text()
+
+
 def test_geometry_does_not_change_with_a_rotated_page(tmp_path):
     """A field's rectangle lives in page space, like the redaction one."""
     upright = str(tmp_path / "dritto.pdf")

@@ -764,7 +764,11 @@ eliminare quelle che toccano un rettangolo di redazione, perché
 `apply_redactions()` toglie il **contenuto** ma lascia l'annotazione in piedi
 (misurato: una nota «SEGRETO» appoggiata sulla parola redatta sopravviveva al
 salvataggio, cioè trapelava proprio ciò che la redazione doveva nascondere). Un
-commento lontano dal segno resta nel file.
+commento lontano dal segno resta nel file. Lo stesso vale per i **campi dei
+moduli**, con un ciclo a parte: `page.annots()` non elenca i widget e
+`apply_redactions()` non li tocca, quindi un campo compilato con «Mario Rossi»
+e coperto da una zona usciva dal salvataggio con il suo valore (misurato).
+`_redact()` elimina anche ogni widget che tocca un segno (`delete_widget`).
 
 ### Compilazione dei form (`model/forms.py`)
 

@@ -82,9 +82,17 @@ def _redact(page: pymupdf.Page, item: PageItem) -> None:
     # would leak exactly what the redaction was meant to hide (measured). So
     # anything that touches a rectangle goes with it -- the same rule the eye
     # applies to a redaction.
+    marks = [pymupdf.Rect(*r.as_tuple()) for r in item.redactions]
     for annot in list(page.annots() or []):
-        if any(annot.rect.intersects(pymupdf.Rect(*r.as_tuple())) for r in item.redactions):
+        if any(annot.rect.intersects(mark) for mark in marks):
             page.delete_annot(annot)
+    # Form fields too, and they need their own loop: ``annots()`` leaves the
+    # widgets out, and apply_redactions() does not touch them either. A field
+    # filled in with «Mario Rossi» and covered by a mark came out of the save
+    # with its value intact (measured).
+    for widget in list(page.widgets() or []):
+        if any(widget.rect.intersects(mark) for mark in marks):
+            page.delete_widget(widget)
 
 
 def _edit_text(page: pymupdf.Page, item: PageItem) -> None:
