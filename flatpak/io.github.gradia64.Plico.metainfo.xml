@@ -5,33 +5,75 @@
   <project_license>GPL-3.0-or-later</project_license>
 
   <name>Plico</name>
-  <summary>Un vero editor PDF nativo per Linux</summary>
-  <summary xml:lang="en">A true native PDF editor for Linux</summary>
+  <summary>A true native PDF editor for Linux</summary>
+  <summary xml:lang="it">Un vero editor PDF nativo per Linux</summary>
+  <summary xml:lang="es">Un verdadero editor de PDF nativo para Linux</summary>
+  <summary xml:lang="fr">Un véritable éditeur PDF natif pour Linux</summary>
+  <summary xml:lang="de">Ein echter nativer PDF-Editor für Linux</summary>
 
   <description>
-    <p>
-      Plico è un editor PDF nativo per Linux: riunisce in un'unica applicazione
-      quello che oggi richiede PDF Arranger, Xournal++ e i comandi da terminale
-      come qpdf.
-    </p>
-    <p>Funzioni disponibili in questa versione:</p>
+    <p>Plico is a native PDF editor for Linux: it brings together in one application what today takes PDF Arranger, Xournal++ and command-line tools such as qpdf.</p>
+    <p xml:lang="it">Plico è un editor PDF nativo per Linux: riunisce in un'unica applicazione quello che oggi richiede PDF Arranger, Xournal++ e i comandi da terminale come qpdf.</p>
+    <p xml:lang="es">Plico es un editor de PDF nativo para Linux: reúne en una sola aplicación lo que hoy requiere PDF Arranger, Xournal++ y herramientas de terminal como qpdf.</p>
+    <p xml:lang="fr">Plico est un éditeur PDF natif pour Linux : il réunit dans une seule application ce qui demande aujourd'hui PDF Arranger, Xournal++ et des outils en ligne de commande comme qpdf.</p>
+    <p xml:lang="de">Plico ist ein nativer PDF-Editor für Linux: Er vereint in einer Anwendung, wofür man heute PDF Arranger, Xournal++ und Kommandozeilenwerkzeuge wie qpdf braucht.</p>
+    <p>What it can do:</p>
+    <p xml:lang="it">Cosa sa fare:</p>
+    <p xml:lang="es">Lo que puede hacer:</p>
+    <p xml:lang="fr">Ce qu'il sait faire :</p>
+    <p xml:lang="de">Was er kann:</p>
     <ul>
-      <li>Ruotare, eliminare e riordinare le pagine, anche con drag &amp; drop</li>
-      <li>Unire più PDF, anche protetti da password: le pagine vengono accodate senza copiarle</li>
-      <li>Estrarre un sottoinsieme di pagine in un nuovo file</li>
-      <li>Comprimere il documento al salvataggio, su tre livelli</li>
-      <li>Cancellare davvero un dato: il testo sparisce dal file, non viene coperto</li>
-      <li>Compilare i moduli AcroForm e correggere una riga di testo</li>
-      <li>Riconoscere con l'OCR il testo di una scansione e renderla cercabile</li>
-      <li>Firmare il documento con una firma digitale PAdES e verificarne le firme</li>
-      <li>Annullare e ripristinare ogni operazione</li>
-      <li>Rendering asincrono e pigro: l'interfaccia non si blocca mai</li>
+      <li>Rotate, delete and reorder pages, also by drag and drop</li>
+      <li xml:lang="it">Ruotare, eliminare e riordinare le pagine, anche con il trascinamento</li>
+      <li xml:lang="es">Girar, eliminar y reordenar páginas, también arrastrándolas</li>
+      <li xml:lang="fr">Pivoter, supprimer et réordonner les pages, aussi par glisser-déposer</li>
+      <li xml:lang="de">Seiten drehen, löschen und umsortieren, auch per Drag and Drop</li>
+      <li>Merge PDFs, including password-protected ones, and add photos and scans</li>
+      <li xml:lang="it">Unire più PDF, anche protetti da password, e aggiungere foto e scansioni</li>
+      <li xml:lang="es">Unir varios PDF, incluso protegidos con contraseña, y añadir fotos y escaneos</li>
+      <li xml:lang="fr">Fusionner des PDF, même protégés par mot de passe, et ajouter photos et scans</li>
+      <li xml:lang="de">PDFs zusammenführen, auch passwortgeschützte, und Fotos und Scans hinzufügen</li>
+      <li>Create a PDF from images and extract pages into a new file</li>
+      <li xml:lang="it">Creare un PDF da immagini ed estrarre pagine in un nuovo file</li>
+      <li xml:lang="es">Crear un PDF a partir de imágenes y extraer páginas a un archivo nuevo</li>
+      <li xml:lang="fr">Créer un PDF à partir d'images et extraire des pages dans un nouveau fichier</li>
+      <li xml:lang="de">Ein PDF aus Bildern erstellen und Seiten in eine neue Datei extrahieren</li>
+      <li>Really erase confidential data: the text leaves the file, it is not just covered</li>
+      <li xml:lang="it">Cancellare davvero un dato riservato: il testo esce dal file, non viene coperto</li>
+      <li xml:lang="es">Borrar de verdad un dato confidencial: el texto sale del archivo, no se tapa</li>
+      <li xml:lang="fr">Effacer réellement une donnée confidentielle : le texte quitte le fichier, il n'est pas seulement masqué</li>
+      <li xml:lang="de">Vertrauliche Daten wirklich löschen: Der Text verlässt die Datei, er wird nicht nur verdeckt</li>
+      <li>Fill in PDF forms and correct a line of text in place</li>
+      <li xml:lang="it">Compilare i moduli PDF e correggere una riga di testo dove si trova</li>
+      <li xml:lang="es">Rellenar formularios PDF y corregir una línea de texto en su sitio</li>
+      <li xml:lang="fr">Remplir des formulaires PDF et corriger une ligne de texte sur place</li>
+      <li xml:lang="de">PDF-Formulare ausfüllen und eine Textzeile direkt korrigieren</li>
+      <li>Recognize the text of a scan with OCR and make it searchable</li>
+      <li xml:lang="it">Riconoscere con l'OCR il testo di una scansione e renderla cercabile</li>
+      <li xml:lang="es">Reconocer con OCR el texto de un escaneo y hacerlo buscable</li>
+      <li xml:lang="fr">Reconnaître par OCR le texte d'un scan et le rendre cherchable</li>
+      <li xml:lang="de">Den Text eines Scans per OCR erkennen und durchsuchbar machen</li>
+      <li>Sign with a PAdES digital signature and verify the signatures of a document</li>
+      <li xml:lang="it">Firmare con una firma digitale PAdES e verificare le firme di un documento</li>
+      <li xml:lang="es">Firmar con una firma digital PAdES y verificar las firmas de un documento</li>
+      <li xml:lang="fr">Signer avec une signature numérique PAdES et vérifier les signatures d'un document</li>
+      <li xml:lang="de">Mit einer digitalen PAdES-Signatur signieren und die Signaturen eines Dokuments prüfen</li>
+      <li>Compress on saving, choosing how much and what</li>
+      <li xml:lang="it">Comprimere al salvataggio, scegliendo quanto e cosa</li>
+      <li xml:lang="es">Comprimir al guardar, eligiendo cuánto y qué</li>
+      <li xml:lang="fr">Compresser à l'enregistrement, en choisissant combien et quoi</li>
+      <li xml:lang="de">Beim Speichern komprimieren, mit Wahl von wie stark und was</li>
+      <li>Undo and redo every operation</li>
+      <li xml:lang="it">Annullare e ripristinare ogni operazione</li>
+      <li xml:lang="es">Deshacer y rehacer cada operación</li>
+      <li xml:lang="fr">Annuler et rétablir chaque opération</li>
+      <li xml:lang="de">Jeden Schritt rückgängig machen und wiederholen</li>
     </ul>
-    <p>
-      Il file non viene mai modificato finché non si salva: il documento aperto
-      è una lista di pagine virtuali che puntano ai PDF originali, letti in sola
-      lettura. Questo rende l'annullamento immediato e il salvataggio sicuro.
-    </p>
+    <p>The file is never modified until you save: the open document is a list of virtual pages pointing at the original PDFs, which are only read. That makes undo immediate and saving safe.</p>
+    <p xml:lang="it">Il file non viene mai modificato finché non si salva: il documento aperto è una lista di pagine virtuali che puntano ai PDF originali, letti in sola lettura. Questo rende l'annullamento immediato e il salvataggio sicuro.</p>
+    <p xml:lang="es">El archivo nunca se modifica hasta que se guarda: el documento abierto es una lista de páginas virtuales que apuntan a los PDF originales, que solo se leen. Eso hace que deshacer sea inmediato y guardar, seguro.</p>
+    <p xml:lang="fr">Le fichier n'est jamais modifié avant l'enregistrement : le document ouvert est une liste de pages virtuelles qui pointent vers les PDF d'origine, lus seulement. Cela rend l'annulation immédiate et l'enregistrement sûr.</p>
+    <p xml:lang="de">Die Datei wird erst beim Speichern verändert: Das geöffnete Dokument ist eine Liste virtueller Seiten, die auf die ursprünglichen PDFs zeigen, die nur gelesen werden. Das macht Rückgängig sofort und Speichern sicher.</p>
   </description>
 
   <launchable type="desktop-id">io.github.gradia64.Plico.desktop</launchable>
@@ -48,16 +90,69 @@
 
   <keywords>
     <keyword>PDF</keyword>
-    <keyword>pagine</keyword>
-    <keyword>ruota</keyword>
-    <keyword>unisci</keyword>
-    <keyword>estrai</keyword>
-    <keyword>comprimi</keyword>
+    <keyword>pages</keyword>
+    <keyword>rotate</keyword>
+    <keyword>merge</keyword>
+    <keyword>extract</keyword>
+    <keyword>compress</keyword>
+    <keyword>redact</keyword>
     <keyword>OCR</keyword>
-    <keyword>scansione</keyword>
-    <keyword>firma</keyword>
-    <keyword>firmare</keyword>
+    <keyword>scan</keyword>
+    <keyword>sign</keyword>
+    <keyword>form</keyword>
+    <keyword xml:lang="it">PDF</keyword>
+    <keyword xml:lang="it">pagine</keyword>
+    <keyword xml:lang="it">ruota</keyword>
+    <keyword xml:lang="it">unisci</keyword>
+    <keyword xml:lang="it">estrai</keyword>
+    <keyword xml:lang="it">comprimi</keyword>
+    <keyword xml:lang="it">cancella</keyword>
+    <keyword xml:lang="it">OCR</keyword>
+    <keyword xml:lang="it">scansione</keyword>
+    <keyword xml:lang="it">firma</keyword>
+    <keyword xml:lang="it">modulo</keyword>
+    <keyword xml:lang="es">PDF</keyword>
+    <keyword xml:lang="es">páginas</keyword>
+    <keyword xml:lang="es">girar</keyword>
+    <keyword xml:lang="es">unir</keyword>
+    <keyword xml:lang="es">extraer</keyword>
+    <keyword xml:lang="es">comprimir</keyword>
+    <keyword xml:lang="es">borrar</keyword>
+    <keyword xml:lang="es">OCR</keyword>
+    <keyword xml:lang="es">escaneo</keyword>
+    <keyword xml:lang="es">firmar</keyword>
+    <keyword xml:lang="es">formulario</keyword>
+    <keyword xml:lang="fr">PDF</keyword>
+    <keyword xml:lang="fr">pages</keyword>
+    <keyword xml:lang="fr">pivoter</keyword>
+    <keyword xml:lang="fr">fusionner</keyword>
+    <keyword xml:lang="fr">extraire</keyword>
+    <keyword xml:lang="fr">compresser</keyword>
+    <keyword xml:lang="fr">caviarder</keyword>
+    <keyword xml:lang="fr">OCR</keyword>
+    <keyword xml:lang="fr">scan</keyword>
+    <keyword xml:lang="fr">signer</keyword>
+    <keyword xml:lang="fr">formulaire</keyword>
+    <keyword xml:lang="de">PDF</keyword>
+    <keyword xml:lang="de">Seiten</keyword>
+    <keyword xml:lang="de">drehen</keyword>
+    <keyword xml:lang="de">zusammenführen</keyword>
+    <keyword xml:lang="de">extrahieren</keyword>
+    <keyword xml:lang="de">komprimieren</keyword>
+    <keyword xml:lang="de">schwärzen</keyword>
+    <keyword xml:lang="de">OCR</keyword>
+    <keyword xml:lang="de">Scan</keyword>
+    <keyword xml:lang="de">signieren</keyword>
+    <keyword xml:lang="de">Formular</keyword>
   </keywords>
+
+  <languages>
+    <lang percentage="100">it</lang>
+    <lang percentage="100">en</lang>
+    <lang percentage="100">es</lang>
+    <lang percentage="100">fr</lang>
+    <lang percentage="100">de</lang>
+  </languages>
 
   <developer id="io.github.gradia64">
     <name>gradia64</name>
@@ -66,6 +161,7 @@
   <url type="homepage">https://github.com/gradia64/Plico</url>
   <url type="bugtracker">https://github.com/gradia64/Plico/issues</url>
   <url type="vcs-browser">https://github.com/gradia64/Plico</url>
+  <url type="translate">https://github.com/gradia64/Plico/tree/main/src/plico/translations</url>
 
   <content_rating type="oars-1.1"/>
 
