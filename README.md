@@ -580,3 +580,19 @@ scorciatoia a due voci di un menu.
 ## Licenza
 
 GPL v3 — vedi [LICENSE](LICENSE).
+
+## About
+
+Un vero editor PDF nativo per Linux: unisci, dividi, ruota, riordina, salva. Qt6 + PySide6 + PyMuPDF.
+
+### Topics
+
+[desktop-application](https://github.com/topics/desktop-application) [flatpak](https://github.com/topics/flatpak) [kde](https://github.com/topics/kde) [linux](https://github.com/topics/linux) [pdf](https://github.com/topics/pdf) [pdf-editor](https://github.com/topics/pdf-editor) [pymupdf](https://github.com/topics/pymupdf) [pyside6](https://github.com/topics/pyside6) [python](https://github.com/topics/python) [qt6](https://github.com/topics/qt6)
+
+### Resources
+
+[Readme](https://github.com/gradia64/Plico#readme-ov-file)
+
+[GPL-3.0 license](https://github.com/gradia64/Plico#GPL-3.0-1-ov-file)
+
+[Activity](https://github.com/gradia64/Plico/activity)
