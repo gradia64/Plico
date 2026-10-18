@@ -508,7 +508,16 @@ che non porta pagine non deve lasciare un comando vuoto nello stack, e un
 `redo()` che rileggesse il file lo farebbe scrivere pagine diverse da quelle
 che l'utente ha visto. `redo()` accoda la sorgente e allunga `pages`; `undo()`
 taglia `pages[-n:]` e toglie la sorgente: è tutto quello che serve, perché le
-pagine appese puntano a una sorgente che nessun'altra pagina usa. Il nome è
+pagine appese puntano a una sorgente che nessun'altra pagina usa.
+
+**Il `source_id` liberato da un undo viene riusato** dall'unione successiva,
+per un file diverso, e le chiavi di render lo contengono: senza fare niente, le
+pagine del file nuovo venivano mostrate con i pixel di quello tolto (misurato:
+una pagina blu mostrata rossa, mentre il salvataggio la scriveva blu). Per
+questo, a ogni `changed`, `PageView._forget_dropped_sources()` e
+`thumbnail_bar.forget_dropped_sources()` scartano dalle cache le chiavi con un
+`source_id` oltre `len(sources)`: le sorgenti escono solo dalla coda, quindi
+sono esattamente quelle sparite. Il nome è
 `QCoreApplication.translate("AppendDocument", "Unisci «{0}»")` con il nome del
 file, così Ctrl+Z dice cosa sta per togliere.
 

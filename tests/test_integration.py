@@ -645,6 +645,49 @@ def test_merge_appends_a_second_source(windows, tmp_path):
     assert mw._thumb_bar._model.rowCount() == 8
 
 
+def _filled_pdf(path: str, fill: tuple[float, float, float]) -> None:
+    with pymupdf.open() as doc:
+        page = doc.new_page()
+        page.draw_rect(page.rect, color=None, fill=fill)
+        doc.save(path)
+
+
+def test_a_merge_after_an_undone_merge_shows_its_own_pages(windows, tmp_path):
+    """Undoing a merge frees its source id, and the next merge reuses it.
+
+    The renders of the undone file used to answer for the new one: page 2 of
+    the blue file was shown red, while the save wrote it blue.
+    """
+    white, red, blue = (str(tmp_path / f"{name}.pdf") for name in ("w", "r", "b"))
+    _filled_pdf(white, (1, 1, 1))
+    _filled_pdf(red, (1, 0, 0))
+    _filled_pdf(blue, (0, 0, 1))
+
+    mw = windows()
+    mw.resize(800, 700)
+    mw.show()
+    _open(mw, white)
+    mw.merge_path(red)
+    _pump()
+    thumbs_before = len(mw._thumbnail_cache)
+    mw._undo_stack.undo()
+    _pump()
+    assert not [key for key in mw._thumbnail_cache if key[1] == 1]
+    assert not [key for key in mw._page_view._cache if key[1] == 1]
+    mw.merge_path(blue)
+    _pump(1.5)
+
+    assert thumbs_before > 0
+    canvas = mw._page_view._canvases[1]
+    image = canvas.label.pixmap().toImage()
+    colour = image.pixelColor(image.width() // 2, image.height() // 2)
+    assert (colour.red(), colour.blue()) == (0, 255), "la pagina unita deve essere blu"
+    thumb = mw._thumbnail_cache.get(thumb_key(mw._doc_model.pages[1], THUMB_ZOOM, 1.0))
+    if thumb is not None:
+        pixel = thumb.pixelColor(thumb.width() // 2, thumb.height() // 2)
+        assert (pixel.red(), pixel.blue()) == (0, 255)
+
+
 def test_merged_page_identity_does_not_collide(windows, tmp_path):
     """Both sources contain a page 0; they must remain distinct pages."""
     pdf_a = str(tmp_path / "a.pdf")

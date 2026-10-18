@@ -767,6 +767,7 @@ class PageView(QScrollArea):
         self._close_field_editor()
         self._hide_notice()
         first_page = self._first_visible_page()
+        self._forget_dropped_sources(len(self._model.sources))
         self._items = list(self._model.pages)
         # No size list to copy: each item carries its own oriented size.
         self._rebuild_canvases()
@@ -785,6 +786,18 @@ class PageView(QScrollArea):
             # would leave that page impossible to select.
             canvas.words = None
             canvas.label.update()
+
+    def _forget_dropped_sources(self, source_count: int) -> None:
+        """Drop the renders of sources the document no longer has.
+
+        Undoing a merge frees its source id and the next merge reuses it for
+        another file: without this, the pages of that file were shown with
+        the pixels of the one whose merge had been undone (see
+        ``thumbnail_bar.forget_dropped_sources``, the same rule for the bar).
+        """
+        for key in [key for key in self._cache if key[1] >= source_count]:
+            old = self._cache.pop(key)
+            self._cache_bytes -= old.width() * old.height() * 4
 
     @staticmethod
     def _identity(item: PageItem) -> tuple[int, int]:

@@ -89,6 +89,8 @@ class ThumbnailModel(QAbstractListModel):
         self._dpr = dpr or 1.0
 
     def _on_doc_changed(self) -> None:
+        # Before the reset, so the first data() after it cannot find them.
+        forget_dropped_sources(self._cache, len(self._doc_model.sources))
         self.beginResetModel()
         self.endResetModel()
 
@@ -386,6 +388,20 @@ class ThumbnailBar(QListView):
         if to_row == from_row:
             return
         self.move_requested.emit(from_row, to_row)
+
+
+def forget_dropped_sources(cache: OrderedDict, source_count: int) -> None:
+    """Drop the renders of sources the document no longer has.
+
+    A source id is a position in ``DocumentModel.sources``, and undoing a merge
+    gives that position back: the next merge reuses it for a different file.
+    Its renders would then answer for pages they never showed -- measured, a
+    blue page displayed in the red of the file whose merge had been undone,
+    while the save wrote the blue one. Sources only ever leave from the end
+    (the undo stack is LIFO), so "beyond the count" is exactly the gone ones.
+    """
+    for key in [key for key in cache if len(key) > 1 and key[1] >= source_count]:
+        del cache[key]
 
 
 def _is_stale_thumb_key(key: tuple, item: PageItem) -> bool:
