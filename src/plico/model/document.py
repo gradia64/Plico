@@ -332,8 +332,12 @@ class DocumentModel(QObject):
         """
         if not os.path.exists(path):
             return []
+        # Only the sources some page points into: an undone merge leaves its
+        # source registered (ids are never reused), and writing over a file
+        # no page reads invalidates nothing.
+        used = {item.source_id for item in self.pages}
         found: list[str] = []
-        for source in self.sources:
+        for source in (self.sources[source_id] for source_id in sorted(used)):
             try:
                 if os.path.exists(source) and os.path.samefile(path, source):
                     found.append(source)

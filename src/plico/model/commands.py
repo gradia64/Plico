@@ -98,6 +98,13 @@ class AppendDocument(QUndoCommand):
     empty step on the undo stack. Reading them once also means ``redo`` never
     goes back to a file the user may have changed in the meantime, and it is
     why the source is registered here rather than by the model.
+
+    Undo takes the pages away but leaves the source REGISTERED, unused. A
+    source id is part of every render key, and an id given back by an undo was
+    handed to the next merge for a different file: its pages were then shown
+    with the pixels of the file whose merge had been undone. Ids are never
+    reused, so nothing keyed on one can answer for another file -- not even a
+    render still on its way back from the worker.
     """
 
     def __init__(
@@ -119,18 +126,20 @@ class AppendDocument(QUndoCommand):
         self._items = items
 
     def redo(self) -> None:
-        assert self._source_id == len(self._model.sources), (
-            "the undo stack is LIFO: a merge can only be redone on top of "
-            "exactly the sources it was read against"
-        )
-        self._model.sources.append(self._path)
+        sources = self._model.sources
+        if self._source_id == len(sources):
+            sources.append(self._path)
+        else:
+            # A redo after an undo: the source stayed registered (see above).
+            assert sources[self._source_id] == self._path, (
+                "a merge is redone against exactly the source it was read from"
+            )
         self._model.pages.extend(self._items)
         self._model.changed.emit()
 
     def undo(self) -> None:
         count = len(self._items)
         del self._model.pages[len(self._model.pages) - count :]
-        self._model.sources.pop()
         self._model.changed.emit()
 
 

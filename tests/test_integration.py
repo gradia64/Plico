@@ -654,10 +654,11 @@ def _filled_pdf(path: str, fill: tuple[float, float, float]) -> None:
 
 
 def test_a_merge_after_an_undone_merge_shows_its_own_pages(windows, tmp_path):
-    """Undoing a merge frees its source id, and the next merge reuses it.
-
-    The renders of the undone file used to answer for the new one: page 2 of
-    the blue file was shown red, while the save wrote it blue.
+    """Undoing a merge used to give its source id back, and the next merge
+    reused it for another file: the renders of the undone file answered for the
+    new one, and page 2 of the blue file was shown red while the save wrote it
+    blue. Ids are never reused now -- so not even a render of the old file
+    still on its way back from the worker can land on the new page.
     """
     white, red, blue = (str(tmp_path / f"{name}.pdf") for name in ("w", "r", "b"))
     _filled_pdf(white, (1, 1, 1))
@@ -669,16 +670,22 @@ def test_a_merge_after_an_undone_merge_shows_its_own_pages(windows, tmp_path):
     mw.show()
     _open(mw, white)
     mw.merge_path(red)
+    mw._page_view.ensure_page_visible(1)
     _pump()
-    thumbs_before = len(mw._thumbnail_cache)
+    red_key = mw._page_view._canvases[1].current_key
+    assert red_key is not None and red_key[1] == 1
+    red_image = mw._page_view._canvases[1].label.pixmap().toImage()
     mw._undo_stack.undo()
     _pump()
-    assert not [key for key in mw._thumbnail_cache if key[1] == 1]
-    assert not [key for key in mw._page_view._cache if key[1] == 1]
     mw.merge_path(blue)
+    mw._page_view.ensure_page_visible(1)
     _pump(1.5)
 
-    assert thumbs_before > 0
+    assert mw._doc_model.pages[1].source_id == 2, "un id liberato non si riusa"
+    # A late render of the red page, as if it had still been in flight.
+    mw._worker.rendered.emit(red_key, red_image)
+    _pump(0.2)
+
     canvas = mw._page_view._canvases[1]
     image = canvas.label.pixmap().toImage()
     colour = image.pixelColor(image.width() // 2, image.height() // 2)
@@ -687,6 +694,26 @@ def test_a_merge_after_an_undone_merge_shows_its_own_pages(windows, tmp_path):
     if thumb is not None:
         pixel = thumb.pixelColor(thumb.width() // 2, thumb.height() // 2)
         assert (pixel.red(), pixel.blue()) == (0, 255)
+
+
+def test_saving_over_a_file_whose_merge_was_undone_keeps_the_history(
+    windows, tmp_path, monkeypatch
+):
+    """The undone source stays registered, but no page reads it: writing over
+    it is an ordinary save elsewhere, not a reason to reopen the document."""
+    first, merged = str(tmp_path / "a.pdf"), str(tmp_path / "b.pdf")
+    _make_pdf(first, pages=2)
+    _make_pdf(merged, pages=1)
+    mw = windows()
+    _open(mw, first)
+    mw.merge_path(merged)
+    mw._undo_stack.undo()
+    mw._rotate_cw_clicked()
+
+    assert mw._save_to(merged)
+
+    assert mw._save_target == merged
+    assert mw._undo_stack.canUndo(), "nessuna sorgente in uso è stata sovrascritta"
 
 
 def test_merged_page_identity_does_not_collide(windows, tmp_path):
@@ -3014,7 +3041,8 @@ def test_merging_from_the_window_is_undoable(windows, tmp_path):
     _pump()
 
     assert mw._doc_model.page_count == 2
-    assert mw._doc_model.sources == [first]
+    # The source stays registered, unused (ids are never reused).
+    assert {item.source_id for item in mw._doc_model.pages} == {0}
     assert not mw.is_modified()
 
     mw._undo_stack.redo()

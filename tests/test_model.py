@@ -476,7 +476,9 @@ def test_undoing_a_merge_takes_the_pages_away(mixed_model, mixed_pdf, qapp, tmp_
     stack.undo()
 
     assert mixed_model.page_count == 3
-    assert mixed_model.sources == [mixed_pdf]
+    # The source stays registered, unused: its id is never handed out again.
+    assert mixed_model.sources == [mixed_pdf, other]
+    assert {item.source_id for item in mixed_model.pages} == {0}
     assert stack.isClean(), "tornati al documento di partenza"
 
 
@@ -503,9 +505,10 @@ def test_two_merges_undo_in_reverse_order(mixed_model, mixed_pdf, qapp, tmp_path
 
     assert mixed_model.sources == [mixed_pdf, first, second]
     stack.undo()
-    assert mixed_model.sources == [mixed_pdf, first]
+    assert [item.source_id for item in mixed_model.pages] == [0, 0, 0, 1]
     stack.undo()
-    assert mixed_model.sources == [mixed_pdf]
+    assert [item.source_id for item in mixed_model.pages] == [0, 0, 0]
+    assert mixed_model.sources == [mixed_pdf, first, second]
     assert mixed_model.page_count == 3
 
     stack.redo()
@@ -571,3 +574,23 @@ def test_unmarked_leaves_out_what_is_already_marked(tmp_path, qapp):
 
     m.pages[0].redactions = [words[0]]
     assert m.unmarked(0, words) == [words[1]]
+
+
+def test_a_merge_after_an_undone_one_gets_a_fresh_source_id(
+    mixed_model, mixed_pdf, qapp, tmp_path
+):
+    """Render keys carry the source id: a reused one would let the undone
+    file's pixels answer for the new file's pages."""
+    first = _one_page_pdf(tmp_path / "primo.pdf", "PRIMO")
+    second = _one_page_pdf(tmp_path / "secondo.pdf", "SECONDO")
+    stack = QUndoStack()
+    items = mixed_model.read_source(len(mixed_model.sources), first)
+    stack.push(AppendDocument(mixed_model, len(mixed_model.sources), first, items))
+    stack.undo()
+
+    items = mixed_model.read_source(len(mixed_model.sources), second)
+    stack.push(AppendDocument(mixed_model, len(mixed_model.sources), second, items))
+
+    assert mixed_model.pages[-1].source_id == 2
+    assert mixed_model.source_for(mixed_model.pages[-1]) == second
+    assert mixed_model.sources_at(first) == [], "nessuna pagina legge il file tolto"

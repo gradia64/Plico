@@ -510,18 +510,22 @@ all'undo — lo stack è LIFO, quindi gli indici restano coerenti), `MovePage`,
 (`MainWindow._push_merge`, che è anche quello che chiede la password): un file
 che non porta pagine non deve lasciare un comando vuoto nello stack, e un
 `redo()` che rileggesse il file lo farebbe scrivere pagine diverse da quelle
-che l'utente ha visto. `redo()` accoda la sorgente e allunga `pages`; `undo()`
-taglia `pages[-n:]` e toglie la sorgente: è tutto quello che serve, perché le
-pagine appese puntano a una sorgente che nessun'altra pagina usa.
+che l'utente ha visto. `redo()` accoda la sorgente (la prima volta) e allunga
+`pages`; `undo()` taglia `pages[-n:]` e **lascia la sorgente registrata**,
+senza pagine che la usino.
 
-**Il `source_id` liberato da un undo viene riusato** dall'unione successiva,
-per un file diverso, e le chiavi di render lo contengono: senza fare niente, le
-pagine del file nuovo venivano mostrate con i pixel di quello tolto (misurato:
-una pagina blu mostrata rossa, mentre il salvataggio la scriveva blu). Per
-questo, a ogni `changed`, `PageView._forget_dropped_sources()` e
-`thumbnail_bar.forget_dropped_sources()` scartano dalle cache le chiavi con un
-`source_id` oltre `len(sources)`: le sorgenti escono solo dalla coda, quindi
-sono esattamente quelle sparite. Il nome è
+**Un `source_id` non si riusa mai.** Prima `undo()` toglieva la sorgente, e
+l'unione successiva riceveva lo stesso id per un file diverso: le chiavi di
+render contengono l'id, quindi le pagine del file nuovo venivano mostrate con i
+pixel di quello tolto (misurato: una pagina blu mostrata rossa, mentre il
+salvataggio la scriveva blu). Svuotare le cache a ogni `changed` toglieva il
+sintomo ma non un render del file vecchio ancora in viaggio dal worker, che
+arrivava con la stessa chiave chiesta dalla pagina nuova; con gli id mai
+riusati nessuna chiave può più rispondere per un altro file. Il prezzo è che
+`sources` può contenere voci che nessuna pagina legge: chi deve sapere quali
+file sono **in uso** lo chiede alle pagine, come fa `sources_at()` — scrivere
+sopra un file la cui unione è stata annullata è un salvataggio altrove, non un
+motivo per riaprire il documento. Il nome è
 `QCoreApplication.translate("AppendDocument", "Unisci «{0}»")` con il nome del
 file, così Ctrl+Z dice cosa sta per togliere.
 
