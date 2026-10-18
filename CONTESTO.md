@@ -87,7 +87,7 @@ plico/
     └── test_integration.py   # MainWindow vera, offscreen: 161 test end-to-end
 ```
 
-Gate di qualità attuale: **491 passed, 8 skipped**, `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **493 passed, 8 skipped**, `ruff` pulito, `mypy` pulito
 (25 file sorgente). Uno `skip` è il test delle icone, che vuole un tema che
 fornisca `object-rotate-*`. Gli altri skip possibili dipendono da
 strumenti che mancano (§9): `pylupdate6` e `lrelease`/`pyside6-lrelease` in
@@ -1643,6 +1643,19 @@ Scelte non ovvie (documentate anche nel README):
   `ResolutionImpossible`), e gli URL e gli `sha256` si prendono dall'API JSON di
   PyPI. La firma è la parte del programma in cui «più o meno quella versione»
   non è una risposta accettabile.
+
+- **I font web dell'host sono esclusi** (`flatpak/fontconfig-local.conf`,
+  installato come `/app/etc/fonts/local.conf`, che il `fonts.conf` del runtime
+  include). Nella sandbox fontconfig vede anche `/run/host/fonts`, compresi i
+  `.woff2` che Debian mette in `/usr/share/fonts/woff` (`fonts-roboto-slab`,
+  `fonts-font-awesome`). Quando Qt cerca un glifo di riserva, fontconfig può
+  sceglierne uno, e con il runtime KDE 6.11 quella scelta va in **SIGSEGV
+  dentro libfontconfig**. Il primo a pagarlo è stato il dialogo della firma: il
+  pallino della password (U+25CF) chiudeva l'app appena si scriveva. Sull'host
+  lo stesso glifo va a DejaVu e non succede niente, e con
+  `QT_QPA_PLATFORM=offscreen` non si riproduce: serve Wayland, dentro il
+  Flatpak. Un `QLineEdit` in modalità password basta a riprodurlo, senza
+  Plico.
 
 - **Niente `--filesystem=home`**: l'unico accesso ai file è il portal. Qt
   dentro Flatpak apre da solo i dialoghi di `org.freedesktop.portal.FileChooser`
