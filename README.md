@@ -1,3 +1,5 @@
+🌐 **Lingua:** Italiano | [English](README.en.md)
+
 # Plico
 
 Un vero editor PDF nativo per Linux, costruito con **Qt6** e **PySide6**, con
