@@ -83,7 +83,7 @@
       <caption xml:lang="es">Un documento con sus páginas, ajustado al ancho de la ventana</caption>
       <caption xml:lang="fr">Un document et ses pages, ajusté à la largeur de la fenêtre</caption>
       <caption xml:lang="de">Ein Dokument mit seinen Seiten, an die Fensterbreite angepasst</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.0/flatpak/screenshots/main.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.1/flatpak/screenshots/main.png</image>
     </screenshot>
     <screenshot>
       <caption>Personal data marked for erasure: on saving it leaves the file</caption>
@@ -91,7 +91,7 @@
       <caption xml:lang="es">Datos personales marcados para borrar: al guardar salen del archivo</caption>
       <caption xml:lang="fr">Données personnelles marquées pour l'effacement : à l'enregistrement, elles quittent le fichier</caption>
       <caption xml:lang="de">Persönliche Daten zum Löschen markiert: Beim Speichern verlassen sie die Datei</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.0/flatpak/screenshots/redact.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.1/flatpak/screenshots/redact.png</image>
     </screenshot>
     <screenshot>
       <caption>Filling in a PDF form, on the page or in the side panel</caption>
@@ -99,7 +99,7 @@
       <caption xml:lang="es">Rellenar un formulario PDF, en la página o en el panel lateral</caption>
       <caption xml:lang="fr">Remplir un formulaire PDF, sur la page ou dans le panneau latéral</caption>
       <caption xml:lang="de">Ein PDF-Formular ausfüllen, auf der Seite oder in der Seitenleiste</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.0/flatpak/screenshots/form.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.1/flatpak/screenshots/form.png</image>
     </screenshot>
     <screenshot>
       <caption>Correcting a line of text where it stands</caption>
@@ -107,7 +107,7 @@
       <caption xml:lang="es">Corregir una línea de texto en su sitio</caption>
       <caption xml:lang="fr">Corriger une ligne de texte là où elle se trouve</caption>
       <caption xml:lang="de">Eine Textzeile direkt an ihrer Stelle korrigieren</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.0/flatpak/screenshots/edit.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.1/flatpak/screenshots/edit.png</image>
     </screenshot>
   </screenshots>
 
@@ -201,6 +201,37 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.1.1" date="2026-10-18">
+      <description>
+        <p>Redactions are visible before saving, and confirmed before they are written.</p>
+        <p xml:lang="it">Le cancellazioni si vedono prima di salvare, e vengono confermate prima di scriverle.</p>
+        <p xml:lang="es">Las eliminaciones se ven antes de guardar y se confirman antes de escribirlas.</p>
+        <p xml:lang="fr">Les suppressions sont visibles avant l'enregistrement et confirmées avant d'être écrites.</p>
+        <p xml:lang="de">Löschungen sind vor dem Speichern sichtbar und werden vor dem Schreiben bestätigt.</p>
+        <ul>
+          <li>The page and its thumbnail show the redactions applied as soon as the tool is off</li>
+          <li xml:lang="it">La pagina e la miniatura mostrano le cancellazioni applicate appena si spegne lo strumento</li>
+          <li xml:lang="es">La página y su miniatura muestran las eliminaciones aplicadas en cuanto se apaga la herramienta</li>
+          <li xml:lang="fr">La page et sa miniature montrent les suppressions appliquées dès que l'outil est désactivé</li>
+          <li xml:lang="de">Seite und Miniatur zeigen die Löschungen angewendet, sobald das Werkzeug aus ist</li>
+          <li>A notice over the page confirms marks and the end of text recognition</li>
+          <li xml:lang="it">Un avviso sopra la pagina conferma i segni e la fine del riconoscimento del testo</li>
+          <li xml:lang="es">Un aviso sobre la página confirma las marcas y el final del reconocimiento de texto</li>
+          <li xml:lang="fr">Un avis au-dessus de la page confirme les marques et la fin de la reconnaissance du texte</li>
+          <li xml:lang="de">Ein Hinweis über der Seite bestätigt Markierungen und das Ende der Texterkennung</li>
+          <li>Fixed a crash of the signing dialog on systems with web fonts installed</li>
+          <li xml:lang="it">Corretta la chiusura improvvisa del dialogo di firma sui sistemi con font web installati</li>
+          <li xml:lang="es">Corregido el cierre inesperado del diálogo de firma en sistemas con fuentes web instaladas</li>
+          <li xml:lang="fr">Correction d'un plantage de la boîte de signature sur les systèmes avec des polices web installées</li>
+          <li xml:lang="de">Absturz des Signaturdialogs auf Systemen mit installierten Webfonts behoben</li>
+          <li>The Flatpak no longer has access to the home folder: files go through the file chooser portal</li>
+          <li xml:lang="it">Il Flatpak non ha più accesso alla cartella home: i file passano dal portale di selezione</li>
+          <li xml:lang="es">El Flatpak ya no tiene acceso a la carpeta personal: los archivos pasan por el portal de selección</li>
+          <li xml:lang="fr">Le Flatpak n'a plus accès au dossier personnel : les fichiers passent par le portail de sélection</li>
+          <li xml:lang="de">Das Flatpak hat keinen Zugriff mehr auf den Home-Ordner: Dateien laufen über das Dateiauswahl-Portal</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-10-18"/>
   </releases>
 </component>
