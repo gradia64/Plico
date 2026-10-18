@@ -8,6 +8,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Read the code and nothing else: the cache and the uploaded artifact go
+# through the runner's own token, not GITHUB_TOKEN.
+permissions:
+  contents: read
+
 concurrency:
   group: flatpak-${{ github.ref }}
   cancel-in-progress: true
