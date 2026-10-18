@@ -6,7 +6,14 @@ readme = "README.md"
 license = "GPL-3.0-or-later"
 requires-python = ">=3.11"
 dependencies = [
-    "PySide6>=6.7",
+    # From 6.12 the PyPI wheels are built against the Python 3.12 headers
+    # (PYSIDE-3424) while still declaring 3.10+: on 3.11 every Signal.emit()
+    # drops a reference to True, and after a few hundred signals the
+    # interpreter aborts with bool_dealloc (PYSIDE-3474). From 3.12 on True is
+    # immortal and nothing happens. Held below 6.12 on 3.11 until upstream
+    # either fixes the wheels or retags them for 3.12+.
+    "PySide6>=6.7,<6.12; python_version < '3.12'",
+    "PySide6>=6.7; python_version >= '3.12'",
     # 1.24.3 is the release that renamed the module to `pymupdf`; the code
     # imports that name, and `fitz` survives only as a deprecated alias.
     "pymupdf>=1.24.3",

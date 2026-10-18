@@ -87,7 +87,7 @@ plico/
     └── test_integration.py   # MainWindow vera, offscreen: 161 test end-to-end
 ```
 
-Gate di qualità attuale: **513 passed, 1 skipped** (con `lrelease` dell'SDK nel `PATH`), `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **514 passed, 1 skipped** (con `lrelease` dell'SDK nel `PATH`), `ruff` pulito, `mypy` pulito
 (26 file sorgente). Uno `skip` è il test delle icone, che vuole un tema che
 fornisca `object-rotate-*`. Gli altri skip possibili dipendono da
 strumenti che mancano (§9): `pylupdate6` e `lrelease`/`pyside6-lrelease` in
@@ -1313,6 +1313,24 @@ tutte scoperte perché qualcosa saltava o falliva in silenzio:
 ---
 
 ## 10. Insidie già pagate (leggere prima di scrivere codice)
+
+- **PySide6 6.12.0 su Python 3.11: ogni `Signal.emit()` perde un
+  riferimento a `True`**, collegato o no. Da Python 3.12 `True` è immortale e
+  non succede niente; su 3.11 il conteggio arriva a zero dopo qualche migliaio
+  di segnali e l'interprete abortisce con `Fatal Python error: bool_dealloc`,
+  di solito a fine pytest, durante la garbage collection della
+  finalizzazione. È uscito in CI (job 3.11) dopo l'anteprima delle
+  cancellazioni, che fa emettere al worker qualche centinaio di render in più:
+  tutti i test verdi, poi il core dump. Isolato misurando `sys.getrefcount(True)`
+  prima e dopo 300 emit: −300 con 6.12.0, 0 con 6.11.2. Segnalato a Qt
+  come [PYSIDE-3474](https://qt-project.atlassian.net/browse/PYSIDE-3474):
+  da 6.12 le wheel di PyPI sono compilate contro gli header di Python 3.12
+  (PYSIDE-3424) ma dichiarano ancora `Requires-Python >=3.10`, quindi pip le
+  installa su 3.11 senza avvisare. Per questo `pyproject.toml` tiene PySide6
+  **sotto 6.12** su Python < 3.12 (non solo `!=6.12.0`: le 6.12.x successive
+  nascono dalla stessa build), e `tests/test_pyside_refcount.py` fallisce con
+  un messaggio leggibile se una versione ammessa rifà lo stesso errore. Il
+  Flatpak non è toccato: PySide6 6.11 e Python 3.13.
 
 ### PySide6 / Qt6
 
