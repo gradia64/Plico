@@ -358,9 +358,14 @@ def is_signed(path: str, password: str = "") -> bool:
     put "firmato" in the title and to warn before a save that would drop the
     signature. The full check is :func:`read_signatures`.
     """
+    # Bit 1 of /SigFlags is "SignaturesExist". The number itself is -1 with no
+    # form at all and 0 for a form that has never been signed, so ">= 0" made
+    # any form carrying /SigFlags 0 read as signed. The -1 must be ruled out
+    # before the mask: in Python ``-1 & 1`` is 1.
     try:
         with open_for_reading(path, password) as document:
-            return int(document.get_sigflags()) >= 0
+            flags = int(document.get_sigflags())
+            return flags > 0 and bool(flags & 1)
     except Exception:  # noqa: BLE001 -- unreadable is "not signed" for our purposes
         return False
 

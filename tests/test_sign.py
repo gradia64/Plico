@@ -690,3 +690,21 @@ def test_a_broken_signature_is_never_called_intact(certificate, tmp_path) -> Non
     assert "integra" not in text
     assert "rotta" in text
     assert style == "color: #b00020"
+
+
+def test_a_form_that_was_never_signed_is_not_signed(tmp_path) -> None:
+    """/SigFlags 0 means "a form, no signatures": only bit 1 says signed."""
+    path = str(tmp_path / "modulo.pdf")
+    with pymupdf.open() as doc:
+        page = doc.new_page()
+        widget = pymupdf.Widget()
+        widget.field_name = "nome"
+        widget.field_type = pymupdf.PDF_WIDGET_TYPE_TEXT
+        widget.rect = pymupdf.Rect(72, 72, 300, 100)
+        page.add_widget(widget)
+        doc.xref_set_key(doc.pdf_catalog(), "AcroForm/SigFlags", "0")
+        doc.save(path)
+    with pymupdf.open(path) as doc:
+        assert doc.get_sigflags() == 0
+
+    assert not is_signed(path)
