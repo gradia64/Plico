@@ -331,3 +331,50 @@ def test_the_window_is_locked_from_the_moment_the_task_starts(
         monkeypatch.setattr(QThreadPool, "start", start)
 
     assert seen and seen[0] is not None, "nessuna finestra modale mentre il task parte"
+
+
+# --------------------------------------------------------------------- #
+#  The language proposed follows the user's
+# --------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    ("locale", "expected"),
+    [
+        ("it_IT", "ita+eng"),
+        ("de_DE", "deu+eng"),
+        ("fr_FR", "fra+eng"),
+        ("es_ES", "spa+eng"),
+        ("en_GB", "eng"),
+        ("pt_BR", "eng"),
+    ],
+)
+def test_the_proposed_language_is_the_user_s_plus_english(
+    tmp_path, monkeypatch, locale, expected
+) -> None:
+    """It used to be Italian and English for everybody."""
+    from PySide6.QtCore import QLocale
+
+    for code in ("ita", "eng", "deu", "fra", "spa"):
+        (tmp_path / f"{code}.traineddata").write_bytes(b"")
+    monkeypatch.setenv("PLICO_TESSDATA", str(tmp_path))
+
+    assert default_language(QLocale(locale)) == expected
+
+
+def test_without_the_user_s_language_english_alone(tmp_path, monkeypatch) -> None:
+    from PySide6.QtCore import QLocale
+
+    (tmp_path / "eng.traineddata").write_bytes(b"")
+    monkeypatch.setenv("PLICO_TESSDATA", str(tmp_path))
+
+    assert default_language(QLocale("de_DE")) == "eng"
+
+
+def test_languages_are_named_in_their_own_language() -> None:
+    from plico.widgets.ocr import language_name
+
+    assert language_name("deu") == "Deutsch"
+    assert language_name("fra") == "Français"
+    assert language_name("swe") == "Svenska", "la tabella non c'e`: risponde Qt"
+    assert language_name("xyz") == "xyz"

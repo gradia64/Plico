@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, QRunnable, Signal
+from PySide6.QtCore import QLocale, QObject, QRunnable, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -27,23 +27,41 @@ __all__ = ["OcrDialog", "OcrSignals", "OcrTask"]
 
 # Tesseract speaks ISO 639-2, so ``ita`` and not ``it``. A code missing here is
 # shown as it is: better an unexplained "dan" than a wrong Italian name.
+# Each language by its own name -- «Deutsch», «Français» -- the way language
+# pickers show them: a German user looks for «Deutsch», and an endonym reads
+# the same in every translation of Plico, so it needs none. Qt's
+# nativeLanguageName() answers for the rest, with a country attached
+# («American English») that suits a locale better than a language to read.
 _NAMES = {
     "ita": "Italiano",
-    "eng": "Inglese",
-    "deu": "Tedesco",
-    "fra": "Francese",
-    "spa": "Spagnolo",
-    "por": "Portoghese",
-    "nld": "Olandese",
-    "rus": "Russo",
-    "pol": "Polacco",
-    "ell": "Greco",
-    "tur": "Turco",
-    "ara": "Arabo",
-    "zho": "Cinese",
-    "jpn": "Giapponese",
-    "kor": "Coreano",
+    "eng": "English",
+    "deu": "Deutsch",
+    "fra": "Français",
+    "spa": "Español",
+    "por": "Português",
+    "nld": "Nederlands",
+    "rus": "Русский",
+    "pol": "Polski",
+    "ell": "Ελληνικά",
+    "tur": "Türkçe",
+    "ara": "العربية",
+    "zho": "中文",
+    "chi_sim": "中文 (简体)",
+    "chi_tra": "中文 (繁體)",
+    "jpn": "日本語",
+    "kor": "한국어",
 }
+
+
+def language_name(code: str) -> str:
+    """The name to show for the Tesseract language *code*."""
+    if code in _NAMES:
+        return _NAMES[code]
+    language = QLocale.codeToLanguage(code.split("_")[0], QLocale.LanguageCodeType.ISO639Part2)
+    if language == QLocale.Language.AnyLanguage:
+        return code
+    name = QLocale(language).nativeLanguageName()
+    return name[:1].upper() + name[1:] if name else code
 
 
 def _runs(indices: list[int]) -> str:
@@ -134,7 +152,7 @@ class OcrDialog(QDialog):
     def _label(self, code: str) -> str:
         if not code:
             return self.tr("(nessuna lingua installata)")
-        return " + ".join(self.tr(_NAMES.get(part, part)) for part in code.split("+"))
+        return " + ".join(language_name(part) for part in code.split("+"))
 
     @property
     def pages(self) -> list[int]:

@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from typing import cast
 
 import pymupdf
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtCore import QCoreApplication, QLocale
 
 # 300 dpi is the resolution Tesseract's own documentation recommends for
 # scanned office documents, and its cost here is small: a full A4 page of text
@@ -53,9 +53,17 @@ _TESSDATA_DIRS = (
     "/usr/share/tessdata",
 )
 
-# The document language, when both are installed: an Italian document full of
-# numbers and addresses is read better with the two than with either.
-_PREFERRED = ("ita", "eng")
+# Tesseract's code for each language Plico speaks. The document is most likely
+# in the user's own language, and together with English -- the numbers,
+# addresses and borrowed words of any office document -- it reads better than
+# either alone.
+_TESSERACT = {
+    QLocale.Language.Italian: "ita",
+    QLocale.Language.English: "eng",
+    QLocale.Language.Spanish: "spa",
+    QLocale.Language.French: "fra",
+    QLocale.Language.German: "deu",
+}
 
 
 def user_tessdata_dir() -> str:
@@ -135,15 +143,19 @@ def languages(directory: str | None = None) -> list[str]:
     )
 
 
-def default_language() -> str:
-    """The best language to read an Italian document with, out of what is there.
+def default_language(locale: QLocale | None = None) -> str:
+    """The best language to read the user's documents with, out of what is there.
 
-    Italian and English together when both are installed, then either alone,
-    then whatever else there is: refusing to read a page because the ideal
-    data is missing would be worse than reading it imperfectly.
+    The language of *locale* (the system's) together with English when both
+    are installed, then either alone, then whatever else there is: refusing to
+    read a page because the ideal data is missing would be worse than reading
+    it imperfectly. A language Plico does not speak gets English, like its
+    interface does.
     """
+    locale = QLocale.system() if locale is None else locale
+    own = _TESSERACT.get(locale.language(), "eng")
     available = languages()
-    preferred = [code for code in _PREFERRED if code in available]
+    preferred = [code for code in dict.fromkeys((own, "eng")) if code in available]
     if preferred:
         return "+".join(preferred)
     return available[0] if available else "eng"
