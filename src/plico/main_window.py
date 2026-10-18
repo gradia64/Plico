@@ -1610,9 +1610,13 @@ class MainWindow(QMainWindow):
         )
         progress.setWindowTitle(self.tr("Riconosci testo"))
         # Window-modal: the pages are being read from the sources, so the model
-        # must not be rearranged under the task.
+        # must not be rearranged under the task. Shown at once, not after the
+        # usual delay: a dialog that is not on screen yet is not modal yet,
+        # and for half a second the window took a Del or a drag while the
+        # task was reading the page list.
         progress.setWindowModality(Qt.WindowModality.WindowModal)
-        progress.setMinimumDuration(500)
+        progress.setMinimumDuration(0)
+        progress.show()
         task.signals.progress.connect(lambda done, total: progress.setValue(done))
         progress.canceled.connect(task.cancel)
         loop = QEventLoop()

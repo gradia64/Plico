@@ -303,3 +303,31 @@ def test_a_page_without_text_is_not_a_modification(window, tmp_path, language, m
     assert window._undo_stack.count() == 0
     assert window._undo_stack.isClean()
     assert window._status.text() == "Nessun testo riconosciuto nelle pagine scelte."
+
+
+def test_the_window_is_locked_from_the_moment_the_task_starts(
+    window, tmp_path, language, monkeypatch
+) -> None:
+    """The progress dialog is what keeps the page list still under the task,
+    and it used to appear only after half a second: until then the window
+    still took a Del or a drag while the pool was reading the pages."""
+    from PySide6.QtCore import QThreadPool
+
+    path = str(tmp_path / "scansione.pdf")
+    _scan_of(path)
+    window.open_document(path)
+    monkeypatch.setattr(OcrDialog, "exec", lambda self: QDialog.DialogCode.Accepted)
+    seen: list[object] = []
+    start = QThreadPool.start
+
+    def watched(pool, task, *args):
+        seen.append(QApplication.activeModalWidget())
+        start(pool, task, *args)
+
+    monkeypatch.setattr(QThreadPool, "start", watched)
+    try:
+        window._ocr_pages()
+    finally:
+        monkeypatch.setattr(QThreadPool, "start", start)
+
+    assert seen and seen[0] is not None, "nessuna finestra modale mentre il task parte"
