@@ -87,9 +87,9 @@ plico/
     └── test_integration.py   # MainWindow vera, offscreen: 161 test end-to-end
 ```
 
-Gate di qualità attuale: **480 passed, 1 skipped**, `ruff` pulito, `mypy` pulito
-(24 file sorgente). Lo `skip` è il test delle icone, che vuole un tema che
-fornisca `object-rotate-*`. Gli altri tre `skip` possibili dipendono da
+Gate di qualità attuale: **476 passed, 8 skipped**, `ruff` pulito, `mypy` pulito
+(25 file sorgente). Uno `skip` è il test delle icone, che vuole un tema che
+fornisca `object-rotate-*`. Gli altri skip possibili dipendono da
 strumenti che mancano (§9): `pylupdate6` e `lrelease`/`pyside6-lrelease` in
 `tests/test_i18n.py`. **Uno skip lì non è innocuo**: è il test che avvisa
 quando una stringa nuova manca dal catalogo, e durante la review di ottobre
