@@ -16,7 +16,12 @@ dependencies = [
     "PySide6>=6.7; python_version >= '3.12'",
     # 1.24.3 is the release that renamed the module to `pymupdf`; the code
     # imports that name, and `fitz` survives only as a deprecated alias.
-    "pymupdf>=1.24.3",
+    # Below 2.0: PyMuPDF 2.0 (October 2026) made onnxruntime, numpy, networkx,
+    # pymupdf-layout and pymupdf4llm hard dependencies -- about 200 MB that
+    # Plico never imports -- and the Flatpak ships 1.28.2, so CI must test that
+    # line and not the one pip happens to pick. Moving to 2.x is a decision of
+    # its own, made together with flatpak/python3-pymupdf.json.
+    "pymupdf>=1.24.3,<2",
     # Compression with a purpose: qpdf through its bindings. `recompress_flate`
     # and `ObjectStreamMode.generate` (the two options that do the work) have
     # existed since pikepdf 9.

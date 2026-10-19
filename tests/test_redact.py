@@ -13,7 +13,7 @@ black rectangle.
 import pymupdf
 import pytest
 
-from plico.model import LEVELS_BY_KEY, DocumentModel, RedactionRect, save_as, save_compressed
+from plico.model import LEVELS_BY_KEY, DocumentModel, RedactionRect, save_as
 from plico.model.commands import AddRedaction, AdjustRedaction, RemoveRedaction
 from plico.model.redact import (
     derotation_matrix,
@@ -22,6 +22,7 @@ from plico.model.redact import (
     rotation_matrix,
     unrotated_size,
 )
+from plico.model.save import prepare_compressed
 
 SEGRETO = "SEGRETO"
 PUBBLICO = "PUBBLICO"
@@ -399,7 +400,14 @@ def test_a_redaction_lands_on_its_own_page(tmp_path) -> None:
 
 
 def test_the_text_disappears_when_saving_compressed_too(tmp_path) -> None:
-    """The two save paths must apply the same redactions."""
+    """The two save paths must apply the same redactions.
+
+    Read from the compressed temporary, before anything decides whether to
+    keep it: ``save_compressed`` writes nothing when the compression gains
+    nothing, and on a one-line page PyMuPDF 2.0 gains exactly 0 bytes where
+    1.28 gained 4. The test then failed on a missing file, for a reason that
+    has nothing to do with redactions.
+    """
     src = str(tmp_path / "doc.pdf")
     out = str(tmp_path / "out.pdf")
     _pdf_with_text(src)
@@ -407,11 +415,13 @@ def test_the_text_disappears_when_saving_compressed_too(tmp_path) -> None:
     model = DocumentModel()
     model.open(src)
     model.pages[0].redactions.append(_secret_rect(src))
-    save_compressed(model, out, LEVELS_BY_KEY["light"])
-
-    with pymupdf.open(out) as doc:
-        assert SEGRETO not in doc[0].get_text()
-        assert PUBBLICO in doc[0].get_text()
+    preview = prepare_compressed(model, out, LEVELS_BY_KEY["light"])
+    try:
+        with pymupdf.open(preview.path) as doc:
+            assert SEGRETO not in doc[0].get_text()
+            assert PUBBLICO in doc[0].get_text()
+    finally:
+        preview.drop()
 
 
 def test_without_redactions_the_text_stays(tmp_path) -> None:

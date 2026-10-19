@@ -1434,6 +1434,20 @@ commento in `shutdown_worker()` lo spiega.
 
 ## 10. Insidie già pagate (leggere prima di scrivere codice)
 
+- **PyMuPDF 2.0 (ottobre 2026) e la CI.** La CI installa l'ultima versione
+  ammessa da `pyproject.toml`, e il giorno dell'uscita di 2.0 è fallita su
+  tutte e quattro le versioni di Python per un solo test:
+  `test_the_text_disappears_when_saving_compressed_too` cercava il file
+  scritto da `save_compressed()`. Su una pagina di una riga la compressione
+  «leggera» guadagna 4 byte con 1.28 e 0 con 2.0, e senza guadagno
+  `save_compressed()` **non scrive niente**, come promette. Il test ora legge
+  il temporaneo di `prepare_compressed()`, e verifica le cancellazioni senza
+  dipendere dal guadagno. In più, 2.0 rende obbligatori `onnxruntime`, `numpy`,
+  `networkx`, `pymupdf-layout` e `pymupdf4llm`, circa 200 MB che Plico non
+  usa, mentre il Flatpak resta su 1.28.2: `pyproject.toml` tiene `pymupdf<2`,
+  così la CI prova la stessa versione che spediamo. Il passaggio a 2.x va
+  fatto apposta, insieme a `flatpak/python3-pymupdf.json`.
+
 - **PySide6 6.12.0 su Python 3.11: ogni `Signal.emit()` perde un
   riferimento a `True`**, collegato o no. Da Python 3.12 `True` è immortale e
   non succede niente; su 3.11 il conteggio arriva a zero dopo qualche migliaio
