@@ -83,7 +83,7 @@
       <caption xml:lang="es">Un documento con sus páginas, ajustado al ancho de la ventana</caption>
       <caption xml:lang="fr">Un document et ses pages, ajusté à la largeur de la fenêtre</caption>
       <caption xml:lang="de">Ein Dokument mit seinen Seiten, an die Fensterbreite angepasst</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.1/flatpak/screenshots/main.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.2/flatpak/screenshots/main.png</image>
     </screenshot>
     <screenshot>
       <caption>Personal data marked for erasure: on saving it leaves the file</caption>
@@ -91,7 +91,7 @@
       <caption xml:lang="es">Datos personales marcados para borrar: al guardar salen del archivo</caption>
       <caption xml:lang="fr">Données personnelles marquées pour l'effacement : à l'enregistrement, elles quittent le fichier</caption>
       <caption xml:lang="de">Persönliche Daten zum Löschen markiert: Beim Speichern verlassen sie die Datei</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.1/flatpak/screenshots/redact.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.2/flatpak/screenshots/redact.png</image>
     </screenshot>
     <screenshot>
       <caption>Filling in a PDF form, on the page or in the side panel</caption>
@@ -99,7 +99,7 @@
       <caption xml:lang="es">Rellenar un formulario PDF, en la página o en el panel lateral</caption>
       <caption xml:lang="fr">Remplir un formulaire PDF, sur la page ou dans le panneau latéral</caption>
       <caption xml:lang="de">Ein PDF-Formular ausfüllen, auf der Seite oder in der Seitenleiste</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.1/flatpak/screenshots/form.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.2/flatpak/screenshots/form.png</image>
     </screenshot>
     <screenshot>
       <caption>Correcting a line of text where it stands</caption>
@@ -107,7 +107,7 @@
       <caption xml:lang="es">Corregir una línea de texto en su sitio</caption>
       <caption xml:lang="fr">Corriger une ligne de texte là où elle se trouve</caption>
       <caption xml:lang="de">Eine Textzeile direkt an ihrer Stelle korrigieren</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.1/flatpak/screenshots/edit.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.2/flatpak/screenshots/edit.png</image>
     </screenshot>
   </screenshots>
 
@@ -201,6 +201,37 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.1.2" date="2026-10-19">
+      <description>
+        <p>Search in the document, and fixes to redaction and signatures.</p>
+        <p xml:lang="it">Ricerca nel documento, e correzioni a cancellazione e firme.</p>
+        <p xml:lang="es">Búsqueda en el documento y correcciones en la eliminación y las firmas.</p>
+        <p xml:lang="fr">Recherche dans le document, et corrections de la suppression et des signatures.</p>
+        <p xml:lang="de">Suche im Dokument sowie Korrekturen beim Löschen und bei Signaturen.</p>
+        <ul>
+          <li>Find in the document with Ctrl+F: every match highlighted, F3 and Shift+F3 to move between them</li>
+          <li xml:lang="it">Ricerca nel documento con Ctrl+F: ogni occorrenza evidenziata, F3 e Maiusc+F3 per spostarsi</li>
+          <li xml:lang="es">Búsqueda en el documento con Ctrl+F: cada coincidencia resaltada, F3 y Mayús+F3 para moverse</li>
+          <li xml:lang="fr">Recherche dans le document avec Ctrl+F : chaque occurrence surlignée, F3 et Maj+F3 pour se déplacer</li>
+          <li xml:lang="de">Suche im Dokument mit Strg+F: jeder Treffer hervorgehoben, F3 und Umschalt+F3 zum Wechseln</li>
+          <li>Redacting a form field now removes its value from the file in every form layout</li>
+          <li xml:lang="it">Cancellare un campo di un modulo ora toglie il suo valore dal file con ogni struttura di modulo</li>
+          <li xml:lang="es">Eliminar un campo de formulario ahora quita su valor del archivo con cualquier estructura de formulario</li>
+          <li xml:lang="fr">Supprimer un champ de formulaire retire désormais sa valeur du fichier, quelle que soit la structure du formulaire</li>
+          <li xml:lang="de">Das Löschen eines Formularfelds entfernt seinen Wert jetzt bei jedem Formularaufbau aus der Datei</li>
+          <li>An empty signature field no longer marks a document as signed, and signatures of password-protected files can be verified</li>
+          <li xml:lang="it">Un campo firma vuoto non fa più risultare firmato il documento, e si possono verificare le firme dei file protetti da password</li>
+          <li xml:lang="es">Un campo de firma vacío ya no marca el documento como firmado, y se pueden verificar las firmas de archivos protegidos con contraseña</li>
+          <li xml:lang="fr">Un champ de signature vide ne fait plus passer le document pour signé, et les signatures des fichiers protégés par mot de passe peuvent être vérifiées</li>
+          <li xml:lang="de">Ein leeres Signaturfeld markiert das Dokument nicht mehr als signiert, und Signaturen passwortgeschützter Dateien lassen sich prüfen</li>
+          <li>Extract pages: "1 3" now means pages 1 and 3</li>
+          <li xml:lang="it">Estrai pagine: «1 3» ora significa le pagine 1 e 3</li>
+          <li xml:lang="es">Extraer páginas: «1 3» ahora significa las páginas 1 y 3</li>
+          <li xml:lang="fr">Extraire des pages : « 1 3 » signifie maintenant les pages 1 et 3</li>
+          <li xml:lang="de">Seiten extrahieren: „1 3“ bedeutet jetzt die Seiten 1 und 3</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.1" date="2026-10-18">
       <description>
         <p>Redactions are visible before saving, and confirmed before they are written.</p>
