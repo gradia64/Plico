@@ -196,3 +196,16 @@ def test_turning_the_tray_off_brings_a_hidden_window_back(window, tray_available
 
     assert mw._tray is None
     assert mw.isVisible(), "senza icona non ci sarebbe più modo di raggiungerla"
+
+
+def test_a_chosen_language_reaches_the_desktop_buttons_too():
+    """Plasma's «Chiudi»/«Annulla» follow LANGUAGE, set before the app starts."""
+    from plico.app import language_environment
+
+    environment = {"LANGUAGE": "it"}
+    language_environment("de", environment)
+    assert environment["LANGUAGE"] == "de"
+
+    untouched = {"LANGUAGE": "it:en"}
+    language_environment(preferences.AUTOMATIC, untouched)
+    assert untouched == {"LANGUAGE": "it:en"}, "«automatica» non tocca l'ambiente"

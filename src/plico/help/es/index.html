@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Manual de Plico</title>
+</head>
+<body>
+
+<h1>Manual de Plico</h1>
+
+<p>Plico es un editor de PDF: gira, elimina y reordena páginas, une archivos,
+borra de verdad los datos confidenciales, rellena formularios, hace que los
+escaneos se puedan buscar y firma documentos. El archivo original no se toca
+hasta que guardas.</p>
+
+<ul class="toc">
+<li><a href="#open">Abrir y unir</a></li>
+<li><a href="#pages">Las páginas</a></li>
+<li><a href="#images">Crear un PDF desde imágenes</a></li>
+<li><a href="#save">Guardar</a></li>
+<li><a href="#find">Buscar</a></li>
+<li><a href="#redact">Borrar datos</a></li>
+<li><a href="#text">Corregir el texto</a></li>
+<li><a href="#forms">Rellenar formularios</a></li>
+<li><a href="#ocr">Reconocer el texto de un escaneo</a></li>
+<li><a href="#sign">Firmar y verificar</a></li>
+<li><a href="#settings">Configuración</a></li>
+<li><a href="#files">Dónde están los archivos</a></li>
+<li><a href="#keys">Atajos de teclado</a></li>
+</ul>
+
+<h2 id="open">Abrir y unir</h2>
+
+<p><b>Archivo → Abrir…</b> (<code>Ctrl+O</code>) abre un PDF. Un archivo
+protegido con contraseña la pide antes de abrirse. También se puede abrir un
+PDF con un doble clic desde el gestor de archivos.</p>
+
+<p><b>Archivo → Unir PDF…</b> (<code>Ctrl+Mayús+M</code>) añade al final las
+páginas de otro PDF, o de una imagen: un recibo fotografiado se convierte en
+la última página. Las páginas unidas se mueven, giran y eliminan como las
+demás, y un <code>Ctrl+Z</code> deshace la unión.</p>
+
+<h2 id="pages">Las páginas</h2>
+
+<p>A la izquierda está la barra de miniaturas: un clic muestra la página,
+<b>arrastrar</b> cambia el orden.</p>
+
+<ul>
+<li><b>Girar a la derecha</b> (<code>Ctrl+R</code>) y <b>Girar a la
+izquierda</b> (<code>Ctrl+Mayús+R</code>) giran la página elegida 90°.</li>
+<li><b>Editar → Eliminar página</b> (<code>Supr</code>) la quita.</li>
+<li><b>Archivo → Extraer páginas…</b> (<code>Ctrl+E</code>) escribe una parte
+del documento en un archivo nuevo. Las páginas se escriben como
+<code>1-3,5,8</code>; comas y espacios separan igual, así que
+<code>1 3</code> son las páginas 1 y 3. El orden escrito es el del archivo
+nuevo: <code>5,1-3</code> pone la quinta página primero.</li>
+</ul>
+
+<p>Todo se deshace con <b>Editar → Deshacer</b> (<code>Ctrl+Z</code>) y se
+rehace con <code>Ctrl+Y</code>; el panel «Historial» muestra los pasos dados.
+El zoom está en el menú <b>Ver</b>: <code>Ctrl++</code>, <code>Ctrl+-</code> y
+<code>Ctrl+0</code> para ajustar al ancho.</p>
+
+<h2 id="images">Crear un PDF desde imágenes</h2>
+
+<p><b>Archivo → Crear desde imágenes…</b> (<code>Ctrl+Mayús+N</code>)
+convierte fotos y escaneos (PNG, JPEG, TIFF, BMP, GIF) en un PDF, una página
+por imagen, en el orden elegido. Un escaneo conserva su tamaño real, una foto
+del móvil se convierte en un A4. El documento nace «Sin título»: con
+<code>Ctrl+S</code> Plico propone guardarlo junto a la primera imagen.</p>
+
+<h2 id="save">Guardar</h2>
+
+<ul>
+<li><b>Archivo → Guardar</b> (<code>Ctrl+S</code>) escribe en el archivo
+abierto.</li>
+<li><b>Archivo → Guardar como…</b> (<code>Ctrl+Mayús+S</code>) pregunta
+dónde.</li>
+<li><b>Archivo → Guardar comprimido…</b> (<code>Ctrl+Mayús+C</code>) escribe
+una copia más ligera. <i>Ligera</i> no pierde nada; <i>Media</i> y
+<i>Fuerte</i> remuestrean las imágenes demasiado detalladas (a 150 y 96 dpi).
+Se puede limitar el trabajo a las imágenes o a ciertas páginas. Plico muestra
+lo que ha ganado de verdad, y si no hay nada que ganar no escribe nada.</li>
+</ul>
+
+<p>El guardado pasa siempre por un archivo temporal: si algo sale mal, el
+archivo original queda como estaba. El título de la ventana marca con
+<code>*</code> los cambios sin guardar, y cerrar o abrir otro archivo pregunta
+antes de perderlos.</p>
+
+<h2 id="find">Buscar</h2>
+
+<p><b>Editar → Buscar…</b> (<code>Ctrl+F</code>) abre una barra bajo la
+página. Todas las coincidencias se resaltan, la actual en naranja;
+<code>Intro</code> o <code>F3</code> pasa a la siguiente,
+<code>Mayús+F3</code> a la anterior, <code>Esc</code> cierra la barra. La
+búsqueda también encuentra las palabras que el OCR acaba de reconocer, antes
+de guardar.</p>
+
+<h2 id="redact">Borrar datos</h2>
+
+<p>Borrar en Plico significa <b>quitar</b> el contenido del archivo, no
+cubrirlo con un rectángulo negro: lo que desaparece ya no se puede copiar ni
+buscar. Con ello desaparecen también las notas y los campos de formulario que
+la zona toca. Hay tres formas:</p>
+
+<ul>
+<li><b>Borrar zona</b> (<code>Ctrl+Mayús+X</code>): se arrastra un rectángulo
+sobre el contenido que se quiere quitar. Las esquinas de una zona cambian su
+tamaño, el centro la mueve, un clic la quita.</li>
+<li><b>Borrar selección</b> (<code>Ctrl+Mayús+L</code>): se arrastra sobre
+las palabras, que se toman siempre enteras.</li>
+<li><b>Borrar palabra…</b> (<code>Ctrl+Mayús+F</code>): una palabra buscada
+en todas las páginas, cada aparición de una vez.</li>
+</ul>
+
+<p>Mientras la herramienta está activa, las zonas son rectángulos oscuros que
+se pueden corregir. En cuanto la desactivas (<code>Esc</code>), la página y su
+miniatura muestran la <b>vista previa</b>: el documento tal como se guardará.
+El título cuenta las eliminaciones aún pendientes, y antes de escribir el
+archivo Plico pide confirmación con el número de zonas y las páginas. Hasta
+entonces, todo se deshace con <code>Ctrl+Z</code>.</p>
+
+<h2 id="text">Corregir el texto</h2>
+
+<p><b>Editar → Editar texto</b> (<code>Ctrl+Mayús+T</code>): un clic en una
+línea la abre en un pequeño editor sobre la página. <code>Intro</code>
+confirma, <code>Esc</code> cancela. El texto nuevo ocupa el lugar del antiguo
+con el mismo tamaño y color, y con la misma fuente cuando está instalada. Está
+pensado para correcciones breves, una línea cada vez.</p>
+
+<h2 id="forms">Rellenar formularios</h2>
+
+<p>Si el PDF es un formulario, sus campos aparecen resaltados en la página:
+un clic en un campo lo abre para escribir. El panel «Formulario» enumera los
+campos de la página actual: texto, casillas, listas desplegables y opciones
+múltiples. Los valores entran en el archivo al guardar, y se deshacen con
+<code>Ctrl+Z</code>.</p>
+
+<h2 id="ocr">Reconocer el texto de un escaneo</h2>
+
+<p>Un escaneo es una imagen: su texto no se puede buscar ni copiar.
+<b>Editar → Reconocer texto…</b> (<code>Ctrl+Mayús+O</code>) lo lee y añade
+bajo la imagen una capa de texto invisible: la página se ve igual, pero el
+texto se puede seleccionar y buscar. Se eligen las páginas (la actual, desde
+aquí en adelante, o todas) y el idioma del documento. Al final, un aviso
+sobre la página dice en cuántas páginas ha encontrado texto.</p>
+
+<h2 id="sign">Firmar y verificar</h2>
+
+<p><b>Archivo → Firmar…</b> (<code>Ctrl+Mayús+D</code>) firma el documento
+con un certificado personal en formato PKCS#12 (<code>.p12</code> o
+<code>.pfx</code>) y su contraseña. Se puede añadir un motivo, un lugar y un
+recuadro visible en una página. La firma cubre el archivo guardado: cualquier
+cambio posterior la anula, y Plico avisa antes de quitarla.</p>
+
+<p><b>Archivo → Verificar firmas…</b> indica para cada firma si el documento
+está intacto y quién lo firmó. Un certificado se considera <i>de
+confianza</i> solo si lo añades tú, como archivo <code>.pem</code>, con el
+botón del diálogo: Plico no decide por su cuenta en quién confiar.</p>
+
+<h2 id="settings">Configuración</h2>
+
+<p><b>Configuración → Configurar Plico…</b> (<code>Ctrl+Mayús+,</code>):</p>
+
+<ul>
+<li><b>Idioma</b>: automático (el del sistema) o italiano, inglés, francés,
+alemán o español. Si el idioma del sistema no está entre estos, Plico usa el
+inglés. El nuevo idioma se aplica desde el próximo inicio.</li>
+<li><b>Área de notificación</b>: un icono de Plico junto al reloj. Con el
+icono también se puede elegir que la <b>X</b> de la ventana minimice Plico en
+el área de notificación en lugar de cerrarlo: un clic en el icono vuelve a
+abrir la ventana, y se sale con <b>Archivo → Salir</b> (<code>Ctrl+Q</code>) o
+con «Salir» en el menú del icono.</li>
+</ul>
+
+<h2 id="files">Dónde están los archivos</h2>
+
+<p>Instalado como Flatpak, Plico no ve por sí solo la carpeta personal: cada
+archivo pasa por el selector de archivos del sistema, y Plico solo puede leer y
+escribir los que eliges ahí, o los que abres con un doble clic. Es una
+protección, no un límite: los diálogos siguen proponiendo las carpetas
+reales.</p>
+
+<h2 id="keys">Atajos de teclado</h2>
+
+<table>
+<tr><th>Teclas</th><th>Orden</th></tr>
+<tr><td><code>Ctrl+O</code></td><td>Abrir</td></tr>
+<tr><td><code>Ctrl+Mayús+N</code></td><td>Crear desde imágenes</td></tr>
+<tr><td><code>Ctrl+S</code></td><td>Guardar</td></tr>
+<tr><td><code>Ctrl+Mayús+S</code></td><td>Guardar como</td></tr>
+<tr><td><code>Ctrl+Mayús+M</code></td><td>Unir PDF</td></tr>
+<tr><td><code>Ctrl+E</code></td><td>Extraer páginas</td></tr>
+<tr><td><code>Ctrl+Mayús+C</code></td><td>Guardar comprimido</td></tr>
+<tr><td><code>Ctrl+Mayús+D</code></td><td>Firmar</td></tr>
+<tr><td><code>Ctrl+W</code></td><td>Cerrar el documento</td></tr>
+<tr><td><code>Ctrl+Q</code></td><td>Salir</td></tr>
+<tr><td><code>Ctrl+Z</code> / <code>Ctrl+Y</code></td><td>Deshacer / Rehacer</td></tr>
+<tr><td><code>Ctrl+F</code></td><td>Buscar</td></tr>
+<tr><td><code>F3</code> / <code>Mayús+F3</code></td><td>Coincidencia siguiente / anterior</td></tr>
+<tr><td><code>Supr</code></td><td>Eliminar página</td></tr>
+<tr><td><code>Ctrl+R</code> / <code>Ctrl+Mayús+R</code></td><td>Girar a la derecha / a la izquierda</td></tr>
+<tr><td><code>Ctrl+Mayús+X</code></td><td>Borrar zona</td></tr>
+<tr><td><code>Ctrl+Mayús+L</code></td><td>Borrar selección</td></tr>
+<tr><td><code>Ctrl+Mayús+F</code></td><td>Borrar palabra</td></tr>
+<tr><td><code>Ctrl+Mayús+T</code></td><td>Editar texto</td></tr>
+<tr><td><code>Ctrl+Mayús+O</code></td><td>Reconocer texto</td></tr>
+<tr><td><code>Ctrl++</code> / <code>Ctrl+-</code></td><td>Ampliar / Reducir</td></tr>
+<tr><td><code>Ctrl+0</code></td><td>Ajustar al ancho</td></tr>
+<tr><td><code>Ctrl+Mayús+,</code></td><td>Configuración</td></tr>
+<tr><td><code>F1</code></td><td>Este manual</td></tr>
+<tr><td><code>Esc</code></td><td>Sale de la herramienta activa o cierra la búsqueda</td></tr>
+</table>
+
+</body>
+</html>

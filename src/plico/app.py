@@ -1,12 +1,14 @@
 """Entry point — creates QApplication and MainWindow."""
 
+import os
 import sys
+from collections.abc import MutableMapping
 
 from PySide6.QtCore import QCoreApplication, QLocale, QTranslator, QUrl
 from PySide6.QtWidgets import QApplication
 
 from . import preferences
-from .i18n import chosen_locale, install_qt_translator, install_translators
+from .i18n import LANGUAGES, chosen_locale, install_qt_translator, install_translators
 from .main_window import MainWindow
 from .model import is_image
 
@@ -50,6 +52,20 @@ def open_arguments(window: MainWindow, paths: list[str]) -> None:
             window.merge_path(extra)
 
 
+def language_environment(language: str, environment: MutableMapping[str, str]) -> None:
+    """Tell the desktop's own translations about a language chosen by hand.
+
+    On Plasma the standard buttons -- «Chiudi», «Annulla», «Salva» -- are drawn
+    by the KDE platform theme with KDE's catalogs, and those follow LANGUAGE,
+    not Qt's translators: a German Plico on an Italian system had German
+    menus and Italian buttons (measured in the Flatpak). The variable must be
+    set before the QApplication exists, because the theme is loaded with it.
+    "Automatic" leaves the environment alone.
+    """
+    if language in LANGUAGES:
+        environment["LANGUAGE"] = language
+
+
 def apply_language(app: QCoreApplication, language: str) -> list[QTranslator]:
     """Load the catalogs for *language* ("auto": the system's); return Plico's.
 
@@ -72,9 +88,12 @@ def main() -> int:
     QApplication.setApplicationDisplayName("Plico")
     QApplication.setDesktopFileName(APP_ID)
 
+    language = preferences.language(preferences.store())
+    # Before the QApplication: the platform theme reads it while it starts.
+    language_environment(language, os.environ)
     app = QApplication.instance() or QApplication(sys.argv)
     # Before the first window: the strings are read while it is built.
-    apply_language(app, preferences.language(preferences.store()))
+    apply_language(app, language)
     window = MainWindow()
     window.show()
 

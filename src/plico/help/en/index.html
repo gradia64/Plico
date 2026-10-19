@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Plico Handbook</title>
+</head>
+<body>
+
+<h1>Plico Handbook</h1>
+
+<p>Plico is a PDF editor: it rotates, deletes and reorders pages, merges
+files, really removes confidential data, fills in forms, makes scans
+searchable and signs documents. The original file is never touched until you
+save.</p>
+
+<ul class="toc">
+<li><a href="#open">Opening and merging</a></li>
+<li><a href="#pages">Pages</a></li>
+<li><a href="#images">Creating a PDF from images</a></li>
+<li><a href="#save">Saving</a></li>
+<li><a href="#find">Finding</a></li>
+<li><a href="#redact">Erasing data</a></li>
+<li><a href="#text">Correcting text</a></li>
+<li><a href="#forms">Filling in forms</a></li>
+<li><a href="#ocr">Recognizing the text of a scan</a></li>
+<li><a href="#sign">Signing and verifying</a></li>
+<li><a href="#settings">Settings</a></li>
+<li><a href="#files">Where the files are</a></li>
+<li><a href="#keys">Keyboard shortcuts</a></li>
+</ul>
+
+<h2 id="open">Opening and merging</h2>
+
+<p><b>File → Open…</b> (<code>Ctrl+O</code>) opens a PDF. A
+password-protected file asks for it before opening. You can also open a PDF
+by double-clicking it in the file manager.</p>
+
+<p><b>File → Merge PDF…</b> (<code>Ctrl+Shift+M</code>) appends the pages of
+another PDF, or of an image: a photographed receipt becomes the last page.
+Merged pages are moved, rotated and deleted like the others, and one
+<code>Ctrl+Z</code> undoes the merge.</p>
+
+<h2 id="pages">Pages</h2>
+
+<p>On the left is the thumbnail bar: a click brings the page into view,
+<b>dragging</b> changes the order.</p>
+
+<ul>
+<li><b>Rotate Right</b> (<code>Ctrl+R</code>) and <b>Rotate Left</b>
+(<code>Ctrl+Shift+R</code>) turn the selected page by 90°.</li>
+<li><b>Edit → Delete Page</b> (<code>Del</code>) removes it.</li>
+<li><b>File → Extract Pages…</b> (<code>Ctrl+E</code>) writes part of the
+document to a new file. Pages are written like <code>1-3,5,8</code>; commas
+and blanks separate alike, so <code>1 3</code> is pages 1 and 3. The typed
+order is the order of the new file: <code>5,1-3</code> puts the fifth page
+first.</li>
+</ul>
+
+<p>Everything is undone with <b>Edit → Undo</b> (<code>Ctrl+Z</code>) and
+redone with <code>Ctrl+Y</code>; the «History» panel shows the steps taken.
+Zoom is in the <b>View</b> menu: <code>Ctrl++</code>, <code>Ctrl+-</code> and
+<code>Ctrl+0</code> to fit the width.</p>
+
+<h2 id="images">Creating a PDF from images</h2>
+
+<p><b>File → Create from Images…</b> (<code>Ctrl+Shift+N</code>) turns photos
+and scans (PNG, JPEG, TIFF, BMP, GIF) into a PDF, one page per image, in the
+order chosen. A scan keeps its real size, a phone photo becomes an A4. The
+document starts as «Untitled»: with <code>Ctrl+S</code> Plico offers to save
+it next to the first image.</p>
+
+<h2 id="save">Saving</h2>
+
+<ul>
+<li><b>File → Save</b> (<code>Ctrl+S</code>) writes to the open file.</li>
+<li><b>File → Save As…</b> (<code>Ctrl+Shift+S</code>) asks where.</li>
+<li><b>File → Save Compressed…</b> (<code>Ctrl+Shift+C</code>) writes a
+lighter copy. <i>Light</i> loses nothing; <i>Medium</i> and <i>Strong</i>
+resample over-detailed images (to 150 and 96 dpi). The work can be limited
+to the images or to some pages. Plico shows what it really gained, and if
+there is nothing to gain it writes nothing.</li>
+</ul>
+
+<p>Saving always goes through a temporary file: if something goes wrong, the
+original file stays as it was. The window title marks unsaved changes with
+<code>*</code>, and closing or opening another file asks before losing
+them.</p>
+
+<h2 id="find">Finding</h2>
+
+<p><b>Edit → Find…</b> (<code>Ctrl+F</code>) opens a bar under the page.
+Every match is highlighted, the current one in orange; <code>Enter</code> or
+<code>F3</code> goes to the next, <code>Shift+F3</code> to the previous,
+<code>Esc</code> closes the bar. The search also finds words just recognized
+by OCR, before saving.</p>
+
+<h2 id="redact">Erasing data</h2>
+
+<p>Erasing in Plico means <b>taking</b> the content out of the file, not
+covering it with a black rectangle: what goes can no longer be copied or
+searched. The notes and form fields the area touches go with it. There are
+three ways:</p>
+
+<ul>
+<li><b>Erase Area</b> (<code>Ctrl+Shift+X</code>): drag a rectangle over the
+content to remove. The corners of an area resize it, the centre moves it, a
+click removes it.</li>
+<li><b>Erase Selection</b> (<code>Ctrl+Shift+L</code>): drag over the words,
+which are always taken whole.</li>
+<li><b>Erase Word…</b> (<code>Ctrl+Shift+F</code>): a word searched on every
+page, every occurrence in one go.</li>
+</ul>
+
+<p>While the tool is on, the areas are dark rectangles to correct. As soon as
+you turn it off (<code>Esc</code>) the page and its thumbnail show the
+<b>preview</b>: the document as it will be saved. The title counts the
+removals still to apply, and before writing the file Plico asks for
+confirmation with the number of areas and the pages. Until then everything is
+undone with <code>Ctrl+Z</code>.</p>
+
+<h2 id="text">Correcting text</h2>
+
+<p><b>Edit → Edit Text</b> (<code>Ctrl+Shift+T</code>): a click on a line
+opens it in a small editor over the page. <code>Enter</code> confirms,
+<code>Esc</code> cancels. The new text takes the place of the old one with the
+same size and colour, and with the same font when it is installed. It is meant
+for short corrections, one line at a time.</p>
+
+<h2 id="forms">Filling in forms</h2>
+
+<p>If the PDF is a form, its fields are highlighted on the page: a click on a
+field opens it for typing. The «Form» panel lists the fields of the current
+page: text, check boxes, drop-down lists and multiple choices. The values go
+into the file when you save, and are undone with <code>Ctrl+Z</code>.</p>
+
+<h2 id="ocr">Recognizing the text of a scan</h2>
+
+<p>A scan is a picture: its text can be neither searched nor copied.
+<b>Edit → Recognize Text…</b> (<code>Ctrl+Shift+O</code>) reads it and adds
+an invisible text layer under the image: the page looks the same, but the
+text becomes selectable and searchable. You choose the pages (the current
+one, from here on, or all) and the language of the document. At the end a
+notice over the page says on how many pages it found text.</p>
+
+<h2 id="sign">Signing and verifying</h2>
+
+<p><b>File → Sign…</b> (<code>Ctrl+Shift+D</code>) signs the document with a
+personal certificate in PKCS#12 format (<code>.p12</code> or
+<code>.pfx</code>) and its password. You can add a reason, a location and a
+visible box on a page. The signature covers the saved file: any later change
+voids it, and Plico warns before removing it.</p>
+
+<p><b>File → Verify Signatures…</b> tells for each signature whether the
+document is intact and who signed it. A certificate is considered
+<i>trusted</i> only if you add it yourself, as a <code>.pem</code> file, with
+the dialog's button: Plico does not decide on its own whom to trust.</p>
+
+<h2 id="settings">Settings</h2>
+
+<p><b>Settings → Configure Plico…</b> (<code>Ctrl+Shift+,</code>):</p>
+
+<ul>
+<li><b>Language</b>: automatic (the system's) or Italian, English, French,
+German or Spanish. If the system language is not among these, Plico uses
+English. The new language applies from the next start.</li>
+<li><b>Notification area</b>: a Plico icon next to the clock. With the icon
+you can also choose that the window's <b>X</b> minimizes Plico to the
+notification area instead of closing it: a click on the icon reopens the
+window, and you quit from <b>File → Quit</b> (<code>Ctrl+Q</code>) or from
+«Quit» in the icon's menu.</li>
+</ul>
+
+<h2 id="files">Where the files are</h2>
+
+<p>Installed as a Flatpak, Plico does not see the home folder by itself:
+every file goes through the system's file chooser, and Plico can read and
+write only the ones you pick there, or open with a double click. It is a
+protection, not a limit: the dialogs still offer the real folders.</p>
+
+<h2 id="keys">Keyboard shortcuts</h2>
+
+<table>
+<tr><th>Keys</th><th>Command</th></tr>
+<tr><td><code>Ctrl+O</code></td><td>Open</td></tr>
+<tr><td><code>Ctrl+Shift+N</code></td><td>Create from images</td></tr>
+<tr><td><code>Ctrl+S</code></td><td>Save</td></tr>
+<tr><td><code>Ctrl+Shift+S</code></td><td>Save as</td></tr>
+<tr><td><code>Ctrl+Shift+M</code></td><td>Merge PDF</td></tr>
+<tr><td><code>Ctrl+E</code></td><td>Extract pages</td></tr>
+<tr><td><code>Ctrl+Shift+C</code></td><td>Save compressed</td></tr>
+<tr><td><code>Ctrl+Shift+D</code></td><td>Sign</td></tr>
+<tr><td><code>Ctrl+W</code></td><td>Close the document</td></tr>
+<tr><td><code>Ctrl+Q</code></td><td>Quit</td></tr>
+<tr><td><code>Ctrl+Z</code> / <code>Ctrl+Y</code></td><td>Undo / Redo</td></tr>
+<tr><td><code>Ctrl+F</code></td><td>Find</td></tr>
+<tr><td><code>F3</code> / <code>Shift+F3</code></td><td>Next / previous match</td></tr>
+<tr><td><code>Del</code></td><td>Delete page</td></tr>
+<tr><td><code>Ctrl+R</code> / <code>Ctrl+Shift+R</code></td><td>Rotate right / left</td></tr>
+<tr><td><code>Ctrl+Shift+X</code></td><td>Erase area</td></tr>
+<tr><td><code>Ctrl+Shift+L</code></td><td>Erase selection</td></tr>
+<tr><td><code>Ctrl+Shift+F</code></td><td>Erase word</td></tr>
+<tr><td><code>Ctrl+Shift+T</code></td><td>Edit text</td></tr>
+<tr><td><code>Ctrl+Shift+O</code></td><td>Recognize text</td></tr>
+<tr><td><code>Ctrl++</code> / <code>Ctrl+-</code></td><td>Zoom In / Zoom Out</td></tr>
+<tr><td><code>Ctrl+0</code></td><td>Fit to width</td></tr>
+<tr><td><code>Ctrl+Shift+,</code></td><td>Settings</td></tr>
+<tr><td><code>F1</code></td><td>This handbook</td></tr>
+<tr><td><code>Esc</code></td><td>Leaves the active tool or closes the search</td></tr>
+</table>
+
+</body>
+</html>

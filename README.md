@@ -39,6 +39,9 @@ comprimerli.
   Con l'icona si può anche far sì che la X riduca Plico nell'area di notifica
   invece di chiuderlo: si esce da *File → Esci* (`Ctrl+Q`) o da «Esci» nel
   menu dell'icona. La lingua cambia al prossimo avvio
+- **Guida** (*Aiuto → Guida di Plico*, `F1`) in italiano, inglese, francese,
+  tedesco e spagnolo, nella lingua dell'interfaccia: si legge in una finestra
+  di Plico, anche senza rete
 - **Undo/Redo** completo grazie a `QUndoStack`
 - **Rendering asincrono** in un thread separato — l'UI non si blocca mai
 - **Rendering lazy**: si renderizzano solo le pagine visibili, non l'intero

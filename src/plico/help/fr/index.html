@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Manuel de Plico</title>
+</head>
+<body>
+
+<h1>Manuel de Plico</h1>
+
+<p>Plico est un éditeur PDF : il fait pivoter, supprime et réordonne les
+pages, fusionne des fichiers, efface vraiment les données confidentielles,
+remplit les formulaires, rend les scans consultables et signe les documents.
+Le fichier d'origine n'est jamais modifié tant que vous n'enregistrez pas.</p>
+
+<ul class="toc">
+<li><a href="#open">Ouvrir et fusionner</a></li>
+<li><a href="#pages">Les pages</a></li>
+<li><a href="#images">Créer un PDF à partir d'images</a></li>
+<li><a href="#save">Enregistrer</a></li>
+<li><a href="#find">Rechercher</a></li>
+<li><a href="#redact">Effacer des données</a></li>
+<li><a href="#text">Corriger le texte</a></li>
+<li><a href="#forms">Remplir les formulaires</a></li>
+<li><a href="#ocr">Reconnaître le texte d'un scan</a></li>
+<li><a href="#sign">Signer et vérifier</a></li>
+<li><a href="#settings">Configuration</a></li>
+<li><a href="#files">Où sont les fichiers</a></li>
+<li><a href="#keys">Raccourcis clavier</a></li>
+</ul>
+
+<h2 id="open">Ouvrir et fusionner</h2>
+
+<p><b>Fichier → Ouvrir…</b> (<code>Ctrl+O</code>) ouvre un PDF. Un fichier
+protégé par mot de passe le demande avant de s'ouvrir. On peut aussi ouvrir
+un PDF d'un double clic depuis le gestionnaire de fichiers.</p>
+
+<p><b>Fichier → Fusionner des PDF…</b> (<code>Ctrl+Maj+M</code>) ajoute à la
+fin les pages d'un autre PDF, ou d'une image : un reçu photographié devient la
+dernière page. Les pages fusionnées se déplacent, pivotent et se suppriment
+comme les autres, et un <code>Ctrl+Z</code> annule la fusion.</p>
+
+<h2 id="pages">Les pages</h2>
+
+<p>À gauche se trouve la barre des miniatures : un clic affiche la page, le
+<b>glisser-déposer</b> change l'ordre.</p>
+
+<ul>
+<li><b>Pivoter à droite</b> (<code>Ctrl+R</code>) et <b>Pivoter à gauche</b>
+(<code>Ctrl+Maj+R</code>) tournent la page choisie de 90°.</li>
+<li><b>Édition → Supprimer la page</b> (<code>Suppr</code>) la retire.</li>
+<li><b>Fichier → Extraire des pages…</b> (<code>Ctrl+E</code>) écrit une partie
+du document dans un nouveau fichier. Les pages s'écrivent comme
+<code>1-3,5,8</code> ; virgules et espaces séparent de la même façon, donc
+<code>1 3</code> désigne les pages 1 et 3. L'ordre saisi est celui du nouveau
+fichier : <code>5,1-3</code> place la cinquième page en premier.</li>
+</ul>
+
+<p>Tout s'annule avec <b>Édition → Annuler</b> (<code>Ctrl+Z</code>) et se
+rétablit avec <code>Ctrl+Y</code> ; le panneau « Historique » montre les
+étapes. Le zoom est dans le menu <b>Affichage</b> : <code>Ctrl++</code>,
+<code>Ctrl+-</code> et <code>Ctrl+0</code> pour ajuster à la largeur.</p>
+
+<h2 id="images">Créer un PDF à partir d'images</h2>
+
+<p><b>Fichier → Créer à partir d'images…</b> (<code>Ctrl+Maj+N</code>)
+transforme photos et scans (PNG, JPEG, TIFF, BMP, GIF) en PDF, une page par
+image, dans l'ordre choisi. Un scan garde son format réel, une photo de
+téléphone devient un A4. Le document naît « Sans titre » : avec
+<code>Ctrl+S</code> Plico propose de l'enregistrer à côté de la première
+image.</p>
+
+<h2 id="save">Enregistrer</h2>
+
+<ul>
+<li><b>Fichier → Enregistrer</b> (<code>Ctrl+S</code>) écrit dans le fichier
+ouvert.</li>
+<li><b>Fichier → Enregistrer sous…</b> (<code>Ctrl+Maj+S</code>) demande
+où.</li>
+<li><b>Fichier → Enregistrer compressé…</b> (<code>Ctrl+Maj+C</code>) écrit
+une copie plus légère. <i>Légère</i> ne perd rien ; <i>Moyenne</i> et
+<i>Forte</i> rééchantillonnent les images trop détaillées (à 150 et 96 dpi).
+On peut limiter le travail aux images ou à certaines pages. Plico montre le
+gain réel, et s'il n'y a rien à gagner il n'écrit rien.</li>
+</ul>
+
+<p>L'enregistrement passe toujours par un fichier temporaire : si quelque
+chose tourne mal, le fichier d'origine reste tel quel. Le titre de la fenêtre
+marque d'un <code>*</code> les modifications non enregistrées, et fermer ou
+ouvrir un autre fichier demande avant de les perdre.</p>
+
+<h2 id="find">Rechercher</h2>
+
+<p><b>Édition → Rechercher…</b> (<code>Ctrl+F</code>) ouvre une barre sous la
+page. Toutes les occurrences sont surlignées, l'occurrence courante en orange ;
+<code>Entrée</code> ou <code>F3</code> passe à la suivante,
+<code>Maj+F3</code> à la précédente, <code>Échap</code> ferme la barre. La
+recherche trouve aussi les mots que l'OCR vient de reconnaître, avant
+l'enregistrement.</p>
+
+<h2 id="redact">Effacer des données</h2>
+
+<p>Effacer dans Plico veut dire <b>retirer</b> le contenu du fichier, pas le
+couvrir d'un rectangle noir : ce qui disparaît ne peut plus être copié ni
+recherché. Les notes et les champs de formulaire touchés par la zone
+disparaissent aussi. Il y a trois façons :</p>
+
+<ul>
+<li><b>Effacer une zone</b> (<code>Ctrl+Maj+X</code>) : on trace un rectangle
+sur le contenu à retirer. Les coins d'une zone la redimensionnent, le centre la
+déplace, un clic la retire.</li>
+<li><b>Effacer la sélection</b> (<code>Ctrl+Maj+L</code>) : on glisse sur les
+mots, toujours pris en entier.</li>
+<li><b>Effacer un mot…</b> (<code>Ctrl+Maj+F</code>) : un mot recherché dans
+toutes les pages, chaque occurrence d'un coup.</li>
+</ul>
+
+<p>Tant que l'outil est actif, les zones sont des rectangles sombres à
+corriger. Dès que vous le désactivez (<code>Échap</code>), la page et sa
+miniature montrent l'<b>aperçu</b> : le document tel qu'il sera enregistré.
+Le titre compte les suppressions encore à appliquer, et avant d'écrire le
+fichier Plico demande confirmation avec le nombre de zones et les pages.
+Jusque-là, tout s'annule avec <code>Ctrl+Z</code>.</p>
+
+<h2 id="text">Corriger le texte</h2>
+
+<p><b>Édition → Modifier le texte</b> (<code>Ctrl+Maj+T</code>) : un clic sur
+une ligne l'ouvre dans un petit éditeur au-dessus de la page.
+<code>Entrée</code> confirme, <code>Échap</code> annule. Le nouveau texte prend
+la place de l'ancien avec la même taille et la même couleur, et avec la même
+police quand elle est installée. C'est fait pour de courtes corrections, une
+ligne à la fois.</p>
+
+<h2 id="forms">Remplir les formulaires</h2>
+
+<p>Si le PDF est un formulaire, ses champs sont mis en évidence sur la page :
+un clic sur un champ l'ouvre pour écrire. Le panneau « Formulaire » liste les
+champs de la page courante : texte, cases à cocher, listes déroulantes et
+choix multiples. Les valeurs entrent dans le fichier à l'enregistrement, et
+s'annulent avec <code>Ctrl+Z</code>.</p>
+
+<h2 id="ocr">Reconnaître le texte d'un scan</h2>
+
+<p>Un scan est une image : son texte ne peut être ni recherché ni copié.
+<b>Édition → Reconnaître le texte…</b> (<code>Ctrl+Maj+O</code>) le lit et
+ajoute sous l'image une couche de texte invisible : la page reste identique,
+mais le texte devient sélectionnable et consultable. On choisit les pages (la
+courante, à partir d'ici, ou toutes) et la langue du document. À la fin, un
+avis au-dessus de la page indique sur combien de pages du texte a été
+trouvé.</p>
+
+<h2 id="sign">Signer et vérifier</h2>
+
+<p><b>Fichier → Signer…</b> (<code>Ctrl+Maj+D</code>) signe le document avec
+un certificat personnel au format PKCS#12 (<code>.p12</code> ou
+<code>.pfx</code>) et son mot de passe. On peut ajouter un motif, un lieu et
+un cadre visible sur une page. La signature couvre le fichier enregistré :
+toute modification ultérieure l'annule, et Plico prévient avant de la
+retirer.</p>
+
+<p><b>Fichier → Vérifier les signatures…</b> indique pour chaque signature si
+le document est intact et qui l'a signé. Un certificat n'est considéré comme
+<i>de confiance</i> que si vous l'ajoutez vous-même, sous forme de fichier
+<code>.pem</code>, avec le bouton de la boîte de dialogue : Plico ne décide
+pas seul à qui faire confiance.</p>
+
+<h2 id="settings">Configuration</h2>
+
+<p><b>Configuration → Configurer Plico…</b> (<code>Ctrl+Maj+,</code>) :</p>
+
+<ul>
+<li><b>Langue</b> : automatique (celle du système) ou italien, anglais,
+français, allemand ou espagnol. Si la langue du système n'en fait pas partie,
+Plico utilise l'anglais. La nouvelle langue s'applique au prochain
+démarrage.</li>
+<li><b>Zone de notification</b> : une icône de Plico près de l'horloge. Avec
+l'icône, on peut aussi choisir que le <b>X</b> de la fenêtre réduise Plico
+dans la zone de notification au lieu de le fermer : un clic sur l'icône
+rouvre la fenêtre, et on quitte par <b>Fichier → Quitter</b>
+(<code>Ctrl+Q</code>) ou par « Quitter » dans le menu de l'icône.</li>
+</ul>
+
+<h2 id="files">Où sont les fichiers</h2>
+
+<p>Installé en Flatpak, Plico ne voit pas seul le dossier personnel : chaque
+fichier passe par la fenêtre de sélection de fichiers du système, et Plico ne
+peut lire et écrire que ceux que vous y choisissez, ou que vous ouvrez d'un
+double clic. C'est une protection, pas une limite : les boîtes de dialogue
+proposent quand même les vrais dossiers.</p>
+
+<h2 id="keys">Raccourcis clavier</h2>
+
+<table>
+<tr><th>Touches</th><th>Commande</th></tr>
+<tr><td><code>Ctrl+O</code></td><td>Ouvrir</td></tr>
+<tr><td><code>Ctrl+Maj+N</code></td><td>Créer à partir d'images</td></tr>
+<tr><td><code>Ctrl+S</code></td><td>Enregistrer</td></tr>
+<tr><td><code>Ctrl+Maj+S</code></td><td>Enregistrer sous</td></tr>
+<tr><td><code>Ctrl+Maj+M</code></td><td>Fusionner des PDF</td></tr>
+<tr><td><code>Ctrl+E</code></td><td>Extraire des pages</td></tr>
+<tr><td><code>Ctrl+Maj+C</code></td><td>Enregistrer compressé</td></tr>
+<tr><td><code>Ctrl+Maj+D</code></td><td>Signer</td></tr>
+<tr><td><code>Ctrl+W</code></td><td>Fermer le document</td></tr>
+<tr><td><code>Ctrl+Q</code></td><td>Quitter</td></tr>
+<tr><td><code>Ctrl+Z</code> / <code>Ctrl+Y</code></td><td>Annuler / Rétablir</td></tr>
+<tr><td><code>Ctrl+F</code></td><td>Rechercher</td></tr>
+<tr><td><code>F3</code> / <code>Maj+F3</code></td><td>Occurrence suivante / précédente</td></tr>
+<tr><td><code>Suppr</code></td><td>Supprimer la page</td></tr>
+<tr><td><code>Ctrl+R</code> / <code>Ctrl+Maj+R</code></td><td>Pivoter à droite / à gauche</td></tr>
+<tr><td><code>Ctrl+Maj+X</code></td><td>Effacer une zone</td></tr>
+<tr><td><code>Ctrl+Maj+L</code></td><td>Effacer la sélection</td></tr>
+<tr><td><code>Ctrl+Maj+F</code></td><td>Effacer un mot</td></tr>
+<tr><td><code>Ctrl+Maj+T</code></td><td>Modifier le texte</td></tr>
+<tr><td><code>Ctrl+Maj+O</code></td><td>Reconnaître le texte</td></tr>
+<tr><td><code>Ctrl++</code> / <code>Ctrl+-</code></td><td>Zoom avant / Zoom arrière</td></tr>
+<tr><td><code>Ctrl+0</code></td><td>Ajuster à la largeur</td></tr>
+<tr><td><code>Ctrl+Maj+,</code></td><td>Configuration</td></tr>
+<tr><td><code>F1</code></td><td>Ce manuel</td></tr>
+<tr><td><code>Échap</code></td><td>Quitte l'outil actif ou ferme la recherche</td></tr>
+</table>
+
+</body>
+</html>

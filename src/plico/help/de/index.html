@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Plico-Handbuch</title>
+</head>
+<body>
+
+<h1>Plico-Handbuch</h1>
+
+<p>Plico ist ein PDF-Editor: Er dreht, löscht und sortiert Seiten, führt
+Dateien zusammen, entfernt vertrauliche Daten wirklich, füllt Formulare aus,
+macht Scans durchsuchbar und signiert Dokumente. Die Ausgangsdatei wird nie
+verändert, solange Sie nicht speichern.</p>
+
+<ul class="toc">
+<li><a href="#open">Öffnen und zusammenführen</a></li>
+<li><a href="#pages">Seiten</a></li>
+<li><a href="#images">Ein PDF aus Bildern erstellen</a></li>
+<li><a href="#save">Speichern</a></li>
+<li><a href="#find">Suchen</a></li>
+<li><a href="#redact">Daten löschen</a></li>
+<li><a href="#text">Text korrigieren</a></li>
+<li><a href="#forms">Formulare ausfüllen</a></li>
+<li><a href="#ocr">Den Text eines Scans erkennen</a></li>
+<li><a href="#sign">Signieren und prüfen</a></li>
+<li><a href="#settings">Einstellungen</a></li>
+<li><a href="#files">Wo die Dateien sind</a></li>
+<li><a href="#keys">Tastenkürzel</a></li>
+</ul>
+
+<h2 id="open">Öffnen und zusammenführen</h2>
+
+<p><b>Datei → Öffnen…</b> (<code>Strg+O</code>) öffnet ein PDF. Eine
+passwortgeschützte Datei fragt vor dem Öffnen danach. Ein PDF lässt sich auch
+per Doppelklick im Dateimanager öffnen.</p>
+
+<p><b>Datei → PDF zusammenführen…</b> (<code>Strg+Umschalt+M</code>) hängt
+die Seiten eines anderen PDFs oder eines Bildes an: Eine fotografierte
+Quittung wird zur letzten Seite. Zusammengeführte Seiten lassen sich wie die
+anderen verschieben, drehen und löschen, und ein <code>Strg+Z</code> macht das
+Zusammenführen rückgängig.</p>
+
+<h2 id="pages">Seiten</h2>
+
+<p>Links ist die Miniaturleiste: Ein Klick zeigt die Seite an,
+<b>Ziehen</b> ändert die Reihenfolge.</p>
+
+<ul>
+<li><b>Nach rechts drehen</b> (<code>Strg+R</code>) und <b>Nach links
+drehen</b> (<code>Strg+Umschalt+R</code>) drehen die gewählte Seite um
+90°.</li>
+<li><b>Bearbeiten → Seite löschen</b> (<code>Entf</code>) entfernt sie.</li>
+<li><b>Datei → Seiten extrahieren…</b> (<code>Strg+E</code>) schreibt einen
+Teil des Dokuments in eine neue Datei. Seiten werden wie <code>1-3,5,8</code>
+angegeben; Kommas und Leerzeichen trennen gleichermaßen, <code>1 3</code> sind
+also die Seiten 1 und 3. Die eingegebene Reihenfolge ist die der neuen Datei:
+<code>5,1-3</code> setzt die fünfte Seite an den Anfang.</li>
+</ul>
+
+<p>Alles lässt sich mit <b>Bearbeiten → Rückgängig</b> (<code>Strg+Z</code>)
+zurücknehmen und mit <code>Strg+Y</code> wiederholen; das Feld „Verlauf“
+zeigt die Schritte. Der Zoom ist im Menü <b>Ansicht</b>: <code>Strg++</code>,
+<code>Strg+-</code> und <code>Strg+0</code> zum Anpassen an die Breite.</p>
+
+<h2 id="images">Ein PDF aus Bildern erstellen</h2>
+
+<p><b>Datei → Aus Bildern erstellen…</b> (<code>Strg+Umschalt+N</code>) macht
+aus Fotos und Scans (PNG, JPEG, TIFF, BMP, GIF) ein PDF, eine Seite pro Bild,
+in der gewählten Reihenfolge. Ein Scan behält sein echtes Format, ein
+Handyfoto wird zu A4. Das Dokument beginnt als „Unbenannt“: Mit
+<code>Strg+S</code> schlägt Plico vor, es neben dem ersten Bild zu
+speichern.</p>
+
+<h2 id="save">Speichern</h2>
+
+<ul>
+<li><b>Datei → Speichern</b> (<code>Strg+S</code>) schreibt in die geöffnete
+Datei.</li>
+<li><b>Datei → Speichern unter…</b> (<code>Strg+Umschalt+S</code>) fragt,
+wohin.</li>
+<li><b>Datei → Komprimiert speichern…</b> (<code>Strg+Umschalt+C</code>)
+schreibt eine leichtere Kopie. <i>Leicht</i> verliert nichts; <i>Mittel</i>
+und <i>Stark</i> rechnen zu detaillierte Bilder herunter (auf 150 und
+96 dpi). Die Arbeit lässt sich auf die Bilder oder auf bestimmte Seiten
+beschränken. Plico zeigt, was wirklich gewonnen wurde, und schreibt nichts,
+wenn nichts zu gewinnen ist.</li>
+</ul>
+
+<p>Gespeichert wird immer über eine temporäre Datei: Geht etwas schief, bleibt
+die Ausgangsdatei, wie sie war. Der Fenstertitel markiert ungespeicherte
+Änderungen mit <code>*</code>, und Schließen oder Öffnen einer anderen Datei
+fragt, bevor sie verloren gehen.</p>
+
+<h2 id="find">Suchen</h2>
+
+<p><b>Bearbeiten → Suchen…</b> (<code>Strg+F</code>) öffnet eine Leiste unter
+der Seite. Alle Treffer werden hervorgehoben, der aktuelle in Orange;
+<code>Eingabe</code> oder <code>F3</code> springt zum nächsten,
+<code>Umschalt+F3</code> zum vorherigen, <code>Esc</code> schließt die Leiste.
+Die Suche findet auch Wörter, die die Texterkennung gerade erkannt hat, schon
+vor dem Speichern.</p>
+
+<h2 id="redact">Daten löschen</h2>
+
+<p>Löschen heißt in Plico, den Inhalt aus der Datei zu <b>entfernen</b>, nicht
+ihn mit einem schwarzen Rechteck abzudecken: Was verschwindet, lässt sich
+weder kopieren noch durchsuchen. Notizen und Formularfelder, die der Bereich
+berührt, verschwinden mit. Es gibt drei Wege:</p>
+
+<ul>
+<li><b>Bereich löschen</b> (<code>Strg+Umschalt+X</code>): ein Rechteck über
+den zu entfernenden Inhalt ziehen. Die Ecken eines Bereichs ändern seine
+Größe, die Mitte verschiebt ihn, ein Klick entfernt ihn.</li>
+<li><b>Auswahl löschen</b> (<code>Strg+Umschalt+L</code>): über die Wörter
+ziehen, die immer ganz erfasst werden.</li>
+<li><b>Wort löschen…</b> (<code>Strg+Umschalt+F</code>): ein Wort, auf allen
+Seiten gesucht, jedes Vorkommen auf einmal.</li>
+</ul>
+
+<p>Solange das Werkzeug aktiv ist, sind die Bereiche dunkle Rechtecke zum
+Korrigieren. Sobald Sie es ausschalten (<code>Esc</code>), zeigen Seite und
+Miniatur die <b>Vorschau</b>: das Dokument, wie es gespeichert wird. Der Titel
+zählt die noch ausstehenden Löschungen, und vor dem Schreiben der Datei bittet
+Plico um Bestätigung, mit der Zahl der Bereiche und den Seiten. Bis dahin
+lässt sich alles mit <code>Strg+Z</code> zurücknehmen.</p>
+
+<h2 id="text">Text korrigieren</h2>
+
+<p><b>Bearbeiten → Text bearbeiten</b> (<code>Strg+Umschalt+T</code>): Ein
+Klick auf eine Zeile öffnet sie in einem kleinen Editor über der Seite.
+<code>Eingabe</code> bestätigt, <code>Esc</code> bricht ab. Der neue Text
+ersetzt den alten in derselben Größe und Farbe, und in derselben Schrift, wenn
+sie installiert ist. Gedacht ist das für kurze Korrekturen, eine Zeile nach
+der anderen.</p>
+
+<h2 id="forms">Formulare ausfüllen</h2>
+
+<p>Ist das PDF ein Formular, sind seine Felder auf der Seite hervorgehoben:
+Ein Klick auf ein Feld öffnet es zum Schreiben. Das Feld „Formular“ listet die
+Felder der aktuellen Seite: Text, Kontrollkästchen, Auswahllisten und
+Mehrfachauswahlen. Die Werte kommen beim Speichern in die Datei und lassen sich
+mit <code>Strg+Z</code> zurücknehmen.</p>
+
+<h2 id="ocr">Den Text eines Scans erkennen</h2>
+
+<p>Ein Scan ist ein Bild: Sein Text lässt sich weder suchen noch kopieren.
+<b>Bearbeiten → Text erkennen…</b> (<code>Strg+Umschalt+O</code>) liest ihn
+und legt unter das Bild eine unsichtbare Textebene: Die Seite sieht gleich
+aus, aber der Text wird auswählbar und durchsuchbar. Gewählt werden die Seiten
+(die aktuelle, ab hier oder alle) und die Sprache des Dokuments. Am Ende sagt
+ein Hinweis über der Seite, auf wie vielen Seiten Text gefunden wurde.</p>
+
+<h2 id="sign">Signieren und prüfen</h2>
+
+<p><b>Datei → Signieren…</b> (<code>Strg+Umschalt+D</code>) signiert das
+Dokument mit einem persönlichen Zertifikat im Format PKCS#12
+(<code>.p12</code> oder <code>.pfx</code>) und seinem Passwort. Grund, Ort und
+ein sichtbares Feld auf einer Seite lassen sich hinzufügen. Die Signatur deckt
+die gespeicherte Datei ab: Jede spätere Änderung macht sie ungültig, und Plico
+warnt, bevor sie entfernt wird.</p>
+
+<p><b>Datei → Signaturen prüfen…</b> zeigt für jede Signatur, ob das Dokument
+unverändert ist und wer signiert hat. Ein Zertifikat gilt nur dann als
+<i>vertrauenswürdig</i>, wenn Sie es selbst als <code>.pem</code>-Datei über
+die Schaltfläche des Dialogs hinzufügen: Plico entscheidet nicht allein, wem
+zu vertrauen ist.</p>
+
+<h2 id="settings">Einstellungen</h2>
+
+<p><b>Einstellungen → Plico einrichten…</b>
+(<code>Strg+Umschalt+,</code>):</p>
+
+<ul>
+<li><b>Sprache</b>: automatisch (die des Systems) oder Italienisch, Englisch,
+Französisch, Deutsch oder Spanisch. Ist die Systemsprache nicht darunter,
+verwendet Plico Englisch. Die neue Sprache gilt ab dem nächsten Start.</li>
+<li><b>Benachrichtigungsbereich</b>: ein Plico-Symbol neben der Uhr. Mit dem
+Symbol lässt sich auch festlegen, dass das <b>X</b> des Fensters Plico in den
+Benachrichtigungsbereich minimiert, statt es zu schließen: Ein Klick auf das
+Symbol öffnet das Fenster wieder, beendet wird mit <b>Datei → Beenden</b>
+(<code>Strg+Q</code>) oder mit „Beenden“ im Menü des Symbols.</li>
+</ul>
+
+<h2 id="files">Wo die Dateien sind</h2>
+
+<p>Als Flatpak installiert, sieht Plico den persönlichen Ordner nicht von
+selbst: Jede Datei läuft über den Dateiauswahldialog des Systems, und Plico
+kann nur die Dateien lesen und schreiben, die Sie dort wählen oder per
+Doppelklick öffnen. Das ist ein Schutz, keine Einschränkung: Die Dialoge
+schlagen trotzdem die echten Ordner vor.</p>
+
+<h2 id="keys">Tastenkürzel</h2>
+
+<table>
+<tr><th>Tasten</th><th>Befehl</th></tr>
+<tr><td><code>Strg+O</code></td><td>Öffnen</td></tr>
+<tr><td><code>Strg+Umschalt+N</code></td><td>Aus Bildern erstellen</td></tr>
+<tr><td><code>Strg+S</code></td><td>Speichern</td></tr>
+<tr><td><code>Strg+Umschalt+S</code></td><td>Speichern unter</td></tr>
+<tr><td><code>Strg+Umschalt+M</code></td><td>PDF zusammenführen</td></tr>
+<tr><td><code>Strg+E</code></td><td>Seiten extrahieren</td></tr>
+<tr><td><code>Strg+Umschalt+C</code></td><td>Komprimiert speichern</td></tr>
+<tr><td><code>Strg+Umschalt+D</code></td><td>Signieren</td></tr>
+<tr><td><code>Strg+W</code></td><td>Dokument schließen</td></tr>
+<tr><td><code>Strg+Q</code></td><td>Beenden</td></tr>
+<tr><td><code>Strg+Z</code> / <code>Strg+Y</code></td><td>Rückgängig / Wiederholen</td></tr>
+<tr><td><code>Strg+F</code></td><td>Suchen</td></tr>
+<tr><td><code>F3</code> / <code>Umschalt+F3</code></td><td>Nächster / vorheriger Treffer</td></tr>
+<tr><td><code>Entf</code></td><td>Seite löschen</td></tr>
+<tr><td><code>Strg+R</code> / <code>Strg+Umschalt+R</code></td><td>Nach rechts / links drehen</td></tr>
+<tr><td><code>Strg+Umschalt+X</code></td><td>Bereich löschen</td></tr>
+<tr><td><code>Strg+Umschalt+L</code></td><td>Auswahl löschen</td></tr>
+<tr><td><code>Strg+Umschalt+F</code></td><td>Wort löschen</td></tr>
+<tr><td><code>Strg+Umschalt+T</code></td><td>Text bearbeiten</td></tr>
+<tr><td><code>Strg+Umschalt+O</code></td><td>Text erkennen</td></tr>
+<tr><td><code>Strg++</code> / <code>Strg+-</code></td><td>Vergrößern / Verkleinern</td></tr>
+<tr><td><code>Strg+0</code></td><td>An Breite anpassen</td></tr>
+<tr><td><code>Strg+Umschalt+,</code></td><td>Einstellungen</td></tr>
+<tr><td><code>F1</code></td><td>Dieses Handbuch</td></tr>
+<tr><td><code>Esc</code></td><td>Verlässt das aktive Werkzeug oder schließt die Suche</td></tr>
+</table>
+
+</body>
+</html>

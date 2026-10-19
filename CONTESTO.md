@@ -59,6 +59,7 @@ plico/
 │   ├── i18n.py               # cataloghi .qm: dove cercarli, quali chiedere, caricarli
 │   ├── preferences.py        # il QSettings dell'app e le chiavi delle Impostazioni
 │   ├── translations/         # plico_{en,es,fr,de}.ts: i cataloghi, tutti completi
+│   ├── help/                 # {it,en,fr,de,es}/index.html: la guida, una pagina per lingua
 │   ├── main_window.py        # finestra, menu, toolbar, dock, QSettings, dialogs
 │   ├── model/
 │   │   ├── document.py       # DocumentModel, PageItem  ← il cuore
@@ -83,6 +84,7 @@ plico/
 │       ├── compress.py       # dialogo delle opzioni, format_size, task sul thread pool
 │       ├── find_bar.py       # la barra di Ctrl+F: testo, «n di m», avanti/indietro
 │       ├── settings_dialog.py  # Impostazioni: lingua e area di notifica
+│       ├── help_window.py    # la guida (F1) in un QTextBrowser
 │       └── toast.py          # l'avviso sopra la pagina (segni, OCR, anteprima)
 └── tests/                    # conteggi: pytest --collect-only -q (19 ottobre 2026)
     ├── conftest.py           # per tutti: impostazioni in un INI temporaneo, conferma «sì»
@@ -101,6 +103,7 @@ plico/
     ├── test_edit_text.py     # EditText e salvataggio: undo, redazioni, estrai, comprimi (21)
     ├── test_search.py        # Ctrl+F: occorrenze, F3, Esc, ricerca rifatta (9)
     ├── test_settings.py      # Impostazioni: lingua, icona, X che riduce, Esci (13)
+    ├── test_help.py          # la guida: struttura, scorciatoie, nomi dei menu, F1
     ├── test_i18n.py          # cataloghi: estrazione, nomi, caricamento, traduzione (8)
     ├── test_translations.py  # le quattro lingue: complete, segnaposto, menu veri (24)
     ├── test_flathub_manifest.py  # il manifest per Flathub e i controlli del rilascio (15)
@@ -109,8 +112,8 @@ plico/
     └── test_integration.py   # MainWindow vera, offscreen: test end-to-end (168)
 ```
 
-Gate di qualità attuale: **559 passed, 1 skipped** (con `lrelease` dell'SDK nel `PATH`), `ruff` pulito, `mypy` pulito
-(29 file sorgente). Uno `skip` è il test delle icone, che vuole un tema che
+Gate di qualità attuale: **580 passed, 1 skipped** (con `lrelease` dell'SDK nel `PATH`), `ruff` pulito, `mypy` pulito
+(30 file sorgente). Uno `skip` è il test delle icone, che vuole un tema che
 fornisca `object-rotate-*`. Gli altri skip possibili dipendono da
 strumenti che mancano (§9): `pylupdate6` e `lrelease`/`pyside6-lrelease` in
 `tests/test_i18n.py`. **Uno skip lì non è innocuo**: è il test che avvisa
@@ -1349,7 +1352,13 @@ dell'autore: *Impostazioni → Configura Plico…* (`Ctrl+Shift+,`,
   lo dice. Una lingua scelta diventa anche `QLocale.setDefault()`. Il ripiego
   c'era già: una lingua di sistema senza catalogo riceve l'inglese, l'italiano
   nessun catalogo (è la sorgente). Un codice sconosciuto nel file vale
-  «automatica».
+  «automatica». **Trappola di Plasma:** i pulsanti standard («Chiudi»,
+  «Annulla», «Salva») li scrive il tema di piattaforma di KDE con i cataloghi di
+  KDE, che seguono `LANGUAGE` e non i `QTranslator`: un Plico in tedesco su un
+  sistema italiano aveva i menu in tedesco e i pulsanti in italiano (visto
+  nella guida, nel Flatpak). `app.language_environment()` imposta `LANGUAGE`
+  **prima** di creare la `QApplication`, perché il tema si carica con lei; con
+  «automatica» l'ambiente non si tocca.
 - **Area di notifica.** «Mostra l'icona» e, solo con l'icona, «Chiudendo la
   finestra, riducila nell'area di notifica». Entrambe **spente di default**
   (in OllaDesk sono accese): per un editor di PDF chi non le chiede non deve
@@ -1369,6 +1378,33 @@ dell'autore: *Impostazioni → Configura Plico…* (`Ctrl+Shift+,`,
   `--own-name`. Niente `showMessage()`: userebbe
   `org.freedesktop.Notifications`, un permesso in più, e il tooltip dell'icona
   dice già come uscire.
+
+### La guida (Aiuto → Guida di Plico, F1)
+
+Una pagina HTML per lingua in `src/plico/help/<codice>/index.html`, dentro il
+pacchetto (`package-data` in `pyproject.toml`), mostrata da
+`widgets/help_window.py` in un `QTextBrowser` non modale: il browser dell'host
+non vedrebbe un file sotto `/app`, e la guida deve funzionare senza rete. La
+lingua è quella dell'interfaccia (`help_language()`: il locale di default,
+che `apply_language()` imposta quando la lingua è scelta a mano), l'inglese
+per una lingua senza guida, l'italiano per il locale `C`. In più c'è *Aiuto →
+Informazioni su Plico* (versione, licenza, indirizzo del progetto).
+
+Le pagine sono scritte per l'utente, non per chi sviluppa (quello è il
+README), e `tests/test_help.py` impedisce che divergano:
+
+- gli `id` delle sezioni sono gli stessi in tutte le lingue (`open`, `pages`,
+  `redact`…), l'indice punta a ciascuno, e la tabella delle scorciatoie ha le
+  stesse righe;
+- ogni scorciatoia dei menu della finestra vera compare nella pagina italiana;
+- in ogni lingua i nomi dei comandi, presi dal catalogo compilato, compaiono
+  nella pagina di quella lingua. Al primo giro ha trovato «Acercar / Alejar»
+  dove il menu spagnolo dice «Ampliar / Reducir».
+
+I nomi dei tasti sono quelli che Qt mostra nei menu di ciascuna lingua:
+«Ctrl+Shift» e «Canc» in italiano (il catalogo di Qt non traduce Shift),
+«Ctrl+Maj» e «Suppr» in francese, «Strg+Umschalt» e «Entf» in tedesco,
+«Ctrl+Mayús» e «Supr» in spagnolo.
 
 ### Revisione esterna del 19 ottobre 2026 (DeepSeek 4.1 Flash, GLM 5.3)
 

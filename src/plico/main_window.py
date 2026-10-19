@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import preferences
+from . import __version__, preferences
 from .model import (
     IMAGE_SUFFIXES,
     AddRedaction,
@@ -71,6 +71,7 @@ from .rendering import RenderWorker
 from .widgets.compress import CompressionDialog, CompressionTask, format_size
 from .widgets.find_bar import FindBar
 from .widgets.form_panel import FormPanel
+from .widgets.help_window import HelpWindow
 from .widgets.ocr import OcrDialog, OcrTask
 from .widgets.page_view import PageView
 from .widgets.settings_dialog import Choices, SettingsDialog
@@ -532,6 +533,17 @@ class MainWindow(QMainWindow):
             self.tr("&Configura Plico…"), "configure", "Ctrl+Shift+,", self._open_settings
         )
         settings_menu.addAction(self._settings_act)
+
+        help_menu = self.menuBar().addMenu(self.tr("A&iuto"))
+        self._help_act = self._act(self.tr("&Guida di Plico"), "help-contents", "", self._open_help)
+        self._help_act.setShortcut(QKeySequence(QKeySequence.StandardKey.HelpContents))
+        help_menu.addAction(self._help_act)
+        help_menu.addAction(
+            self._act(self.tr("&Informazioni su Plico"), "help-about", "", self._about)
+        )
+        # One handbook window, reused: F1 pressed twice brings it forward
+        # instead of opening a second copy.
+        self._help_window: HelpWindow | None = None
 
     def _setup_toolbar(self) -> None:
         toolbar = QToolBar(self.tr("Strumenti"))
@@ -2205,6 +2217,26 @@ class MainWindow(QMainWindow):
                 self.tr("Lingua"),
                 self.tr("La nuova lingua sarà usata al prossimo avvio di Plico."),
             )
+
+    def _open_help(self) -> None:
+        """F1: the handbook, in the interface's language, beside the document."""
+        if self._help_window is None:
+            self._help_window = HelpWindow(self)
+        self._help_window.show()
+        self._help_window.raise_()
+        self._help_window.activateWindow()
+
+    def _about(self) -> None:
+        QMessageBox.about(
+            self,
+            self.tr("Informazioni su Plico"),
+            self.tr(
+                "<h3>Plico {0}</h3>"
+                "<p>Un vero editor PDF nativo per Linux.</p>"
+                "<p>Licenza GPL-3.0 o successiva.<br>"
+                '<a href="https://github.com/gradia64/Plico">github.com/gradia64/Plico</a></p>'
+            ).format(__version__),
+        )
 
     def _sync_tray(self) -> None:
         """Show or remove the tray icon, as the settings say."""

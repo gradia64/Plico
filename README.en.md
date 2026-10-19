@@ -37,6 +37,9 @@ A true native PDF editor for Linux, built with **Qt6** and **PySide6**, using
   also minimize Plico to the notification area instead of closing it: you
   quit from _File → Quit_ (`Ctrl+Q`) or from "Quit" in the icon's menu. The
   language changes at the next start
+- **Handbook** (_Help → Plico Handbook_, `F1`) in Italian, English, French,
+  German and Spanish, in the interface language: it opens in a Plico window,
+  offline too
 - **Undo/Redo** in full, backed by `QUndoStack`
 - **Asynchronous rendering** in a separate thread — the UI never blocks
 - **Lazy rendering**: only the visible pages are rendered, not the whole
