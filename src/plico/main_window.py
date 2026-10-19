@@ -15,7 +15,7 @@ from PySide6.QtCore import (
     QThreadPool,
     QTimer,
 )
-from PySide6.QtGui import QAction, QIcon, QKeySequence, QUndoStack, QWindow
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QSessionManager, QUndoStack, QWindow
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -275,15 +275,22 @@ class MainWindow(QMainWindow):
 
         # --- the icon in the notification area, if the user wants it ---
         self._tray: QSystemTrayIcon | None = None
-        # True only on the ways out that mean "quit": File → Esci, the tray's
-        # «Esci», a session ending. The window's X with close-to-tray on only
-        # hides the window.
+        # True only on the ways out that mean "quit": File → Esci and the
+        # tray's «Esci». The window's X with close-to-tray on only hides the
+        # window. A logout does not touch it (see _on_commit_data): a flag set
+        # there stayed on after a cancelled logout, and the next X quit
+        # instead of hiding (reported by two reviews).
         self._really_quit = False
         app = QApplication.instance()
         if isinstance(app, QApplication):
-            # A logout must be able to close Plico: a window that turned the
-            # session's close into a hide would hold the session up.
-            app.commitDataRequest.connect(lambda _manager: self._mark_quitting())
+            # A bound method, not a lambda: the connection dies with the
+            # window. Direct, as Qt's documentation asks for this signal.
+            app.commitDataRequest.connect(
+                self._on_commit_data, Qt.ConnectionType.DirectConnection
+            )
+        # The notification area may not be there yet when Plico starts with
+        # the desktop: a few more tries before giving up on the icon.
+        self._tray_retries = [5_000, 30_000]
         self._sync_tray()
 
     # ------------------------------------------------------------------ #
@@ -345,7 +352,7 @@ class MainWindow(QMainWindow):
         )
         file_menu.addAction(
             self._act(
-                self.tr("&Estrai pagine…"),
+                self.tr("Es&trai pagine…"),
                 "document-export",
                 "Ctrl+E",
                 self._extract_pages,
@@ -353,7 +360,7 @@ class MainWindow(QMainWindow):
         )
         file_menu.addAction(
             self._act(
-                self.tr("Salva &compresso…"),
+                self.tr("Salva c&ompresso…"),
                 "archive-insert",
                 "Ctrl+Shift+C",
                 self._compress_file,
@@ -534,7 +541,7 @@ class MainWindow(QMainWindow):
         )
         settings_menu.addAction(self._settings_act)
 
-        help_menu = self.menuBar().addMenu(self.tr("A&iuto"))
+        help_menu = self.menuBar().addMenu(self.tr("&Aiuto"))
         self._help_act = self._act(self.tr("&Guida di Plico"), "help-contents", "", self._open_help)
         self._help_act.setShortcut(QKeySequence(QKeySequence.StandardKey.HelpContents))
         help_menu.addAction(self._help_act)
@@ -2157,8 +2164,9 @@ class MainWindow(QMainWindow):
         """Persist the UI state and shut the worker thread down cleanly.
 
         With the tray icon and close-to-tray on, the X only hides the window:
-        the document stays open, nothing is asked. Quitting is File → Esci,
-        the tray's «Esci», or the session ending.
+        the document stays open, nothing is asked. Quitting is File → Esci or
+        the tray's «Esci». A session ending does not come through here: Qt 6
+        ends the process after :meth:`_on_commit_data`.
         """
         if self._tray is not None and self._close_to_tray() and not self._really_quit:
             event.ignore()
@@ -2240,10 +2248,12 @@ class MainWindow(QMainWindow):
 
     def _sync_tray(self) -> None:
         """Show or remove the tray icon, as the settings say."""
-        wanted = (
-            preferences.flag(self._settings(), preferences.TRAY_ICON)
-            and QSystemTrayIcon.isSystemTrayAvailable()
-        )
+        chosen = preferences.flag(self._settings(), preferences.TRAY_ICON)
+        wanted = chosen and QSystemTrayIcon.isSystemTrayAvailable()
+        if chosen and not wanted and self._tray is None and self._tray_retries:
+            # Started with the desktop, before its notification area: the
+            # icon was lost for the whole session (reported by a review).
+            QTimer.singleShot(self._tray_retries.pop(0), self._sync_tray)
         if wanted and self._tray is None:
             self._tray = self._build_tray()
         elif not wanted and self._tray is not None:
@@ -2298,15 +2308,41 @@ class MainWindow(QMainWindow):
         self.raise_()
         self.activateWindow()
 
-    def _mark_quitting(self) -> None:
-        self._really_quit = True
+    def _on_commit_data(self, manager: QSessionManager) -> None:
+        """The session is ending (logout, shutdown): save the layout, ask once.
+
+        Qt 6 does nothing here by itself -- no close event, no question --
+        and the process is simply ended afterwards: unsaved changes went
+        without a word (reported by a review, confirmed in Qt's sources). The
+        pattern is the one Qt documents: ask only when the manager allows
+        interaction, and cancel the logout if the user says so.
+        """
+        self._save_settings()
+        if not self.is_modified() or not manager.allowsInteraction():
+            return
+        # The question needs a window to belong to, also from the tray.
+        self._show_from_tray()
+        if not self._confirm_discard():
+            manager.cancel()
 
     def _quit(self) -> None:
         """File → Esci and the tray's «Esci»: quit, not hide.
 
         The window is shown first: the question about unsaved changes needs
         a window to belong to, and a hidden one would ask from nowhere.
+
+        Not under a modal dialog. Its input blocks Ctrl+Q and the window's X
+        (Qt drops a window system close for a window a modal blocks), but the
+        tray's menu is drawn by the panel and reaches this method all the
+        same: under an OCR run it froze the interface until the run ended,
+        then quit (reported by two reviews). The dialog comes forward instead.
         """
+        modal = QApplication.activeModalWidget()
+        if modal is not None and modal is not self:
+            self._show_from_tray()
+            modal.raise_()
+            modal.activateWindow()
+            return
         self._really_quit = True
         if not self.isVisible():
             self._show_from_tray()
@@ -2361,8 +2397,10 @@ class MainWindow(QMainWindow):
         # or a compression". From the interface it cannot happen: both run
         # under a WINDOW-MODAL progress dialog, and Qt drops the close request
         # of a window blocked by a modal one (Ctrl+Q is blocked with the rest
-        # of the input). What reaches this line with work in the pool is a
-        # logout or a signal, and there waiting is exactly what must happen.
+        # of the input). The tray's «Esci» does reach the window -- the panel
+        # draws that menu -- and _quit() refuses while a modal is open. What
+        # reaches this line with work in the pool is a signal, and there
+        # waiting is exactly what must happen.
         QThreadPool.globalInstance().waitForDone()
         if not self._thread.isRunning():
             self._remove_scratch()

@@ -316,9 +316,9 @@ impossibile. Lo trova subito, non solo dopo aver salvato: lo strato entra nel
 file al salvataggio, ma la ricerca guarda anche le parole appena riconosciute.
 
 Il riconoscimento costa (circa mezzo secondo per pagina A4 a 300 dpi), per
-questo non è automatico: si dice quali pagine (la corrente, la corrente e le
-successive, o tutto il documento) e in che lingua, con italiano e inglese
-insieme come proposta. Gira nel thread pool con una barra di avanzamento
+questo non è automatico: si scrivono le pagine come in *Estrai pagine* (`3`,
+`4-8`, `1-3,5`; all'apertura sono proposte tutte) e si sceglie la lingua, con
+quella dell'interfaccia e l'inglese insieme come proposta. Gira nel thread pool con una barra di avanzamento
 annullabile — finché gira, la finestra non accetta modifiche alle pagine che
 sta leggendo — e ogni giro è **un solo** passo di undo: un `Ctrl+Z` toglie lo
 strato di tutte le pagine in una volta. Alla fine un avviso sopra la pagina

@@ -303,9 +303,9 @@ el archivo al guardar, pero la búsqueda también mira las palabras recién
 reconocidas.
 
 El reconocimiento cuesta (alrededor de medio segundo por página A4 a 300
-dpi), por eso no es automático: se dice qué páginas (la actual, la actual y
-las siguientes, o todo el documento) y en qué idioma, con italiano e inglés
-juntos como propuesta. Corre en el pool de hilos con una barra de progreso
+dpi), por eso no es automático: se escriben las páginas como en *Extraer
+páginas* (`3`, `4-8`, `1-3,5`; al abrirse se proponen todas) y se elige el
+idioma, con el de la interfaz y el inglés juntos como propuesta. Corre en el pool de hilos con una barra de progreso
 cancelable — mientras corre la ventana no acepta ediciones en las páginas
 que está leyendo — y cada ejecución es **un solo** paso de deshacer: un
 `Ctrl+Z` quita la capa de todas las páginas de una vez.

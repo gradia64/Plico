@@ -112,7 +112,7 @@ plico/
     └── test_integration.py   # MainWindow vera, offscreen: test end-to-end (168)
 ```
 
-Gate di qualità attuale: **580 passed, 1 skipped** (con `lrelease` dell'SDK nel `PATH`), `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **596 passed, 1 skipped** (con `lrelease` dell'SDK nel `PATH`), `ruff` pulito, `mypy` pulito
 (30 file sorgente). Uno `skip` è il test delle icone, che vuole un tema che
 fornisca `object-rotate-*`. Gli altri skip possibili dipendono da
 strumenti che mancano (§9): `pylupdate6` e `lrelease`/`pyside6-lrelease` in
@@ -1112,11 +1112,15 @@ si può selezionare, cercare con Ctrl+F, copiare — e la redazione per parola
 
 - **Una capacità, non una modifica automatica.** Riconoscere costa (mezzo
   secondo per pagina A4 a 300 dpi, misurato) e può sbagliare, quindi si
-  sceglie *cosa* e *in che lingua*: `OcrDialog` propone la pagina corrente, la
-  corrente e le successive, o tutto il documento, e la lingua fra quelle
-  installate — con italiano+inglese insieme quando ci sono entrambe, perché un
-  documento italiano è pieno di numeri e indirizzi e le due leggono meglio di
-  una sola.
+  sceglie *cosa* e *in che lingua*: `OcrDialog` ha un campo «Pagine» nella
+  forma di *Estrai pagine* (`parse_page_ranges`), che all'apertura propone
+  tutte le pagine, e la lingua fra quelle installate — quella dell'interfaccia
+  più l'inglese quando ci sono entrambe (`default_language()`, sul locale di
+  default, quindi anche sulla lingua scelta nelle Impostazioni), perché un
+  documento è spesso pieno di numeri e indirizzi e le due leggono meglio di
+  una sola. (Fino alla review del 19 ottobre questo punto, e da qui la guida e
+  i README, descriveva tre scelte — pagina corrente, da qui in poi, tutte —
+  che il dialogo non ha mai avuto.)
 - **Nello spazio pagina, come tutto il resto.** `recognise()` mette a zero il
   `/Rotate` per la durata della chiamata e lo rimette com'era, quindi i
   rettangoli tornano in spazio pagina e si confrontano con `PageItem.redactions`
@@ -1364,8 +1368,9 @@ dell'autore: *Impostazioni → Configura Plico…* (`Ctrl+Shift+,`,
   (in OllaDesk sono accese): per un editor di PDF chi non le chiede non deve
   veder cambiare niente. Con «riduci» la X nasconde la finestra, documento
   aperto e nessuna domanda; si esce da *File → Esci* (`Ctrl+Q`, ora
-  `MainWindow._quit()`), da «Esci» nel menu dell'icona, o con la fine della
-  sessione (`commitDataRequest` mette `_really_quit`). Con l'icona attiva
+  `MainWindow._quit()`) o da «Esci» nel menu dell'icona. La fine della
+  sessione è `_on_commit_data()` (vedi la revisione prima della 0.1.3). Con
+  l'icona attiva
   `setQuitOnLastWindowClosed(False)`, così chiudere un dialogo a finestra
   nascosta non esce, e l'uscita passa da `closeEvent()` con un
   `QApplication.quit` differito. Spegnere l'icona con la finestra nascosta la
@@ -1405,6 +1410,47 @@ I nomi dei tasti sono quelli che Qt mostra nei menu di ciascuna lingua:
 «Ctrl+Shift» e «Canc» in italiano (il catalogo di Qt non traduce Shift),
 «Ctrl+Maj» e «Suppr» in francese, «Strg+Umschalt» e «Entf» in tedesco,
 «Ctrl+Mayús» e «Supr» in spagnolo.
+
+### Revisione esterna prima della 0.1.3 (DeepSeek Flash, GLM 5.3)
+
+Due review mirate sul diff `v0.1.2..02c2e5f` (report fuori dal repository),
+verificate una per una. Corrette, ciascuna con un test che fallisce senza la
+correzione:
+
+- **«Esci» dalla tray sotto un lavoro in corso** (P-01 = G-01,
+  `test_settings.py`): il menu della tray lo disegna il pannello, non è
+  bloccato dal dialogo window-modal di OCR o compressione, e `_quit()`
+  chiamava `close()` dal codice: l'interfaccia restava ferma per tutto il
+  lavoro (riprodotto: 2 s su 2), poi usciva. Ora `_quit()`, con un modale
+  aperto, lo porta in primo piano e non esce.
+- **Logout** (P-02, P-03 = G-06, G-07): in Qt 6 `commitDataRequest` non
+  chiude finestre e non chiede niente (sorgenti di Qt 6.11), e il processo
+  viene chiuso dopo: le modifiche non salvate si perdevano senza una domanda,
+  già nella 0.1.2. Il flag `_really_quit` messo lì, poi, restava acceso dopo
+  un logout annullato, e la X successiva usciva invece di ridurre. Ora
+  `_on_commit_data()` (metodo, non lambda, connessione diretta come chiede la
+  documentazione) salva il layout e, con modifiche e `allowsInteraction()`,
+  mostra la finestra e chiede: «Annulla» chiama `manager.cancel()`. Il flag
+  non si tocca più al logout.
+- **Icona riprovata** (G-05): se all'avvio l'area di notifica non c'è ancora,
+  `_sync_tray()` riprova dopo 5 e 30 secondi.
+- **Lingua dell'OCR** (G-03, `test_ocr.py`): `default_language()` usava
+  `QLocale.system()`; ora il locale di default, che segue la lingua scelta.
+- **Scorciatoie italiane** (G-04, `test_integration.py`): nel menu File Alt+E
+  valeva «Estrai pagine» ed «Esci», Alt+C «Salva compresso» e «Chiudi»; nella
+  barra dei menu la I valeva «Impostazioni» e «Aiuto» (questo l'ha trovato la
+  verifica, non le review). Ora «Es&trai pagine…», «Salva c&ompresso…»,
+  «&Aiuto», e un test controlla l'italiano, che non ha catalogo.
+- **Pagine dell'OCR** (P-06 = G-02, `test_help.py`): vedi §8; guida, README
+  e questo file descrivevano tre scelte inesistenti. Il dialogo ora mostra
+  anche un esempio del formato.
+- **Francese** (P-05): «consultable» → «recherchable» nella guida.
+
+Scartata: **P-04** («la X chiude sotto un dialogo modale»). La prova chiamava
+`close()` dal codice; la X vera passa da
+`QGuiApplicationPrivate::processCloseEvent`, che in Qt 6.11 scarta la chiusura
+di una finestra bloccata da un modale e lascia passare solo una `close()` del
+codice — il percorso di P-01, ora chiuso.
 
 ### Revisione esterna del 19 ottobre 2026 (DeepSeek 4.1 Flash, GLM 5.3)
 

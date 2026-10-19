@@ -118,8 +118,15 @@ class OcrDialog(QDialog):
         self._summary.setWordWrap(True)
         self._summary.setMinimumWidth(420)
 
+        # The format said where it is typed: the field is free text, and a
+        # handbook once described three choices it never had (review P-06).
+        self._pages_hint = QLabel(
+            self.tr("Come in Estrai pagine: per esempio 3, 4-8 oppure 1-3,5."), self
+        )
+
         fields = QFormLayout()
         fields.addRow(self.tr("Pagine:"), self._pages)
+        fields.addRow("", self._pages_hint)
         fields.addRow(self.tr("Lingua:"), self._language)
 
         buttons = QDialogButtonBox(

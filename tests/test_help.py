@@ -169,3 +169,33 @@ def test_f1_opens_one_handbook_window(qapp):
     finally:
         window.shutdown_worker()
         window.deleteLater()
+
+
+@pytest.mark.parametrize("code", LANGUAGES)
+def test_the_handbook_describes_the_ocr_pages_as_the_dialog_takes_them(code):
+    """Review 2026-10-19 (P-06): three choices described, a text field in the dialog."""
+    source = (HELP_DIR / code / "index.html").read_text(encoding="utf-8")
+    section = source[source.index('id="ocr"') : source.index('id="sign"')]
+    assert "<code>4-8</code>" in section and "<code>1-3,5</code>" in section
+
+
+def test_the_french_handbook_says_searchable():
+    """Review 2026-10-19 (P-05): «consultable» is «can be looked at», not searched."""
+    _, text = _read("fr")
+    assert "recherchable" in text
+    assert "consultable" not in text
+
+
+def test_the_ocr_dialog_is_a_field_with_an_example(qapp):
+    """The dialog the handbook describes: free text, all pages proposed, an example."""
+    from PySide6.QtWidgets import QLineEdit
+
+    from plico.widgets.ocr import OcrDialog
+
+    dialog = OcrDialog(12)
+    try:
+        assert isinstance(dialog._pages, QLineEdit)
+        assert dialog._pages.text() == "1-12"
+        assert "4-8" in dialog._pages_hint.text()
+    finally:
+        dialog.deleteLater()

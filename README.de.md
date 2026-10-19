@@ -323,9 +323,9 @@ Schicht gelangt beim Speichern in die Datei, aber die Suche schaut auch auf
 die gerade erkannten Wörter.
 
 Die Erkennung kostet (etwa eine halbe Sekunde pro A4-Seite bei 300 dpi), daher
-ist sie nicht automatisch: man sagt, welche Seiten (die aktuelle, die aktuelle
-und die folgenden, oder das ganze Dokument) und in welcher Sprache, mit
-Italienisch und Englisch zusammen als Vorschlag. Sie läuft im Thread-Pool mit
+ist sie nicht automatisch: man gibt die Seiten wie bei *Seiten extrahieren*
+an (`3`, `4-8`, `1-3,5`; beim Öffnen sind alle vorgeschlagen) und wählt die
+Sprache, mit der Sprache der Oberfläche und Englisch zusammen als Vorschlag. Sie läuft im Thread-Pool mit
 einem abbrechbaren Fortschrittsbalken — während sie läuft, nimmt das Fenster
 keine Seitenbearbeitungen an den Seiten an, die sie liest — und jeder
 Durchlauf ist **ein einziger** Rückgängig-Schritt: ein `Ctrl+Z` entfernt die

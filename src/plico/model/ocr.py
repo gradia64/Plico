@@ -146,13 +146,17 @@ def languages(directory: str | None = None) -> list[str]:
 def default_language(locale: QLocale | None = None) -> str:
     """The best language to read the user's documents with, out of what is there.
 
-    The language of *locale* (the system's) together with English when both
-    are installed, then either alone, then whatever else there is: refusing to
-    read a page because the ideal data is missing would be worse than reading
-    it imperfectly. A language Plico does not speak gets English, like its
-    interface does.
+    The language of *locale* (the default one: the interface's) together
+    with English when both are installed, then either alone, then whatever
+    else there is: refusing to read a page because the ideal data is missing
+    would be worse than reading it imperfectly. A language Plico does not
+    speak gets English, like its interface does.
+
+    The default locale, not the system's: a language chosen in «Impostazioni»
+    is set as the default, and an interface in German on an Italian system
+    proposed Italian for the documents (reported by a review).
     """
-    locale = QLocale.system() if locale is None else locale
+    locale = QLocale() if locale is None else locale
     own = _TESSERACT.get(locale.language(), "eng")
     available = languages()
     preferred = [code for code in dict.fromkeys((own, "eng")) if code in available]

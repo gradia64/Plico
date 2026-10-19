@@ -378,3 +378,20 @@ def test_languages_are_named_in_their_own_language() -> None:
     assert language_name("fra") == "Français"
     assert language_name("swe") == "Svenska", "la tabella non c'e`: risponde Qt"
     assert language_name("xyz") == "xyz"
+
+
+def test_the_proposed_language_follows_the_one_chosen_in_the_settings(
+    tmp_path, monkeypatch
+) -> None:
+    """Review 2026-10-19 (G-03): German chosen, Italian system, Italian proposed."""
+    from PySide6.QtCore import QLocale
+
+    for code in ("ita", "eng", "deu"):
+        (tmp_path / f"{code}.traineddata").write_bytes(b"")
+    monkeypatch.setenv("PLICO_TESSDATA", str(tmp_path))
+    before = QLocale()
+    try:
+        QLocale.setDefault(QLocale("de_DE"))  # what apply_language("de") does
+        assert default_language() == "deu+eng"
+    finally:
+        QLocale.setDefault(before)

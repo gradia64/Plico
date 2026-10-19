@@ -539,7 +539,7 @@ def test_file_menu_exposes_every_expected_action(windows):
         "&Salva",
         "Salva con &nome…",
         "&Unisci PDF…",
-        "&Estrai pagine…",
+        "Es&trai pagine…",
         "&Chiudi",
         "&Esci",
         "Annulla",
@@ -3862,3 +3862,24 @@ def test_the_suite_never_reads_the_real_settings(windows) -> None:
     """Review 2026-10-19 (GLM 2): tests read the user's ~/.config/Plico."""
     mw = windows()
     assert mw._settings().fileName().endswith("plico-test.ini")
+
+
+def test_the_italian_menus_have_no_two_equal_accelerators(windows) -> None:
+    """Review 2026-10-19 (G-04): Alt+E was both «Estrai pagine» and «Esci».
+
+    The translated catalogs were checked already; the source language, the
+    one most users of Plico read, was not. The menu bar too: «Impostazioni»
+    and «Aiuto» both took the I.
+    """
+
+    def accelerators(texts: list[str]) -> list[str]:
+        return [text[text.index("&") + 1].lower() for text in texts if "&" in text]
+
+    mw = windows()
+    titles = [action.text() for action in mw.menuBar().actions()]
+    top = accelerators(titles)
+    assert len(top) == len(set(top)), f"barra dei menu: {titles}"
+    for action in mw.menuBar().actions():
+        texts = [item.text() for item in action.menu().actions()]
+        letters = accelerators(texts)
+        assert len(letters) == len(set(letters)), f"{action.text()}: {texts}"

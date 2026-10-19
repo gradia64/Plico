@@ -315,9 +315,9 @@ entre dans le fichier à la sauvegarde, mais la recherche regarde aussi les
 mots juste reconnus.
 
 La reconnaissance coûte (environ une demi-seconde par page A4 à 300 dpi), donc
-elle n'est pas automatique : on dit quelles pages (la courante, la courante et
-les suivantes, ou tout le document) et en quelle langue, avec l'italien et
-l'anglais ensemble comme proposition. Elle tourne dans le pool de threads
+elle n'est pas automatique : on écrit les pages comme dans *Extraire des
+pages* (`3`, `4-8`, `1-3,5` ; toutes sont proposées à l'ouverture) et on choisit
+la langue, avec celle de l'interface et l'anglais ensemble comme proposition. Elle tourne dans le pool de threads
 avec une barre de progression annulable — pendant qu'elle tourne la fenêtre
 n'accepte aucune modification des pages qu'elle lit — et chaque passage est
 **une seule** étape d'annulation : un `Ctrl+Z` retire la couche de toutes

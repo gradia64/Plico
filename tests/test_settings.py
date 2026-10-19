@@ -209,3 +209,130 @@ def test_a_chosen_language_reaches_the_desktop_buttons_too():
     untouched = {"LANGUAGE": "it:en"}
     language_environment(preferences.AUTOMATIC, untouched)
     assert untouched == {"LANGUAGE": "it:en"}, "«automatica» non tocca l'ambiente"
+
+
+# -- review of 2026-10-19 (0.1.3) ------------------------------------------- #
+
+
+class _Session:
+    """A stand-in for QSessionManager: what Plico asks of it, recorded."""
+
+    def __init__(self, interaction: bool = True) -> None:
+        self.interaction = interaction
+        self.cancelled = False
+
+    def allowsInteraction(self) -> bool:
+        return self.interaction
+
+    def cancel(self) -> None:
+        self.cancelled = True
+
+
+def test_esci_from_the_tray_waits_for_a_modal_dialog(window, tray_available):
+    """P-01: the tray's menu reached close() under an OCR run and froze the UI."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QProgressDialog
+
+    mw = window(**{preferences.TRAY_ICON: True, preferences.CLOSE_TO_TRAY: True})
+    mw.show()
+    progress = QProgressDialog("OCR", None, 0, 0, mw)
+    progress.setWindowModality(Qt.WindowModality.WindowModal)
+    progress.show()
+    QApplication.processEvents()
+
+    mw._quit()
+    QApplication.processEvents()
+
+    assert mw.isVisible() and mw._thread.isRunning()
+    assert not mw._really_quit
+    assert tray_available == [], "nessuna uscita mentre il lavoro è in corso"
+    progress.close()
+    progress.deleteLater()
+
+
+def test_a_logout_with_unsaved_changes_asks_and_can_be_cancelled(window, monkeypatch):
+    """P-02: Qt 6 ends the process after commitDataRequest without asking."""
+    mw = window()
+    asked: list[int] = []
+    monkeypatch.setattr(mw, "is_modified", lambda: True)
+    monkeypatch.setattr(mw, "_confirm_discard", lambda: asked.append(1) or False)
+    session = _Session()
+
+    mw._on_commit_data(session)
+
+    assert asked == [1] and session.cancelled, "«Annulla» ferma il logout"
+    assert mw.isVisible(), "la domanda ha una finestra, anche dalla tray"
+
+
+def test_a_logout_goes_on_when_the_user_saves_or_discards(window, monkeypatch):
+    mw = window()
+    monkeypatch.setattr(mw, "is_modified", lambda: True)
+    monkeypatch.setattr(mw, "_confirm_discard", lambda: True)
+    session = _Session()
+    mw._on_commit_data(session)
+    assert not session.cancelled
+
+
+def test_a_logout_asks_nothing_when_there_is_nothing_to_lose(window, monkeypatch):
+    mw = window()
+    asked: list[int] = []
+    monkeypatch.setattr(mw, "_confirm_discard", lambda: asked.append(1) or True)
+    for session in (_Session(), _Session(interaction=False)):
+        mw._on_commit_data(session)
+        assert not session.cancelled
+    monkeypatch.setattr(mw, "is_modified", lambda: True)
+    mw._on_commit_data(_Session(interaction=False))
+    assert asked == [], "senza documento modificato, o senza permesso, nessuna domanda"
+
+
+def test_after_a_cancelled_logout_the_x_still_hides(window, tray_available, monkeypatch):
+    """P-03/G-06: a flag set at logout stayed on, and the next X quit."""
+    mw = window(**{preferences.TRAY_ICON: True, preferences.CLOSE_TO_TRAY: True})
+    mw.show()
+    monkeypatch.setattr(mw, "is_modified", lambda: True)
+    monkeypatch.setattr(mw, "_confirm_discard", lambda: False)
+    mw._on_commit_data(_Session())
+
+    mw.close()
+
+    assert not mw.isVisible() and mw._thread.isRunning(), "nascosta, non uscita"
+    assert not mw._really_quit
+
+
+def test_the_logout_connection_dies_with_the_window(qapp):
+    """G-07: a lambda connection outlived the window it called into."""
+    from PySide6.QtCore import SIGNAL, QCoreApplication, QEvent
+
+    def settle() -> None:
+        # Windows of earlier tests may still wait for their deferred delete.
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    signal = SIGNAL("commitDataRequest(QSessionManager&)")
+    settle()
+    before = qapp.receivers(signal)
+    mw = MainWindow()
+    assert qapp.receivers(signal) == before + 1
+    mw.shutdown_worker()
+    mw.deleteLater()
+
+    settle()
+
+    assert qapp.receivers(signal) == before
+
+
+def test_the_tray_is_tried_again_when_the_desktop_is_late(window, monkeypatch, qapp):
+    """G-05: no notification area at start meant no icon for the whole session."""
+    available = [False]
+    monkeypatch.setattr(QSystemTrayIcon, "isSystemTrayAvailable", staticmethod(lambda: available[0]))
+    before = qapp.quitOnLastWindowClosed()
+    try:
+        mw = window(**{preferences.TRAY_ICON: True})
+        assert mw._tray is None
+        assert mw._tray_retries == [30_000], "un nuovo tentativo è in programma"
+
+        available[0] = True
+        mw._sync_tray()  # what the timer does
+
+        assert mw._tray is not None
+    finally:
+        qapp.setQuitOnLastWindowClosed(before)

@@ -308,9 +308,9 @@ only after saving: the layer enters the file at save time, but search also
 looks at the words just recognised.
 
 Recognition costs (about half a second per A4 page at 300 dpi), so it is
-not automatic: you say which pages (current, current and following, or the
-whole document) and in which language, with Italian and English together as
-the proposal. It runs in the thread pool with a cancellable progress bar —
+not automatic: you write the pages as in _Extract Pages_ (`3`, `4-8`,
+`1-3,5`; all of them are proposed when it opens) and choose the language, with
+the interface's and English together as the proposal. It runs in the thread pool with a cancellable progress bar —
 while it runs the window accepts no page edits on the pages it is reading —
 and each run is **a single** undo step: one `Ctrl+Z` removes the layer from
 all pages at once. At the end a notice over the page says on how many pages it
