@@ -109,6 +109,14 @@
       <caption xml:lang="de">Eine Textzeile direkt an ihrer Stelle korrigieren</caption>
       <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.2/flatpak/screenshots/edit.png</image>
     </screenshot>
+    <screenshot>
+      <caption>Searching the document: every match highlighted, the current one in orange</caption>
+      <caption xml:lang="it">Cercare nel documento: ogni occorrenza evidenziata, quella corrente in arancione</caption>
+      <caption xml:lang="es">Buscar en el documento: cada coincidencia resaltada, la actual en naranja</caption>
+      <caption xml:lang="fr">Rechercher dans le document : chaque occurrence surlignée, l'occurrence courante en orange</caption>
+      <caption xml:lang="de">Im Dokument suchen: jeder Treffer hervorgehoben, der aktuelle in Orange</caption>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.2/flatpak/screenshots/search.png</image>
+    </screenshot>
   </screenshots>
 
   <launchable type="desktop-id">io.github.gradia64.plico.desktop</launchable>

@@ -261,6 +261,21 @@ def main() -> None:
         shots.append(_save(mw, "edit"))
         mw.shutdown_worker()
         mw.deleteLater()
+
+        # 5. Ctrl+F: every match highlighted, the current one in orange.
+        mw = window(app, scratch / "settings")
+        mw.open_document(str(scratch / "annual-report-2026.pdf"))
+        mw._page_view.set_zoom_fit_width()
+        pump(app, 0.3)
+        mw._open_search()
+        mw._find_bar._field.setText("revenue")
+        pump(app, 0.6)  # the bar searches a moment after the last letter
+        mw._step_search(1)
+        pump(app)
+        ready(mw)
+        shots.append(_save(mw, "search"))
+        mw.shutdown_worker()
+        mw.deleteLater()
         pump(app, 0.2)
     print("\n".join(shots))
 
