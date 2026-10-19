@@ -1,9 +1,11 @@
 # Release: sui tag v*, i pacchetti costruiti dal tag e allegati alla release
 # GitHub. Ripreso dal release.yml di OllaDesk, con due differenze:
 #
-# - il tag è firmato con la chiave SSH del maintainer (.github/allowed_signers),
-#   non con GPG: qui lo si VERIFICA, e un tag non firmato o firmato da altri
-#   ferma tutto;
+# - il tag lo firma la sottochiave dei tag della chiave di rilascio di Plico
+#   (packaging/plico-release-key.asc, impronte in scripts/release-keys.sh):
+#   qui lo si VERIFICA con scripts/verify-tag.sh, e un tag non firmato o
+#   firmato da un'altra chiave ferma tutto. Il PKGBUILD verificherà lo
+#   stesso tag con validpgpkeys;
 # - gli allegati non li firma una chiave nella CI: hanno SHA256SUMS e
 #   un'attestazione di provenienza di GitHub, che lega ogni file a questo
 #   workflow e al commit del tag. Si verifica con
@@ -39,16 +41,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Tag annotato, firmato da una chiave di .github/allowed_signers
+      - name: Tag annotato e firmato dalla sottochiave dei tag
         run: |
           # checkout può riscrivere il tag come leggero: si riprende l'oggetto
           # tag annotato com'è sul server prima di verificarne la firma
           git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
-          if [ "$(git cat-file -t "$GITHUB_REF_NAME")" != tag ]; then
-            echo "::error::$GITHUB_REF_NAME è un tag leggero: serve git tag -s"
-            exit 1
-          fi
-          git -c gpg.ssh.allowedSignersFile=.github/allowed_signers tag -v "$GITHUB_REF_NAME"
+          scripts/verify-tag.sh "$GITHUB_REF_NAME"
 
       # gli stessi controlli di tools/flathub_manifest.py: versione in
       # pyproject.toml, in plico.__version__ e nell'ultima <release> della
@@ -131,6 +129,11 @@ jobs:
     needs: [verify, appimage, flatpak]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
+    # come in OllaDesk: l'ultimo punto di controllo prima di pubblicare. Con
+    # «Required reviewers» nelle impostazioni dell'environment, il job aspetta
+    # l'approvazione del maintainer. Nessun secret: la CI non firma niente
+    # (sopra); servirà AUR_SSH_PRIVATE_KEY quando ci sarà il PKGBUILD.
+    environment: release
     permissions:
       contents: write        # creare la release e caricare i file
       id-token: write        # attestazione di provenienza

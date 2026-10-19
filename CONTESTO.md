@@ -57,7 +57,7 @@ plico/
 │   ├── screenshots.py        # gli screenshot dello store, dall'app vera e offscreen
 │   └── flathub_manifest.py   # il manifest per Flathub da un tag firmato (§11)
 ├── .github/
-│   ├── allowed_signers       # le chiavi SSH che firmano i tag di rilascio
+│   ├── allowed_signers       # la chiave SSH dei tag fino a v0.1.3
 │   └── workflows/            # ci.yml, flatpak.yml, release.yml, readme-i18n.yml
 ├── src/plico/
 │   ├── app.py                # entry point: QApplication + apertura da riga di comando
@@ -117,7 +117,7 @@ plico/
     └── test_integration.py   # MainWindow vera, offscreen: test end-to-end (168)
 ```
 
-Gate di qualità attuale: **596 passed, 1 skipped** (con `lrelease` dell'SDK nel `PATH`), `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **601 passed, 1 skipped** (con `lrelease` dell'SDK nel `PATH`), `ruff` pulito, `mypy` pulito
 (30 file sorgente). Uno `skip` è il test delle icone, che vuole un tema che
 fornisca `object-rotate-*`. Gli altri skip possibili dipendono da
 strumenti che mancano (§9): `pylupdate6` e `lrelease`/`pyside6-lrelease` in
@@ -2122,8 +2122,8 @@ e il manifest restano, ma **non** vanno usati per un invio a Flathub. La strada
 
 **`.github/workflows/release.yml`**, sui tag `v*`:
 
-- `verify`: tag annotato e firmato con una chiave SSH di
-  `.github/allowed_signers` (`git tag -v`), versione uguale in
+- `verify`: tag annotato e firmato dalla sottochiave dei tag della chiave di
+  rilascio (`scripts/verify-tag.sh`, vedi sotto), versione uguale in
   `pyproject.toml`, `plico.__version__` e metainfo, screenshot fissati al tag
   (le funzioni di `tools/flathub_manifest.py`), note di rilascio in
   `packaging/release-notes/X.Y.Z.md` (`scripts/release-notes.sh`, come in
@@ -2134,8 +2134,13 @@ e il manifest restano, ma **non** vanno usati per un invio a Flathub. La strada
   `--runtime-repo` di Flathub, così l'installazione scarica il runtime da sé;
 - `publish`: `SHA256SUMS`, attestazione di provenienza
   (`actions/attest-build-provenance`, si verifica con `gh attestation
-  verify`) e release su GitHub. Nessuna chiave di firma nella CI: diversamente
-  da OllaDesk, che firma gli allegati con una sottochiave GPG.
+  verify`) e release su GitHub, nell'environment `release` (approvazione del
+  maintainer, se configurata su GitHub). Nessuna chiave di firma nella CI,
+  per scelta (19 ottobre 2026): OllaDesk firma gli allegati con una sottochiave
+  GPG nei secret; qui l'attestazione dice da quale workflow, commit e tag
+  viene un file senza segreti da custodire o ruotare, al prezzo di affidarsi a
+  GitHub e Sigstore e di chiedere `gh` (o `cosign`) a chi verifica. Il
+  PKGBUILD non c'entra: verifica il tag, firmato fuori dalla CI.
 
 A mano (`workflow_dispatch`) costruisce e collauda senza pubblicare. Il tag
 `v0.1.3` è stato creato prima di questo workflow: la prima release con i
@@ -2168,9 +2173,24 @@ portatile 3.12 di python-build-standalone, stesse librerie xcb da Ubuntu 22.04,
   Risultato in locale: 584 passati, 13 saltati (quelli che vogliono
   `lrelease`/`pylupdate6` o un tema di icone).
 
-Prossimi: PKGBUILD per l'AUR e `.deb`. Per l'AUR, `makepkg` verifica i tag
-solo con chiavi PGP (`validpgpkeys`): servirà la chiave di rilascio di
-OllaDesk, o un controllo del tarball per SHA-256.
+**La chiave di rilascio di Plico** (19 ottobre 2026), OpenPGP, propria e non
+quella di OllaDesk: primaria `184307C7A1585AFAD7F09DF6EBC8B4A0FFD5B91F`, solo
+`[C]`, scade il 2031-10-18; sottochiave dei tag
+`E0C771BBB276A114D0B8C591C5DDC0745643FA72`, `[S]`, scade il 2029-10-18. Tutte e
+due restano sulla macchina del maintainer, nessuna nella CI. Le impronte sono
+scritte solo in `scripts/release-keys.sh` (e nel README per chi verifica); la
+chiave pubblica è `packaging/plico-release-key.asc`. `scripts/verify-tag.sh`
+(ripreso da OllaDesk) importa **solo** quella in un portachiavi temporaneo e
+accetta il tag solo se `VALIDSIG` nomina la sottochiave dei tag e la primaria:
+non un'altra sottochiave, non una chiave qualunque. `tests/test_release_tools.py`
+lo prova con una chiave usa e getta della stessa forma, e controlla che il
+`.asc` del repository contenga proprio le impronte dello script. Perché PGP e
+non SSH come per `v0.1.0`…`v0.1.3`: il PKGBUILD dell'AUR verifica il tag con
+`validpgpkeys`, che conosce solo OpenPGP. Il checkout ha `gpg.format openpgp` e
+`user.signingkey` con il `!` (solo quella sottochiave); `allowed_signers` resta
+per i tag vecchi.
+
+Prossimi: PKGBUILD per l'AUR (con `validpgpkeys` = la primaria) e `.deb`.
 
 ## 12. Cosa manca
 

@@ -40,7 +40,11 @@ python3 -m pip install --quiet --disable-pip-version-check --target "$TMP/pytest
     "pytest>=8.0"
 cd "$ROOT"
 # il plico dell'AppImage davanti a tutto: si prova quello che si spedisce
+# PLICO_TESSDATA: i test dell'OCR con i dati di lingua dell'AppImage, come li
+# vede l'app (l'AppRun lo imposta allo stesso modo). Senza, sul runner della CI
+# che non ha Tesseract, venivano saltati.
 XDG_CONFIG_HOME="$TMP/config-tests" TMPDIR="$TMP" \
+    PLICO_TESSDATA="$APPDIR_X/usr/share/tessdata" \
     PYTHONPATH="$APPDIR_X/usr/share/plico:$TMP/pytest" \
     "$PY" -s -m pytest -q -p no:cacheprovider --basetemp="$TMP/pytest-tmp" tests \
     > "$TMP/pytest.log" 2>&1 || {

@@ -523,45 +523,49 @@ dell'ultimo rilascio, e a ogni rilascio vanno spostati sul tag nuovo.
 
 ### Rilasciare
 
-Flathub non costruisce dal checkout ma da un tag git, fissato anche al suo
-commit. Il manifest di `flatpak/` resta quello di sviluppo (`type: dir`), e
-quello da inviare lo genera `tools/flathub_manifest.py` **dal tag**. Prima di
-scrivere controlla che:
+Una release è un tag `vX.Y.Z` firmato: da lì `.github/workflows/release.yml`
+verifica la firma e la versione, costruisce e collauda AppImage e bundle
+Flatpak, e li allega alla release su GitHub con `SHA256SUMS` e
+un'attestazione di provenienza. Prima del tag controlla che:
 
-- il tag sia `v` + la versione di `pyproject.toml` + l'ultima `<release>` della
-  metainfo;
-- gli screenshot della metainfo puntino al tag e non a `main`;
-- il tag sia annotato, firmato da una chiave di `.github/allowed_signers` e
-  presente su `origin` con lo stesso oggetto.
+- la versione sia la stessa in `pyproject.toml`, in `src/plico/__init__.py` e
+  nell'ultima `<release>` della metainfo, con gli screenshot fissati al tag;
+- ci siano le note in `packaging/release-notes/X.Y.Z.md` (sezioni `## …` e il
+  link «Full Changelog»): sono la descrizione della release.
 
-I tag si firmano con la chiave **SSH** (niente PGP da custodire). Da fare una
-volta sola per checkout:
+I tag si firmano con la **chiave di rilascio di Plico**, una chiave OpenPGP
+che non esce dalla macchina del maintainer: primaria
+`1843 07C7 A158 5AFA D7F0  9DF6 EBC8 B4A0 FFD5 B91F` (solo certificazione) e
+sottochiave dei tag `E0C7 71BB B276 A114 D0B8  C591 C5DD C074 5643 FA72`. La
+chiave pubblica è `packaging/plico-release-key.asc`, e
+`scripts/verify-tag.sh` accetta un tag solo se firmato da quella sottochiave.
+Da fare una volta sola per checkout:
 
 ```bash
-git config gpg.format ssh
-git config user.signingkey ~/.ssh/id_ed25519.pub
+git config gpg.format openpgp
+git config user.signingkey 'E0C771BBB276A114D0B8C591C5DDC0745643FA72!'
 git config tag.gpgSign true
 git config gpg.ssh.allowedSignersFile "$PWD/.github/allowed_signers"
 ```
 
-Perché GitHub mostri il tag come «Verified», la stessa chiave va registrata
-anche come *signing key* dell'account (Settings → SSH and GPG keys → New SSH
-key → Signing key).
+L'ultima riga serve solo a verificare i tag fino a `v0.1.3`, firmati con la
+chiave SSH di `.github/allowed_signers`.
 
 A ogni rilascio:
 
 ```bash
-# 1. versione in pyproject.toml, nuova <release> e URL degli screenshot
-#    (…/Plico/vX.Y.Z/flatpak/screenshots/…) nella metainfo; commit e push
-# 2. tag firmato, verificato, pubblicato
-git tag -s v0.1.0 -m "Plico 0.1.0"
-git tag -v v0.1.0
-git push origin v0.1.0
-# 3. il manifest per Flathub, con i moduli che include
-python tools/flathub_manifest.py v0.1.0 ~/flathub/io.github.gradia64.plico
+# 1. versione, <release> e URL degli screenshot (…/Plico/vX.Y.Z/…) nella
+#    metainfo, note in packaging/release-notes/X.Y.Z.md; commit e push
+# 2. tag firmato, verificato, pubblicato: il resto lo fa release.yml
+git tag -s v0.1.4 -m "Plico 0.1.4"
+scripts/verify-tag.sh v0.1.4
+git push origin v0.1.4
+# 3. a mano, prima di un tag, la stessa build senza pubblicare
+gh workflow run release.yml --ref main
 ```
 
-`--allow-unsigned --offline` fa una prova a secco su un tag locale non firmato.
+Plico non è su Flathub: la sua politica sull'IA generativa esclude manifest
+scritti con l'assistenza dell'IA (vedi CONTESTO).
 
 ## Sviluppo
 
