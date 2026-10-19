@@ -10,7 +10,8 @@
     "--share=ipc",
     "--socket=wayland",
     "--socket=fallback-x11",
-    "--device=dri"
+    "--device=dri",
+    "--talk-name=org.kde.StatusNotifierWatcher"
   ],
   "build-options": {
     "env": {

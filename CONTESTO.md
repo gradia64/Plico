@@ -57,6 +57,7 @@ plico/
 ├── src/plico/
 │   ├── app.py                # entry point: QApplication + apertura da riga di comando
 │   ├── i18n.py               # cataloghi .qm: dove cercarli, quali chiedere, caricarli
+│   ├── preferences.py        # il QSettings dell'app e le chiavi delle Impostazioni
 │   ├── translations/         # plico_{en,es,fr,de}.ts: i cataloghi, tutti completi
 │   ├── main_window.py        # finestra, menu, toolbar, dock, QSettings, dialogs
 │   ├── model/
@@ -81,6 +82,7 @@ plico/
 │       ├── sign.py           # dialoghi di firma e di verifica delle firme
 │       ├── compress.py       # dialogo delle opzioni, format_size, task sul thread pool
 │       ├── find_bar.py       # la barra di Ctrl+F: testo, «n di m», avanti/indietro
+│       ├── settings_dialog.py  # Impostazioni: lingua e area di notifica
 │       └── toast.py          # l'avviso sopra la pagina (segni, OCR, anteprima)
 └── tests/                    # conteggi: pytest --collect-only -q (19 ottobre 2026)
     ├── conftest.py           # per tutti: impostazioni in un INI temporaneo, conferma «sì»
@@ -98,6 +100,7 @@ plico/
     ├── test_sign.py          # certificati, firma, verdetto, campi vuoti, PDF cifrati (39)
     ├── test_edit_text.py     # EditText e salvataggio: undo, redazioni, estrai, comprimi (21)
     ├── test_search.py        # Ctrl+F: occorrenze, F3, Esc, ricerca rifatta (9)
+    ├── test_settings.py      # Impostazioni: lingua, icona, X che riduce, Esci (13)
     ├── test_i18n.py          # cataloghi: estrazione, nomi, caricamento, traduzione (8)
     ├── test_translations.py  # le quattro lingue: complete, segnaposto, menu veri (24)
     ├── test_flathub_manifest.py  # il manifest per Flathub e i controlli del rilascio (15)
@@ -106,8 +109,8 @@ plico/
     └── test_integration.py   # MainWindow vera, offscreen: test end-to-end (168)
 ```
 
-Gate di qualità attuale: **543 passed, 1 skipped** (con `lrelease` dell'SDK nel `PATH`), `ruff` pulito, `mypy` pulito
-(27 file sorgente). Uno `skip` è il test delle icone, che vuole un tema che
+Gate di qualità attuale: **559 passed, 1 skipped** (con `lrelease` dell'SDK nel `PATH`), `ruff` pulito, `mypy` pulito
+(29 file sorgente). Uno `skip` è il test delle icone, che vuole un tema che
 fornisca `object-rotate-*`. Gli altri skip possibili dipendono da
 strumenti che mancano (§9): `pylupdate6` e `lrelease`/`pyside6-lrelease` in
 `tests/test_i18n.py`. **Uno skip lì non è innocuo**: è il test che avvisa
@@ -1330,6 +1333,42 @@ tutte scoperte perché qualcosa saltava o falliva in silenzio:
   senza, si scende ai sosia Base-14.
 
 ---
+
+### Impostazioni: lingua e area di notifica (ottobre 2026)
+
+Le stesse scelte, con le stesse parole, di OllaDesk, l'altra applicazione
+dell'autore: *Impostazioni → Configura Plico…* (`Ctrl+Shift+,`,
+`widgets/settings_dialog.py`).
+
+- **Lingua.** «Automatica (lingua del sistema)» oppure una delle cinque di
+  `i18n.LANGUAGES`, ognuna col suo nome nella sua lingua. Il valore sta in
+  `interfaccia/lingua` (`preferences.py`, che raccoglie anche le altre chiavi e
+  `store()`, il QSettings di tutta l'app), e `app.apply_language()` lo legge
+  **prima** della finestra: i testi si leggono mentre la finestra si
+  costruisce, quindi la lingua nuova vale dal prossimo avvio, e un messaggio
+  lo dice. Una lingua scelta diventa anche `QLocale.setDefault()`. Il ripiego
+  c'era già: una lingua di sistema senza catalogo riceve l'inglese, l'italiano
+  nessun catalogo (è la sorgente). Un codice sconosciuto nel file vale
+  «automatica».
+- **Area di notifica.** «Mostra l'icona» e, solo con l'icona, «Chiudendo la
+  finestra, riducila nell'area di notifica». Entrambe **spente di default**
+  (in OllaDesk sono accese): per un editor di PDF chi non le chiede non deve
+  veder cambiare niente. Con «riduci» la X nasconde la finestra, documento
+  aperto e nessuna domanda; si esce da *File → Esci* (`Ctrl+Q`, ora
+  `MainWindow._quit()`), da «Esci» nel menu dell'icona, o con la fine della
+  sessione (`commitDataRequest` mette `_really_quit`). Con l'icona attiva
+  `setQuitOnLastWindowClosed(False)`, così chiudere un dialogo a finestra
+  nascosta non esce, e l'uscita passa da `closeEvent()` con un
+  `QApplication.quit` differito. Spegnere l'icona con la finestra nascosta la
+  rimostra: altrimenti non ci sarebbe più modo di raggiungerla. Un «Esci»
+  rifiutato (modifiche non salvate, «Annulla») rimette `_really_quit` a falso.
+- **Flatpak.** `--talk-name=org.kde.StatusNotifierWatcher` è l'unico permesso
+  D-Bus. Misurato su Plasma con un'icona di prova dentro la sandbox: senza,
+  `isSystemTrayAvailable()` è falso e il watcher non vede niente; con, l'icona
+  si registra col nome unico (`:1.N/StatusNotifierItem`), senza
+  `--own-name`. Niente `showMessage()`: userebbe
+  `org.freedesktop.Notifications`, un permesso in più, e il tooltip dell'icona
+  dice già come uscire.
 
 ### Revisione esterna del 19 ottobre 2026 (DeepSeek 4.1 Flash, GLM 5.3)
 

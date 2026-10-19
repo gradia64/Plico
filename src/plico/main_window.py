@@ -3,6 +3,7 @@
 import os
 import tempfile
 from collections.abc import Callable
+from pathlib import Path
 
 from PySide6.QtCore import (
     Q_ARG,
@@ -12,6 +13,7 @@ from PySide6.QtCore import (
     Qt,
     QThread,
     QThreadPool,
+    QTimer,
 )
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QUndoStack, QWindow
 from PySide6.QtWidgets import (
@@ -23,14 +25,17 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QProgressDialog,
+    QSystemTrayIcon,
     QToolBar,
     QUndoView,
     QVBoxLayout,
     QWidget,
 )
 
+from . import preferences
 from .model import (
     IMAGE_SUFFIXES,
     AddRedaction,
@@ -68,9 +73,24 @@ from .widgets.find_bar import FindBar
 from .widgets.form_panel import FormPanel
 from .widgets.ocr import OcrDialog, OcrTask
 from .widgets.page_view import PageView
+from .widgets.settings_dialog import Choices, SettingsDialog
 from .widgets.sign import SignatureDialog, SignDialog
 from .widgets.thumbnail_bar import ThumbnailBar, ThumbnailCache
 from .widgets.toast import Toast
+
+
+def _application_icon() -> QIcon:
+    """Plico's icon: from the icon theme where installed, else from a checkout."""
+    icon = QIcon.fromTheme("io.github.gradia64.plico")
+    if icon.isNull():
+        # A checkout run with ``python -m plico.app``: nothing is installed in
+        # the theme, but the SVG is in the repository.
+        source = Path(__file__).resolve().parents[2] / "flatpak" / "io.github.gradia64.plico.svg"
+        if source.is_file():
+            icon = QIcon(str(source))
+    if icon.isNull():
+        icon = QIcon.fromTheme("application-pdf")
+    return icon
 
 
 def _host_path(path: str) -> str:
@@ -243,6 +263,7 @@ class MainWindow(QMainWindow):
 
         # --- menus / toolbar ---
         self._setup_menus()
+        self._setup_settings_menu()
         self._setup_toolbar()
 
         # --- state ---
@@ -250,6 +271,19 @@ class MainWindow(QMainWindow):
 
         # --- restore the previous session's UI state ---
         self._restore_settings()
+
+        # --- the icon in the notification area, if the user wants it ---
+        self._tray: QSystemTrayIcon | None = None
+        # True only on the ways out that mean "quit": File → Esci, the tray's
+        # «Esci», a session ending. The window's X with close-to-tray on only
+        # hides the window.
+        self._really_quit = False
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            # A logout must be able to close Plico: a window that turned the
+            # session's close into a hide would hold the session up.
+            app.commitDataRequest.connect(lambda _manager: self._mark_quitting())
+        self._sync_tray()
 
     # ------------------------------------------------------------------ #
     #  Menus & Toolbar
@@ -352,7 +386,7 @@ class MainWindow(QMainWindow):
         self._close_act.setEnabled(False)
         file_menu.addAction(self._close_act)
         file_menu.addSeparator()
-        file_menu.addAction(self._act(self.tr("&Esci"), "application-exit", "Ctrl+Q", self.close))
+        file_menu.addAction(self._act(self.tr("&Esci"), "application-exit", "Ctrl+Q", self._quit))
         edit_menu = menubar.addMenu(self.tr("&Modifica"))
 
         undo_act = self._undo_stack.createUndoAction(self, self.tr("Annulla"))
@@ -490,6 +524,14 @@ class MainWindow(QMainWindow):
             self.tr("Zoom &indietro"), "zoom-out", "Ctrl+-", self._page_view.zoom_out
         )
         view_menu.addAction(self._zoom_out_act)
+
+    def _setup_settings_menu(self) -> None:
+        """Impostazioni → Configura Plico…, where KDE applications keep it."""
+        settings_menu = self.menuBar().addMenu(self.tr("&Impostazioni"))
+        self._settings_act = self._act(
+            self.tr("&Configura Plico…"), "configure", "Ctrl+Shift+,", self._open_settings
+        )
+        settings_menu.addAction(self._settings_act)
 
     def _setup_toolbar(self) -> None:
         toolbar = QToolBar(self.tr("Strumenti"))
@@ -2100,21 +2142,151 @@ class MainWindow(QMainWindow):
         self._thumb_bar.refresh()
 
     def closeEvent(self, event) -> None:
-        """Persist the UI state and shut the worker thread down cleanly."""
+        """Persist the UI state and shut the worker thread down cleanly.
+
+        With the tray icon and close-to-tray on, the X only hides the window:
+        the document stays open, nothing is asked. Quitting is File → Esci,
+        the tray's «Esci», or the session ending.
+        """
+        if self._tray is not None and self._close_to_tray() and not self._really_quit:
+            event.ignore()
+            self.hide()
+            return
         if not self._confirm_discard():
+            self._really_quit = False
             event.ignore()
             return
         self._save_settings()
+        tray_was_on = self._tray is not None
+        if self._tray is not None:
+            # Gone from the panel at once, not when the process ends.
+            self._tray.hide()
         self.shutdown_worker()
         event.accept()
+        if tray_was_on:
+            # With the tray on, closing the last window does not quit (see
+            # _sync_tray): this is the one way out, deferred to a later turn
+            # of the loop so that the close completes first.
+            QTimer.singleShot(0, QApplication.quit)
+
+    # ------------------------------------------------------------------ #
+    #  Settings dialog, tray icon
+    # ------------------------------------------------------------------ #
+
+    def _choices(self) -> Choices:
+        s = self._settings()
+        return Choices(
+            language=preferences.language(s),
+            tray_icon=preferences.flag(s, preferences.TRAY_ICON),
+            close_to_tray=preferences.flag(s, preferences.CLOSE_TO_TRAY),
+        )
+
+    def _close_to_tray(self) -> bool:
+        return preferences.flag(self._settings(), preferences.CLOSE_TO_TRAY)
+
+    def _open_settings(self) -> None:
+        """Impostazioni: language and tray, saved and applied on OK."""
+        before = self._choices()
+        dialog = SettingsDialog(before, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        after = dialog.choices()
+        s = self._settings()
+        s.setValue(preferences.LANGUAGE, after.language)
+        s.setValue(preferences.TRAY_ICON, after.tray_icon)
+        s.setValue(preferences.CLOSE_TO_TRAY, after.close_to_tray)
+        s.sync()
+        self._sync_tray()
+        if after.language != before.language:
+            # Every string was read when the window was built: changing them
+            # all now would mean rebuilding it, document and undo included.
+            QMessageBox.information(
+                self,
+                self.tr("Lingua"),
+                self.tr("La nuova lingua sarà usata al prossimo avvio di Plico."),
+            )
+
+    def _sync_tray(self) -> None:
+        """Show or remove the tray icon, as the settings say."""
+        wanted = (
+            preferences.flag(self._settings(), preferences.TRAY_ICON)
+            and QSystemTrayIcon.isSystemTrayAvailable()
+        )
+        if wanted and self._tray is None:
+            self._tray = self._build_tray()
+        elif not wanted and self._tray is not None:
+            self._tray.hide()
+            self._tray.deleteLater()
+            self._tray = None
+            if not self.isVisible():
+                # Hidden in a tray that is going away: the window must come
+                # back, or there would be no way to reach it.
+                self._show_from_tray()
+        app = QApplication.instance()
+        if isinstance(app, QApplication):
+            # With an icon, a dialog closed while the window is hidden must not
+            # quit the application: the exit goes through closeEvent instead.
+            app.setQuitOnLastWindowClosed(self._tray is None)
+
+    def _build_tray(self) -> QSystemTrayIcon:
+        tray = QSystemTrayIcon(_application_icon(), self)
+        tray.setToolTip(
+            self.tr("Plico — clic per mostrare o nascondere, «Esci» dal menu per chiudere")
+        )
+        menu = QMenu(self)
+        toggle = QAction(self.tr("Mostra / nascondi"), menu)
+        toggle.triggered.connect(self._toggle_from_tray)
+        menu.addAction(toggle)
+        menu.addSeparator()
+        leave = QAction(self.tr("Esci"), menu)
+        leave.triggered.connect(self._quit)
+        menu.addAction(leave)
+        tray.setContextMenu(menu)
+        tray.activated.connect(self._on_tray_activated)
+        tray.show()
+        return tray
+
+    def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
+        if reason in (
+            QSystemTrayIcon.ActivationReason.Trigger,
+            QSystemTrayIcon.ActivationReason.DoubleClick,
+            QSystemTrayIcon.ActivationReason.MiddleClick,
+        ):
+            self._toggle_from_tray()
+
+    def _toggle_from_tray(self) -> None:
+        if self.isVisible() and not self.isMinimized():
+            self.hide()
+            return
+        self._show_from_tray()
+
+    def _show_from_tray(self) -> None:
+        self.show()
+        self.setWindowState(self.windowState() & ~Qt.WindowState.WindowMinimized)
+        self.raise_()
+        self.activateWindow()
+
+    def _mark_quitting(self) -> None:
+        self._really_quit = True
+
+    def _quit(self) -> None:
+        """File → Esci and the tray's «Esci»: quit, not hide.
+
+        The window is shown first: the question about unsaved changes needs
+        a window to belong to, and a hidden one would ask from nowhere.
+        """
+        self._really_quit = True
+        if not self.isVisible():
+            self._show_from_tray()
+        self.close()
 
     # ------------------------------------------------------------------ #
     #  Settings (QSettings: window geometry, dock/toolbar layout, zoom)
     # ------------------------------------------------------------------ #
 
     def _settings(self) -> QSettings:
-        """Explicit org/app: no reliance on global QApplication state."""
-        return QSettings("Plico", "plico")
+        """The settings file (see :mod:`plico.preferences`); tests redirect it."""
+        return preferences.store()
 
     def _restore_settings(self) -> None:
         s = self._settings()

@@ -30,6 +30,13 @@ A true native PDF editor for Linux, built with **Qt6** and **PySide6**, using
 - **Find** (_Edit → Find…_, `Ctrl+F`): a bar under the page highlights every
   match, `Enter`/`F3` goes to the next, `Shift+F3` to the previous, `Esc`
   closes. It also finds words just recognised by OCR, before saving
+- **Settings** (_Settings → Configure Plico…_, `Ctrl+Shift+,`): the interface
+  language — automatic, that is the system's, or one of Italian, English,
+  French, German and Spanish; a system language Plico does not have gets
+  English — and the icon in the notification area. With the icon, the X can
+  also minimize Plico to the notification area instead of closing it: you
+  quit from _File → Quit_ (`Ctrl+Q`) or from "Quit" in the icon's menu. The
+  language changes at the next start
 - **Undo/Redo** in full, backed by `QUndoStack`
 - **Asynchronous rendering** in a separate thread — the UI never blocks
 - **Lazy rendering**: only the visible pages are rendered, not the whole
@@ -413,7 +420,7 @@ Packaging lives in `flatpak/` and is meant to be publishable on Flathub.
 | `io.github.gradia64.plico.metainfo.xml` | AppStream metadata |
 | `io.github.gradia64.plico.svg` | icon |
 
-Seven non-obvious choices:
+Eight non-obvious choices:
 
 - **`base: io.qt.PySide.BaseApp`** instead of installing PySide6 with pip.
   Flathub's BaseApp already contains PySide6 built and aligned with the Qt of
@@ -452,6 +459,11 @@ Seven non-obvious choices:
   real one, which the portal exposes in the extended attribute
   `user.document-portal.host-path`. The launcher uses `%F`, so a double
   click already arrives as a path exported in the portal.
+- **`--talk-name=org.kde.StatusNotifierWatcher`**, the only D-Bus permission:
+  without it the notification area does not exist inside the sandbox and the
+  Settings icon never shows (tested on Plasma). Qt registers the icon under
+  its unique bus name, so no other name has to be owned. The icon is
+  optional and off by default.
 
 Build and install for your own user:
 

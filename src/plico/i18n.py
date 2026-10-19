@@ -31,6 +31,27 @@ SOURCE_LANGUAGE = "it"
 #: and far fewer people read it than English.
 FALLBACK = "plico_en"
 
+#: The languages Plico speaks, each named in itself, as the «Impostazioni»
+#: dialog lists them. Italian needs no catalog: it is the source.
+LANGUAGES = {
+    "it": "Italiano",
+    "en": "English",
+    "fr": "Français",
+    "de": "Deutsch",
+    "es": "Español",
+}
+
+
+def chosen_locale(language: str | None) -> QLocale | None:
+    """The locale for a language chosen in the settings; None means the system's.
+
+    A code Plico does not know -- a setting written by a later version, a
+    hand-edited file -- counts as "automatic" rather than as an error.
+    """
+    if language in LANGUAGES:
+        return QLocale(language)
+    return None
+
 
 def catalog_dirs() -> list[Path]:
     """Every place a compiled catalog may be, most specific first."""

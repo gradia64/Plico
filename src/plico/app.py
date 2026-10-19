@@ -2,10 +2,11 @@
 
 import sys
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QCoreApplication, QLocale, QTranslator, QUrl
 from PySide6.QtWidgets import QApplication
 
-from .i18n import install_qt_translator, install_translators
+from . import preferences
+from .i18n import chosen_locale, install_qt_translator, install_translators
 from .main_window import MainWindow
 from .model import is_image
 
@@ -49,6 +50,20 @@ def open_arguments(window: MainWindow, paths: list[str]) -> None:
             window.merge_path(extra)
 
 
+def apply_language(app: QCoreApplication, language: str) -> list[QTranslator]:
+    """Load the catalogs for *language* ("auto": the system's); return Plico's.
+
+    The language chosen in «Impostazioni» wins over the system's, and is also
+    the default locale, so dates and numbers follow the same choice. A system
+    language Plico has no catalog for gets English (see :mod:`plico.i18n`).
+    """
+    locale = chosen_locale(language)
+    if locale is not None:
+        QLocale.setDefault(locale)
+    install_qt_translator(app, locale)
+    return install_translators(app, locale)
+
+
 def main() -> int:
     # Set on the class: these are application-wide statics and they must be
     # in place before QSettings or any window is created.
@@ -59,8 +74,7 @@ def main() -> int:
 
     app = QApplication.instance() or QApplication(sys.argv)
     # Before the first window: the strings are read while it is built.
-    install_qt_translator(app)
-    install_translators(app)
+    apply_language(app, preferences.language(preferences.store()))
     window = MainWindow()
     window.show()
 

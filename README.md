@@ -32,6 +32,13 @@ comprimerli.
   evidenzia tutte le occorrenze, `Invio`/`F3` passa alla successiva,
   `Maiusc+F3` alla precedente, `Esc` chiude. Trova anche le parole appena
   riconosciute dall'OCR, prima di salvare
+- **Impostazioni** (*Impostazioni → Configura Plico…*, `Ctrl+Maiusc+,`): la
+  lingua dell'interfaccia — automatica, cioè quella del sistema, oppure una
+  fra italiano, inglese, francese, tedesco e spagnolo; con una lingua di
+  sistema che Plico non ha si usa l'inglese — e l'icona nell'area di notifica.
+  Con l'icona si può anche far sì che la X riduca Plico nell'area di notifica
+  invece di chiuderlo: si esce da *File → Esci* (`Ctrl+Q`) o da «Esci» nel
+  menu dell'icona. La lingua cambia al prossimo avvio
 - **Undo/Redo** completo grazie a `QUndoStack`
 - **Rendering asincrono** in un thread separato — l'UI non si blocca mai
 - **Rendering lazy**: si renderizzano solo le pagine visibili, non l'intero
@@ -424,7 +431,7 @@ Il packaging è in `flatpak/` ed è pensato per essere pubblicabile su Flathub.
 | `io.github.gradia64.plico.metainfo.xml` | metadati AppStream |
 | `io.github.gradia64.plico.svg` | icona |
 
-Sette scelte non ovvie:
+Otto scelte non ovvie:
 
 - **`base: io.qt.PySide.BaseApp`** invece di installare PySide6 con pip. La
   BaseApp di Flathub contiene già PySide6 compilato e allineato al Qt di
@@ -462,6 +469,11 @@ Sette scelte non ovvie:
   dialoghi usa invece quello vero, che il portal espone nell'attributo
   esteso `user.document-portal.host-path`. Il launcher usa `%F`, così un
   doppio clic arriva già come percorso esportato nel portal.
+- **`--talk-name=org.kde.StatusNotifierWatcher`**, l'unico permesso D-Bus:
+  senza, dentro la sandbox l'area di notifica non esiste e l'icona delle
+  Impostazioni non compare (provato su Plasma). Qt registra l'icona col suo
+  nome unico sul bus, quindi non serve possedere altri nomi. L'icona è
+  facoltativa e spenta di default.
 
 Costruire e installare nella propria utenza:
 

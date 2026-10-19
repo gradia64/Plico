@@ -158,3 +158,31 @@ def test_qt_s_own_buttons_follow_the_language(qapp):
         assert QCoreApplication.translate("QPlatformTheme", "Cancel") != "Cancel"
     finally:
         qapp.removeTranslator(translator)
+
+
+def test_a_language_chosen_in_the_settings_beats_the_system(qapp, tmp_path, monkeypatch):
+    """«Impostazioni»: French chosen on any system loads the French catalog."""
+    from plico.app import apply_language
+
+    compiled = _compiled(tmp_path, "fr")
+    monkeypatch.setenv(i18n.ENV_DIR, str(compiled.parent))
+    before = QLocale()
+    try:
+        loaded = apply_language(qapp, "fr")
+        assert [Path(t.filePath()).name for t in loaded] == ["plico_fr.qm"]
+        assert QLocale().language() == QLocale.Language.French
+        assert qapp.translate("MainWindow", "&Impostazioni") == "&Configuration"
+    finally:
+        for translator in loaded:
+            qapp.removeTranslator(translator)
+        QLocale.setDefault(before)
+
+
+def test_italian_chosen_loads_nothing_at_all(qapp):
+    from plico.app import apply_language
+
+    before = QLocale()
+    try:
+        assert apply_language(qapp, "it") == []
+    finally:
+        QLocale.setDefault(before)

@@ -27,3 +27,16 @@ def test_installed_where_the_runtime_reads_it():
         "install -Dm644 flatpak/fontconfig-local.conf /app/etc/fonts/local.conf"
         in plico["build-commands"]
     )
+
+
+def test_the_tray_can_reach_the_notification_area():
+    """Without it, inside the sandbox ``isSystemTrayAvailable()`` is False.
+
+    Measured on KDE Plasma: no permission, no icon; this one name, and Qt
+    registers its StatusNotifierItem under its unique bus name, nothing else
+    to own. The icon is opt-in (Impostazioni), so the permission stays idle
+    for whoever does not want it.
+    """
+    manifest = json.loads(MANIFEST.read_text())
+    assert "--talk-name=org.kde.StatusNotifierWatcher" in manifest["finish-args"]
+    assert not any(arg.startswith("--filesystem") for arg in manifest["finish-args"])
