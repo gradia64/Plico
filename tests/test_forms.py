@@ -664,3 +664,76 @@ def test_compressing_some_pages_keeps_their_fields(tmp_path):
         assert _top_fields(preview.path) == ["nome"]
     finally:
         preview.drop()
+
+
+def _acrobat_style_field(path: str) -> None:
+    """A text field the way Acrobat writes it: value on the parent, widget a kid.
+
+    The parent carries /FT, /T and /V; the widget on the page only points to
+    it. The merged shape (field and widget in one object) is what PyMuPDF
+    itself writes, and it had never leaked; this one did.
+    """
+    pdf = pikepdf.new()
+    pdf.add_blank_page(page_size=(612, 792))
+    page = pdf.pages[0]
+    parent = pdf.make_indirect(
+        pikepdf.Dictionary(FT=pikepdf.Name.Tx, T=pikepdf.String("nome"), V=pikepdf.String("SEGRETO"))
+    )
+    widget = pdf.make_indirect(
+        pikepdf.Dictionary(
+            Type=pikepdf.Name.Annot,
+            Subtype=pikepdf.Name.Widget,
+            Rect=[100, 712, 300, 742],
+            Parent=parent,
+            P=page.obj,
+        )
+    )
+    parent.Kids = pikepdf.Array([widget])
+    page.obj.Annots = pikepdf.Array([widget])
+    pdf.Root.AcroForm = pdf.make_indirect(
+        pikepdf.Dictionary(Fields=pikepdf.Array([parent]), NeedAppearances=True)
+    )
+    pdf.save(path)
+
+
+def _anywhere(path: str, secret: str) -> bool:
+    with pikepdf.open(path) as pdf:
+        return any(
+            secret in str(obj)
+            for obj in pdf.objects
+            if isinstance(obj, (pikepdf.Dictionary, pikepdf.String))
+        )
+
+
+def test_redacting_a_parent_field_takes_its_value_out_of_the_file(tmp_path):
+    """Review 2026-10-19 (R-01): the widget went, the value stayed in /Fields."""
+    source = str(tmp_path / "modulo.pdf")
+    out = str(tmp_path / "redatto.pdf")
+    _acrobat_style_field(source)
+    assert _anywhere(source, "SEGRETO")
+    model = DocumentModel()
+    model.open(source)
+    # The widget is at y 712-742 from the bottom: 50-80 from the top.
+    model.pages[0].redactions.append(RedactionRect(90, 40, 320, 90))
+
+    save_as(model, out)
+
+    assert not _anywhere(out, "SEGRETO")
+    with pymupdf.open(out) as doc:
+        assert not list(doc[0].widgets() or ())
+
+
+def test_a_parent_field_not_redacted_keeps_its_value(tmp_path):
+    """The pruning takes only what lost its widget, not every parent field."""
+    source = str(tmp_path / "modulo.pdf")
+    out = str(tmp_path / "copia.pdf")
+    _acrobat_style_field(source)
+    model = DocumentModel()
+    model.open(source)
+    model.pages[0].redactions.append(RedactionRect(90, 400, 320, 450))
+
+    save_as(model, out)
+
+    assert _anywhere(out, "SEGRETO")
+    with pymupdf.open(out) as doc:
+        assert [w.field_name for w in doc[0].widgets()] == ["nome"]

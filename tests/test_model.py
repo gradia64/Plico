@@ -47,6 +47,15 @@ def mixed_model(mixed_pdf, qapp):
 def test_parse_ranges_basic():
     assert parse_page_ranges("1-3,5", 10) == [0, 1, 2, 4]
 
+def test_parse_ranges_blanks_separate_and_never_merge_numbers():
+    """Review 2026-10-19 (R-12): "1 3" was page 13, extracted without a word."""
+    assert parse_page_ranges("1 3", 20) == [0, 2]
+    assert parse_page_ranges("1 - 3, 5", 20) == [0, 1, 2, 4]
+    assert parse_page_ranges("1-3 7", 20) == [0, 1, 2, 6]
+    assert parse_page_ranges("1,,3", 20) == [0, 2]
+    with pytest.raises(ValueError):
+        parse_page_ranges(" , ", 20)
+
 def test_parse_ranges_preserves_order():
     assert parse_page_ranges("5,1-3", 10) == [4, 0, 1, 2]
 

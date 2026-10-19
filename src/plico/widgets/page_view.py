@@ -59,6 +59,11 @@ FALLBACK_VIEWPORT_H = 800  # assumed height until the widget is sized
 REDACTION_FILL = QColor(0, 0, 0, 190)
 REDACTION_BORDER = QColor(214, 48, 48)
 REDACTION_DRAG = QColor(214, 48, 48, 170)
+# Search hits: the highlighter yellow every reader uses, and the current one
+# in orange with an outline, so it stands out among many on the same page.
+SEARCH_HIT = QColor(255, 214, 0, 110)
+SEARCH_CURRENT = QColor(255, 140, 0, 140)
+SEARCH_CURRENT_BORDER = QColor(214, 96, 0)
 
 # Below this (in pixels) a press-and-release is a click, not a drag.
 CLICK_SLOP = 4.0
@@ -262,6 +267,7 @@ class _PageLabel(QLabel):
         # Text edits are always painted: the page must read the way it will
         # be saved, tool or no tool.
         self._paint_text_edits(painter)
+        self._paint_search(painter)
         if self._view.redaction_mode():
             self._paint_redactions(painter)
         elif self._view.selection_mode():
@@ -364,6 +370,28 @@ class _PageLabel(QLabel):
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRect(box)
+
+    def _paint_search(self, painter: QPainter) -> None:
+        """Highlight the search hits of this page, the current one stronger."""
+        canvas = self.canvas
+        assert canvas is not None
+        hits = self._view.search_hits(canvas.index)
+        if not hits:
+            return
+        current = self._view.search_current()
+        painter.save()
+        painter.setPen(Qt.PenStyle.NoPen)
+        for position, rect in enumerate(hits):
+            area = self._to_pixels(rect)
+            if current == (canvas.index, position):
+                painter.setBrush(QBrush(SEARCH_CURRENT))
+                painter.setPen(QPen(SEARCH_CURRENT_BORDER, 2))
+                painter.drawRect(area)
+                painter.setPen(Qt.PenStyle.NoPen)
+            else:
+                painter.setBrush(QBrush(SEARCH_HIT))
+                painter.drawRect(area)
+        painter.restore()
 
     def _paint_redactions(self, painter: QPainter) -> None:
         canvas = self.canvas
@@ -734,6 +762,9 @@ class PageView(QScrollArea):
         self._pending_scroll: int | None = None
         self._fit_mode = False
         self._redaction_mode = False
+        # Search hits by page index, and the current one as (page, position).
+        self._search_hits: dict[int, list[RedactionRect]] = {}
+        self._search_current: tuple[int, int] | None = None
         self._selection_mode = False
         self._text_mode = False
         # The editor open over a span, and which span of which page it edits.
@@ -1640,6 +1671,52 @@ class PageView(QScrollArea):
         self._apply_pending_scroll()
         self._pending_scroll = None
 
+    # ------------------------------------------------------------------ #
+    #  Search hits
+    # ------------------------------------------------------------------ #
+
+    def set_search_hits(
+        self, hits: dict[int, list[RedactionRect]], current: tuple[int, int] | None
+    ) -> None:
+        """Highlight *hits* (page space, by page index); *current* stronger."""
+        self._search_hits = hits
+        self._search_current = current
+        for c in self._canvases:
+            c.label.update()
+
+    def search_hits(self, index: int) -> list[RedactionRect]:
+        return self._search_hits.get(index, [])
+
+    def search_current(self) -> tuple[int, int] | None:
+        return self._search_current
+
+    def ensure_rect_visible(self, index: int, rect: RedactionRect) -> None:
+        """Scroll so that *rect* of page *index* is on screen, if it is not.
+
+        Computed from the layout recorded in ``y_px``, like :meth:`_scroll_to`,
+        and placed a third of the way down: the line before the hit is
+        context the reader wants to see.
+        """
+        if not 0 <= index < len(self._canvases):
+            return
+        canvas = self._canvases[index]
+        area = canvas.label._to_pixels(rect)
+        top = canvas.y_px + int(area.top())
+        bottom = canvas.y_px + int(area.bottom())
+        bar = self.verticalScrollBar()
+        height = self.viewport().height()
+        if top < bar.value() or bottom > bar.value() + height:
+            self._pending_scroll = max(0, top - height // 3)
+            self._apply_pending_scroll()
+            if self._pending_scroll is not None:
+                QTimer.singleShot(0, self._finish_pending_scroll)
+        horizontal = self.horizontalScrollBar()
+        left = canvas.label.x() + int(area.left())
+        right = canvas.label.x() + int(area.right())
+        width = self.viewport().width()
+        if left < horizontal.value() or right > horizontal.value() + width:
+            horizontal.setValue(max(0, left - width // 4))
+
     def ensure_page_visible(self, index: int) -> None:
         """Scroll the view so the page at *index* is on screen."""
         if 0 <= index < len(self._canvases):
@@ -1657,6 +1734,8 @@ class PageView(QScrollArea):
         self._by_page.clear()
         self._cache.clear()
         self._cache_bytes = 0
+        self._search_hits = {}
+        self._search_current = None
         self.update()
 
     def reset(self) -> None:

@@ -87,8 +87,8 @@ plico/
     └── test_integration.py   # MainWindow vera, offscreen: 161 test end-to-end
 ```
 
-Gate di qualità attuale: **514 passed, 1 skipped** (con `lrelease` dell'SDK nel `PATH`), `ruff` pulito, `mypy` pulito
-(26 file sorgente). Uno `skip` è il test delle icone, che vuole un tema che
+Gate di qualità attuale: **531 passed, 1 skipped** (con `lrelease` dell'SDK nel `PATH`), `ruff` pulito, `mypy` pulito
+(27 file sorgente). Uno `skip` è il test delle icone, che vuole un tema che
 fornisca `object-rotate-*`. Gli altri skip possibili dipendono da
 strumenti che mancano (§9): `pylupdate6` e `lrelease`/`pyside6-lrelease` in
 `tests/test_i18n.py`. **Uno skip lì non è innocuo**: è il test che avvisa
@@ -1311,6 +1311,63 @@ tutte scoperte perché qualcosa saltava o falliva in silenzio:
   senza, si scende ai sosia Base-14.
 
 ---
+
+### Revisione esterna del 19 ottobre 2026 (DeepSeek 4.1 Flash, GLM 5.3)
+
+Due review sul commit `674a4ba`, verificate una per una prima di correggere
+(i report non sono nel repository; qui c'è quello che ne è uscito). Corrette, ciascuna con il suo
+test di regressione:
+
+- **R-01, valore di un campo redatto nel file** (`test_forms.py`): un campo
+  come lo scrive Acrobat ha `/FT`, `/T` e `/V` sul **padre** e il widget come
+  figlio. `burn_redactions()` cancellava il widget, ma il padre restava in
+  `/Fields` con il valore, e `garbage=4` non poteva toglierlo. Il campo fuso
+  (quello che scrive PyMuPDF) non perdeva niente, ed è per questo che i test
+  non l'avevano visto. Ora `_write_pdf()`, dopo redazioni e firme tolte,
+  richiama `prune_fields()` (prima `_prune_fields`, ora pubblica in
+  `assemble.py`).
+- **R-02, campo firma vuoto letto come firma** (`test_sign.py`): per la
+  specifica il bit 1 di `/SigFlags` dice che esiste un **campo** firma, e
+  PyMuPDF scrive `/SigFlags 3` anche per un campo vuoto. `is_signed()` usa il
+  bit solo come filtro e poi cerca un campo con `/V` (`holds_signature()`,
+  spostata da `save.py` a `sign.py` insieme a `signature_widgets()`, che
+  restituisce xref e non oggetti `Widget`: un widget tiene solo un
+  riferimento debole alla sua pagina).
+- **R-04, `/SigFlags` dopo aver tolto l'ultimo campo firma**:
+  `_settle_sigflags()` mette 0 se non resta nessun campo firma, 1 se sono
+  rimasti solo campi vuoti dopo aver tolto le firme.
+- **R-03, verifica delle firme su un PDF cifrato** (`test_sign.py`):
+  `read_signatures()` riceveva la password e non la usava, e pyHanko
+  sollevava `PdfKeyNotAvailableError` fuori dal dialogo. Ora il lettore viene
+  autenticato con `reader.decrypt(password)`, e ogni errore di lettura diventa
+  una `SigningError` con una frase per l'utente.
+- **R-12, «1 3» era la pagina 13** (`test_model.py`): `parse_page_ranges()`
+  toglieva gli spazi prima di dividere. Ora virgole e spazi separano, gli spazi
+  attorno al trattino no (`1 - 3` è un intervallo), i separatori ripetuti sono
+  tollerati.
+- **`Ctrl+F` promesso dal README e inesistente** (GLM 1): ora c'è.
+  `widgets/find_bar.py` è la barra (campo, «n di m», precedente/successiva,
+  chiudi; ricerca 250 ms dopo l'ultima lettera), `MainWindow._run_search()`
+  usa `DocumentModel.find_text()`, la stessa ricerca di *Cancella parola*
+  (quindi trova le parole dell'OCR prima del salvataggio e non le parole già
+  sotto una zona), e `PageView.set_search_hits()` / `ensure_rect_visible()`
+  evidenziano e portano in vista. F3 e Maiusc+F3 funzionano ovunque sia il
+  focus; Esc nella barra la chiude, e senza strumenti accesi la chiude da
+  qualunque punto. La ricerca riparte da sola a ogni `changed` o
+  `page_changed` del modello, solo se la barra è aperta. Due trappole: va
+  selezionata prima la miniatura e **poi** portata in vista l'occorrenza,
+  perché la selezione scorre all'inizio della pagina; e lo stato della barra
+  si legge con `isHidden()`, non `isVisible()`, che è falso in una finestra
+  non ancora mostrata (i test). In francese `&Rechercher` collideva con
+  un'altra voce del menu: è `Rec&hercher`.
+
+Non corrette, perché sbagliate: **R-05** (miniature dopo testo, campi e OCR)
+descrive un sintomo vero, ma la correzione proposta (svuotare la cache) non
+cambia niente: le miniature disegnano solo la sorgente e non hanno mai
+mostrato quelle modifiche. Servirebbe lo stesso meccanismo dell'anteprima delle
+cancellazioni. L'osservazione 1 di DeepSeek («test delle traduzioni sempre
+saltati in CI») è falsa: in CI `pyside6-lrelease` è nel `PATH`. Le anomalie
+minori e di pulizia delle due review restano da fare.
 
 ## 10. Insidie già pagate (leggere prima di scrivere codice)
 

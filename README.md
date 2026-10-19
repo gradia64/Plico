@@ -26,7 +26,12 @@ comprimerli.
   (un A4 a 300 dpi resta un A4), una foto da telefono viene ridotta a un A4
   orientato come lei, e i JPEG entrano senza essere ricompressi
 - **Estrarre pagine** (dividere) in un nuovo file con una selezione tipo
-  `1-3,5,8` — l'ordine digitato è conservato, quindi vale anche come riordino
+  `1-3,5,8` — l'ordine digitato è conservato, quindi vale anche come riordino.
+  Virgole e spazi separano allo stesso modo: `1 3` sono le pagine 1 e 3
+- **Trovare** (*Modifica → Trova…*, `Ctrl+F`): una barra sotto la pagina
+  evidenzia tutte le occorrenze, `Invio`/`F3` passa alla successiva,
+  `Maiusc+F3` alla precedente, `Esc` chiude. Trova anche le parole appena
+  riconosciute dall'OCR, prima di salvare
 - **Undo/Redo** completo grazie a `QUndoStack`
 - **Rendering asincrono** in un thread separato — l'UI non si blocca mai
 - **Rendering lazy**: si renderizzano solo le pagine visibili, non l'intero

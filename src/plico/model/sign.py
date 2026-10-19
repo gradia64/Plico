@@ -37,6 +37,7 @@ from cryptography.hazmat.primitives.serialization import (
     pkcs12,
 )
 from cryptography.x509.oid import NameOID
+from pyhanko.pdf_utils.crypt import AuthStatus
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 from pyhanko.pdf_utils.reader import PdfFileReader
 from pyhanko.pdf_utils.text import TextBoxStyle
@@ -360,6 +361,37 @@ def _sign_bytes(data: bytes, request: SignatureRequest) -> bytes:
     return output.getvalue()  # type: ignore[no-any-return]
 
 
+def holds_signature(doc: pymupdf.Document, xref: int) -> bool:
+    """Whether a signature widget holds a signature (a /V), on itself or its field.
+
+    An empty signature field -- a place left for a signature to come -- has
+    none, and is form content, not a signature.
+    """
+    kind: str = doc.xref_get_key(xref, "V")[0]
+    if kind != "null":
+        return True
+    parent_kind, reference = doc.xref_get_key(xref, "Parent")
+    if parent_kind == "xref" and reference:
+        kind = doc.xref_get_key(int(reference.split()[0]), "V")[0]
+        return kind != "null"
+    return False
+
+
+def signature_widgets(doc: pymupdf.Document) -> list[tuple[int, int]]:
+    """Every signature widget of *doc*, as (page index, xref).
+
+    Xrefs and not Widget objects: a widget keeps only a weak reference to its
+    page, and the pages here go out of scope one after the other.
+    """
+    found = []
+    for index in range(len(doc)):
+        page = doc[index]
+        for widget in page.widgets() or ():
+            if widget.field_type == pymupdf.PDF_WIDGET_TYPE_SIGNATURE:  # type: ignore[attr-defined]
+                found.append((index, widget.xref))
+    return found
+
+
 def is_signed(path: str, password: str = "") -> bool:
     """Whether *path* carries signature fields, without validating them.
 
@@ -371,10 +403,21 @@ def is_signed(path: str, password: str = "") -> bool:
     # form at all and 0 for a form that has never been signed, so ">= 0" made
     # any form carrying /SigFlags 0 read as signed. The -1 must be ruled out
     # before the mask: in Python ``-1 & 1`` is 1.
+    #
+    # The bit alone is not enough either: by the specification it says that a
+    # signature FIELD exists, and an empty one -- a form prepared for signing
+    # -- sets it (PyMuPDF writes /SigFlags 3 for it). The title said
+    # "firmato" for a document nobody had signed. The flag is the cheap
+    # filter; a field with a value is the answer.
     try:
         with open_for_reading(path, password) as document:
             flags = int(document.get_sigflags())
-            return flags > 0 and bool(flags & 1)
+            if flags <= 0 or not flags & 1:
+                return False
+            return any(
+                holds_signature(document, xref)
+                for _, xref in signature_widgets(document)
+            )
     except Exception:  # noqa: BLE001 -- unreadable is "not signed" for our purposes
         return False
 
@@ -405,7 +448,28 @@ def read_signatures(
         raise SigningError(
             QCoreApplication.translate("Signing", "«{0}» non è un PDF leggibile: {1}").format(_name_of(path), error)
         ) from error
-    return [_describe(signature, context) for signature in reader.embedded_signatures]
+    # An encrypted file must be unlocked before pyHanko reads a single object:
+    # without it ``embedded_signatures`` raised PdfKeyNotAvailableError, which
+    # is no SigningError, out of the dialog -- with the right password sitting
+    # in the model all along (reported by a review, reproduced).
+    if reader.encrypted and reader.decrypt(password).status is AuthStatus.FAILED:
+        raise SigningError(
+            QCoreApplication.translate(
+                "Signing", "«{0}» è protetto da una password che non apre il file."
+            ).format(_name_of(path))
+        )
+    try:
+        return [_describe(signature, context) for signature in reader.embedded_signatures]
+    except SigningError:
+        raise
+    # pyHanko's reader raises its own types for a damaged file, and the dialog
+    # needs a sentence, not a traceback.
+    except Exception as error:
+        raise SigningError(
+            QCoreApplication.translate("Signing", "Non riesco a leggere le firme di «{0}»: {1}").format(
+                _name_of(path), error
+            )
+        ) from error
 
 
 def _describe(embedded: Any, context: ValidationContext) -> Signature:

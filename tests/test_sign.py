@@ -11,6 +11,7 @@ reported instead of hidden.
 import datetime
 import os
 
+import pikepdf
 import pymupdf
 import pytest
 from cryptography import x509
@@ -22,7 +23,7 @@ from cryptography.hazmat.primitives.serialization import (
     pkcs12,
 )
 from cryptography.x509.oid import NameOID
-from PySide6.QtWidgets import QApplication, QDialog, QFileDialog, QMessageBox
+from PySide6.QtWidgets import QApplication, QDialog, QFileDialog, QLabel, QMessageBox
 
 from plico.main_window import MainWindow
 from plico.model import (
@@ -38,6 +39,7 @@ from plico.model import (
     stamp_text,
 )
 from plico.model.forms import SIGNATURE, read_fields
+from plico.model.redact import RedactionRect
 from plico.model.sign import SignatureRequest
 from plico.widgets.sign import SignatureDialog, SignDialog, _verdict
 
@@ -778,3 +780,94 @@ def test_an_empty_signature_field_is_kept(tmp_path) -> None:
     with pymupdf.open(out) as doc:
         page = doc[0]
         assert [w.field_name for w in page.widgets()] == ["Firma del richiedente"]
+
+
+# --------------------------------------------------------------------- #
+#  Review of 2026-10-19: empty fields, redacted fields, encrypted files
+# --------------------------------------------------------------------- #
+
+
+def _empty_signature_field(path: str) -> None:
+    """A form prepared for signing: one signature field, nobody signed it."""
+    with pymupdf.open() as doc:
+        page = doc.new_page(width=595, height=842)
+        widget = pymupdf.Widget()
+        widget.field_type = pymupdf.PDF_WIDGET_TYPE_SIGNATURE
+        widget.field_name = "Firma1"
+        widget.rect = pymupdf.Rect(100, 100, 300, 150)
+        page.add_widget(widget)
+        doc.save(path)
+
+
+def test_an_empty_signature_field_is_not_a_signature(tmp_path) -> None:
+    """PyMuPDF writes /SigFlags 3 for an empty field: the flag is not the answer."""
+    path = str(tmp_path / "da-firmare.pdf")
+    _empty_signature_field(path)
+    with pymupdf.open(path) as doc:
+        assert doc.get_sigflags() == 3
+
+    assert not is_signed(path)
+    assert read_signatures(path) == []
+
+
+def test_a_kept_empty_signature_field_survives_a_save(tmp_path) -> None:
+    """The place for a signature is form content: a plain save keeps it."""
+    source = str(tmp_path / "da-firmare.pdf")
+    out = str(tmp_path / "copia.pdf")
+    _empty_signature_field(source)
+    model = DocumentModel()
+    model.open(source)
+
+    save_as(model, out)
+
+    with pymupdf.open(out) as doc:
+        assert any(field.kind == SIGNATURE for field in read_fields(doc[0]))
+        assert doc.get_sigflags() & 1
+
+
+def test_redacting_the_only_signature_field_clears_the_flags(tmp_path) -> None:
+    """No signature field left, so nothing may still say there is one."""
+    source = str(tmp_path / "da-firmare.pdf")
+    out = str(tmp_path / "redatto.pdf")
+    _empty_signature_field(source)
+    model = DocumentModel()
+    model.open(source)
+    model.pages[0].redactions.append(RedactionRect(90, 90, 310, 160))
+
+    save_as(model, out)
+
+    with pymupdf.open(out) as doc:
+        assert doc.get_sigflags() <= 0
+        assert not any(page.widgets() and list(page.widgets()) for page in doc)
+    assert not is_signed(out)
+
+
+def test_verifying_an_encrypted_document_uses_its_password(certificate, tmp_path) -> None:
+    """The model has the password; the verification must use it, not raise."""
+    signed = str(tmp_path / "firmato.pdf")
+    locked = str(tmp_path / "cifrato.pdf")
+    _plain_pdf(signed, pages=1)
+    sign_in_place(signed, _request(certificate[0]))
+    with pikepdf.open(signed) as pdf:
+        pdf.save(locked, encryption=pikepdf.Encryption(user="utente", owner="titolare", R=6))
+
+    assert len(read_signatures(locked, password="utente")) == 1
+    with pytest.raises(SigningError):
+        read_signatures(locked, password="")
+    with pytest.raises(SigningError):
+        read_signatures(locked, password="sbagliata")
+
+
+def test_the_verification_dialog_opens_on_an_encrypted_document(qapp, certificate, tmp_path):
+    """Without the password the dialog says why, instead of a traceback."""
+    signed = str(tmp_path / "firmato.pdf")
+    locked = str(tmp_path / "cifrato.pdf")
+    _plain_pdf(signed, pages=1)
+    sign_in_place(signed, _request(certificate[0]))
+    with pikepdf.open(signed) as pdf:
+        pdf.save(locked, encryption=pikepdf.Encryption(user="utente", owner="titolare", R=6))
+
+    dialog = SignatureDialog(locked, [], password="")
+    texts = [w.text() for w in dialog.findChildren(QLabel)]
+    assert any("password" in text for text in texts), texts
+    dialog.deleteLater()

@@ -25,7 +25,11 @@ A true native PDF editor for Linux, built with **Qt6** and **PySide6**, using
   A4), a phone photo is fitted to a portrait A4, and JPEGs are embedded
   without being recompressed
 - **Extract pages** (split) into a new file with a range like `1-3,5,8` —
-  the typed order is preserved, so this doubles as reordering
+  the typed order is preserved, so this doubles as reordering. Commas and
+  blanks separate alike: `1 3` is pages 1 and 3
+- **Find** (_Edit → Find…_, `Ctrl+F`): a bar under the page highlights every
+  match, `Enter`/`F3` goes to the next, `Shift+F3` to the previous, `Esc`
+  closes. It also finds words just recognised by OCR, before saving
 - **Undo/Redo** in full, backed by `QUndoStack`
 - **Asynchronous rendering** in a separate thread — the UI never blocks
 - **Lazy rendering**: only the visible pages are rendered, not the whole

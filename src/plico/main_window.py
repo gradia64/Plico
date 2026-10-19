@@ -64,6 +64,7 @@ from .model import (
 )
 from .rendering import RenderWorker
 from .widgets.compress import CompressionDialog, CompressionTask, format_size
+from .widgets.find_bar import FindBar
 from .widgets.form_panel import FormPanel
 from .widgets.ocr import OcrDialog, OcrTask
 from .widgets.page_view import PageView
@@ -183,6 +184,20 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self._page_view)
+        # Ctrl+F: hidden until asked for, between the page and the status bar.
+        self._find_bar = FindBar(central)
+        self._find_hits: list[tuple[int, RedactionRect]] = []
+        self._find_position = -1
+        self._find_bar.search_requested.connect(self._run_search)
+        self._find_bar.next_requested.connect(lambda: self._step_search(1))
+        self._find_bar.previous_requested.connect(lambda: self._step_search(-1))
+        self._find_bar.closed.connect(self._close_search)
+        # The hits are page indices and rectangles of one moment: a page
+        # deleted, moved or recognised by OCR makes them wrong, so the search
+        # runs again (only while the bar is open).
+        self._doc_model.changed.connect(self._find_bar.refresh)
+        self._doc_model.page_changed.connect(lambda _row: self._find_bar.refresh())
+        layout.addWidget(self._find_bar)
         layout.addWidget(self._status)
         self.setCentralWidget(central)
 
@@ -349,6 +364,21 @@ class MainWindow(QMainWindow):
         redo_act.setShortcut("Ctrl+Y")
         redo_act.setIcon(QIcon.fromTheme("edit-redo"))
         edit_menu.addAction(redo_act)
+
+        edit_menu.addSeparator()
+
+        self._find_act = self._act(self.tr("&Trova…"), "edit-find", "", self._open_search)
+        self._find_act.setShortcut(QKeySequence(QKeySequence.StandardKey.Find))
+        edit_menu.addAction(self._find_act)
+        # F3 / Shift+F3 work whatever has focus, as in every reader.
+        for keys, step in (
+            (QKeySequence.StandardKey.FindNext, 1),
+            (QKeySequence.StandardKey.FindPrevious, -1),
+        ):
+            action = QAction(self)
+            action.setShortcut(QKeySequence(keys))
+            action.triggered.connect(lambda _checked=False, step=step: self._step_search(step))
+            self.addAction(action)
 
         edit_menu.addSeparator()
 
@@ -1634,7 +1664,21 @@ class MainWindow(QMainWindow):
         )
 
     def _leave_tools(self) -> None:
-        """Esc: leave whichever tool is on, leaving its work where it is."""
+        """Esc: leave whichever tool is on, leaving its work where it is.
+
+        Typing in the search bar, Esc closes the bar and nothing else; with no
+        tool on, Esc closes the bar wherever the focus is.
+        """
+        if self._find_bar.has_focus():
+            self._find_bar.close_bar()
+            return
+        if not (
+            self._redact_act.isChecked()
+            or self._select_act.isChecked()
+            or self._text_act.isChecked()
+        ):
+            self._find_bar.close_bar()
+            return
         if self._redact_act.isChecked():
             self._redact_act.setChecked(False)
             self._on_redaction_toggled(False)
@@ -1644,6 +1688,79 @@ class MainWindow(QMainWindow):
         if self._text_act.isChecked():
             self._text_act.setChecked(False)
             self._on_text_mode_toggled(False)
+
+    # ------------------------------------------------------------------ #
+    #  Search (Ctrl+F)
+    # ------------------------------------------------------------------ #
+
+    def _open_search(self) -> None:
+        """Ctrl+F: show the bar, ready to type."""
+        if not self._doc_model.sources:
+            self._status.setText(self.tr("Nessun documento aperto."))
+            return
+        self._find_bar.open_bar()
+
+    def _run_search(self, text: str) -> None:
+        """Look for *text* in every page and go to the first hit from here on.
+
+        The same search as *Cancella parola*: it reads the sources and the
+        words an OCR run has recognised but not saved yet. Words already
+        under a redaction are not found -- they are gone from the page the
+        preview shows, and will be from the file.
+        """
+        found = self._doc_model.find_text(text) if text and self._doc_model.sources else {}
+        self._find_hits = [
+            (index, rect)
+            for index in sorted(found)
+            for rect in sorted(found[index], key=lambda r: (round(r.y0), r.x0))
+        ]
+        if not self._find_hits:
+            self._find_position = -1
+            self._show_search()
+            return
+        # From the page the user is on: searching is "where next", not "where
+        # first", and a hit behind the reader is found by going back.
+        here = max(0, self._thumb_bar.current_row())
+        self._find_position = next(
+            (i for i, (index, _) in enumerate(self._find_hits) if index >= here), 0
+        )
+        self._show_search(scroll=True)
+
+    def _step_search(self, step: int) -> None:
+        """F3 / Shift+F3: the next or the previous hit, round the document."""
+        # isHidden, not isVisible: the bar is open even in a window that is
+        # not on screen yet.
+        if self._find_bar.isHidden():
+            self._open_search()
+            return
+        if not self._find_hits:
+            return
+        self._find_position = (self._find_position + step) % len(self._find_hits)
+        self._show_search(scroll=True)
+
+    def _show_search(self, scroll: bool = False) -> None:
+        """Hand the hits to the view and the count to the bar."""
+        by_page: dict[int, list[RedactionRect]] = {}
+        current: tuple[int, int] | None = None
+        for position, (index, rect) in enumerate(self._find_hits):
+            if position == self._find_position:
+                current = (index, len(by_page.get(index, [])))
+            by_page.setdefault(index, []).append(rect)
+        self._page_view.set_search_hits(by_page, current)
+        self._find_bar.set_count(self._find_position + 1, len(self._find_hits))
+        if scroll and 0 <= self._find_position < len(self._find_hits):
+            index, rect = self._find_hits[self._find_position]
+            # The thumbnail first: selecting it scrolls to the top of the page,
+            # and the hit must be what the view settles on.
+            self._thumb_bar.set_current_row(index)
+            self._page_view.ensure_rect_visible(index, rect)
+
+    def _close_search(self) -> None:
+        """The bar closed: the highlights go with it."""
+        self._find_hits = []
+        self._find_position = -1
+        self._page_view.set_search_hits({}, None)
+        self._page_view.setFocus()
 
     # ------------------------------------------------------------------ #
     #  Text editing (undo commands)

@@ -2,6 +2,7 @@
 
 import contextlib
 import os
+import re
 import shutil
 import tempfile
 from collections.abc import Callable
@@ -11,7 +12,7 @@ from typing import TypeVar
 import pymupdf
 from PySide6.QtCore import QCoreApplication
 
-from .assemble import acroform_key, assemble
+from .assemble import acroform_key, assemble, prune_fields
 from .document import DocumentModel, PageItem, open_for_reading
 from .forms import write_fields
 from .ocr import write_layer
@@ -23,7 +24,7 @@ from .optimize import (
     optimize_in_place,
 )
 from .redact import burn_redactions
-from .sign import SignatureRequest, sign_in_place
+from .sign import SignatureRequest, holds_signature, sign_in_place, signature_widgets
 from .textedit import apply_edit
 
 _T = TypeVar("_T")
@@ -96,19 +97,7 @@ def _write_ocr(page: pymupdf.Page, item: PageItem) -> None:
     write_layer(page, item.ocr_words)
 
 
-def _signed(doc: pymupdf.Document, widget: pymupdf.Widget) -> bool:
-    """Whether a signature widget holds a signature (a /V), on itself or its field."""
-    kind: str = doc.xref_get_key(widget.xref, "V")[0]
-    if kind != "null":
-        return True
-    parent_kind, reference = doc.xref_get_key(widget.xref, "Parent")
-    if parent_kind == "xref" and reference:
-        kind = doc.xref_get_key(int(reference.split()[0]), "V")[0]
-        return kind != "null"
-    return False
-
-
-def _drop_old_signatures(out: pymupdf.Document) -> None:
+def _drop_old_signatures(out: pymupdf.Document) -> bool:
     """Take out the signatures the rebuilt file can no longer honour.
 
     A signature covers the bytes of the file it was made in, and this file is
@@ -119,20 +108,40 @@ def _drop_old_signatures(out: pymupdf.Document) -> None:
     looked signed and failed verification -- the look of a forgery, for what
     was an ordinary save. The filled signature fields go; an EMPTY one, a
     place left for a signature to come, is form content and stays.
+
+    Returns whether any signature was taken out; :func:`_settle_sigflags`
+    then says what /SigFlags must become.
     """
     found = False
-    for index in range(len(out)):
+    for index, xref in signature_widgets(out):
+        if not holds_signature(out, xref):
+            continue
         # Bound to a local: a widget keeps a weak reference to its page.
         page = out[index]
         for widget in list(page.widgets() or ()):
-            if widget.field_type == pymupdf.PDF_WIDGET_TYPE_SIGNATURE and _signed(  # type: ignore[attr-defined]
-                out, widget
-            ):
+            if widget.xref == xref:
                 page.delete_widget(widget)
                 found = True
+    return found
+
+
+def _settle_sigflags(out: pymupdf.Document, dropped: bool) -> None:
+    """Make /SigFlags tell the truth about the signature fields left.
+
+    Bit 1 says a signature field exists, bit 2 that the file may only be
+    appended to (because something in it is signed). With no signature field
+    left -- every signature dropped, or an empty field taken by a redaction --
+    the flags go to 0: a file that kept /SigFlags 3 after losing its only
+    signature field still announced one (reported by a review). With empty
+    fields left but the signatures gone, only bit 1 is still true.
+    """
     target = acroform_key(out, "SigFlags")
-    if found and target is not None:
+    if target is None:
+        return
+    if not signature_widgets(out):
         out.xref_set_key(*target, "0")
+    elif dropped:
+        out.xref_set_key(*target, "1")
 
 
 def _write_pdf(
@@ -203,7 +212,12 @@ def _write_pdf(
                         _edit_text(page, item)
                     if item.redactions:
                         _redact(page, item)
-            _drop_old_signatures(out)
+            dropped = _drop_old_signatures(out)
+            # After the redactions and the dropped signatures: both delete
+            # widgets, and a field left without one must leave the AcroForm
+            # with its value (see prune_fields).
+            prune_fields(out)
+            _settle_sigflags(out, dropped)
             if any(item.text_edits for item in items):
                 # A replacement embeds its font whole: one edit in a system
                 # font took a 36 KB file to 241 KB. Subsetting brings it back
@@ -451,10 +465,15 @@ def parse_page_ranges(spec: str, page_count: int) -> list[int]:
     """Parse a 1-based page spec such as ``"1-3,5,8"`` into 0-based indices.
 
     The order the user typed is preserved, so ``"5,1-3"`` reorders as well
-    as extracts. Range bounds are inclusive. Anything malformed, out of
-    range, or empty raises :class:`ValueError` with a message meant to be
+    as extracts. Range bounds are inclusive. Commas and blanks both separate
+    (``"1 3"`` is pages 1 and 3), blanks around a dash do not (``"1 - 3"`` is
+    a range), and repeated separators are tolerated. Anything malformed, out
+    of range, or empty raises :class:`ValueError` with a message meant to be
     shown to the user: silently dropping pages from a split would be worse
     than refusing to run it.
+
+    Blanks used to be deleted before splitting, so ``"1 3"`` became page 13
+    -- the wrong page, extracted without a word (reported by a review).
     """
 
     def checked(number: int) -> int:
@@ -468,7 +487,8 @@ def parse_page_ranges(spec: str, page_count: int) -> list[int]:
 
     indices: list[int] = []
 
-    for token in spec.replace(" ", "").split(","):
+    # The dash first takes its blanks with it, then commas and blanks split.
+    for token in re.split(r"[\s,]+", re.sub(r"\s*-\s*", "-", spec.strip())):
         if not token:
             continue
         if "-" in token:

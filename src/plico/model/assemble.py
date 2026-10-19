@@ -18,7 +18,7 @@ ONE call, as the span from the first to the last page it contributes, and the
 document is put in order afterwards inside the output, where ``move_page()``
 and ``fullcopy_page()`` keep the fields as they are. The pages of the span
 that are not wanted are deleted -- and since ``delete_page()`` leaves their
-fields behind in /Fields, value and all, :func:`_prune_fields` takes away
+fields behind in /Fields, value and all, :func:`prune_fields` takes away
 every field no page shows any more: a page the user deleted must not leave its
 filled-in values in the file.
 """
@@ -88,7 +88,7 @@ def assemble(
             where[(key, indices_map[index])] = base + slot
     if len(out) != len(where):
         raise RuntimeError("pagine copiate e pagine attese non corrispondono")
-    _prune_fields(out)
+    prune_fields(out)
 
     # A page named twice is copied inside the output, where the copy keeps
     # its fields; then every page is moved to its slot.
@@ -140,8 +140,16 @@ def acroform_key(doc: pymupdf.Document, key: str) -> tuple[int, str] | None:
     return None
 
 
-def _prune_fields(doc: pymupdf.Document) -> None:
-    """Drop from the AcroForm every field that no page shows any more."""
+def prune_fields(doc: pymupdf.Document) -> None:
+    """Drop from the AcroForm every field that no page shows any more.
+
+    Run after the copy, and again by the save after the redactions: a mark
+    deletes the WIDGET, and a field whose value lives in a parent node (the
+    shape Acrobat writes: /FT, /T and /V on the parent, the widget a kid)
+    stayed reachable from /Fields with its /V -- the redacted value, in the
+    file (reported by a review, reproduced). Pruned, nothing reaches it and
+    ``garbage=4`` drops it.
+    """
     target = acroform_key(doc, "Fields")
     if target is None:
         return
