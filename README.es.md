@@ -476,8 +476,8 @@ flatpak run io.github.gradia64.plico
 ```
 
 Las **capturas** de la tienda están en `flatpak/screenshots/` y las produce
-`tools/screenshots.py` desde la app real; en el metainfo apuntan a `main`, y
-en el lanzamiento se fijan al tag.
+`tools/screenshots.py` desde la app real; en el metainfo apuntan al tag de la
+última versión, y cada versión los mueve a su nuevo tag.
 
 ### Lanzamiento
 
@@ -562,7 +562,7 @@ necesita la herramienta): sin ella, `tests/test_i18n.py` se salta justo la
 comprobación que avisa cuando falta una cadena nueva en el catálogo.
 
 ```
-# 1. reextraer las cadenas tras tocar el código (212 mensajes),
+# 1. reextraer las cadenas tras tocar el código,
 #    en los cuatro catálogos
 for l in en es fr de; do
     pylupdate6 -no-obsolete src/plico -ts src/plico/translations/plico_$l.ts

@@ -338,8 +338,13 @@ def test_save_over_the_original_file(windows, tmp_path):
     assert leftovers == []
 
 
-def test_compression_flags_reduce_size(tmp_path):
-    """garbage=4 + deflate should not inflate a simple document."""
+def test_a_save_writes_the_pages_and_their_text(tmp_path):
+    """The plain save path, end to end: every page, the text where it was.
+
+    It used to be called ``test_compression_flags_reduce_size`` and to say it
+    checked sizes, which it never did (reported by a review); the compression
+    is covered by test_optimize.py.
+    """
     from plico.model import save_as
 
     pdf = str(tmp_path / "in.pdf")
@@ -3796,3 +3801,64 @@ def test_a_pdf_on_the_command_line_opens_and_the_rest_is_merged(windows, tmp_pat
 
     assert mw._doc_model.page_count == 4
     assert mw._save_target == first
+
+
+def test_the_field_editor_follows_the_zoom(windows, tmp_path) -> None:
+    """Review 2026-10-19 (R-07): after a zoom the editor sat where the field was."""
+    pdf = str(tmp_path / "modulo.pdf")
+    _form_pdf(pdf)
+    mw = windows()
+    _open(mw, pdf)
+    view = mw._page_view
+    canvas = view._canvases[0]
+    field = next(f for f in canvas.item.form_fields if f.name == "nome")
+    view.begin_field_edit(canvas, field)
+    before = view._field_editor.geometry()
+
+    view.set_zoom(view.zoom() * 2)
+    _pump(0.3)
+
+    area = canvas.label._rect_pixels(field.rect)
+    after = view._field_editor.geometry()
+    assert after != before
+    assert (after.left(), after.top()) == (int(area.left()), int(area.top()))
+    assert after.width() == max(60, int(area.width()))
+
+
+def test_only_a_rotation_relays_out_every_page(windows, tmp_path, monkeypatch) -> None:
+    """Review 2026-10-19 (GLM 6): every keystroke in a field relaid out all pages."""
+    pdf = str(tmp_path / "in.pdf")
+    _make_pdf(pdf, pages=4)
+    mw = windows()
+    _open(mw, pdf)
+    view = mw._page_view
+    calls: list[int] = []
+    real = view.refresh_geometry
+    monkeypatch.setattr(view, "refresh_geometry", lambda: (calls.append(1), real()))
+
+    mw._doc_model.page_changed.emit(1)  # what a field value, a mark, OCR emit
+    assert calls == []
+
+    mw._undo_stack.push(RotatePage(mw._doc_model, 1, 90))
+    assert calls == [1]
+
+
+def test_clearing_the_view_forgets_everything_of_the_document(windows, tmp_path) -> None:
+    """Review 2026-10-19 (R-08, GLM 10): reset kept old pages, clear the field."""
+    pdf = str(tmp_path / "modulo.pdf")
+    _form_pdf(pdf)
+    mw = windows()
+    _open(mw, pdf)
+    view = mw._page_view
+    view.set_selected_field(0, "nome")
+
+    view.reset()
+
+    assert view._items == []
+    assert view.selected_field() is None
+
+
+def test_the_suite_never_reads_the_real_settings(windows) -> None:
+    """Review 2026-10-19 (GLM 2): tests read the user's ~/.config/Plico."""
+    mw = windows()
+    assert mw._settings().fileName().endswith("plico-test.ini")

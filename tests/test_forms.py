@@ -8,6 +8,7 @@ type has its own case.
 import pikepdf
 import pymupdf
 from PySide6.QtGui import QUndoStack
+from radio_forms import radio_pdf as _radio_pdf
 
 from plico.model import (
     LEVELS_BY_KEY,
@@ -431,11 +432,10 @@ def test_a_repeated_field_survives_page_reordering(tmp_path):
 # --------------------------------------------------------------------- #
 #  Radio buttons: built by hand, because PyMuPDF cannot create them
 # --------------------------------------------------------------------- #
-# `radio_forms` writes the group the way PDF describes it: one field (the
+# `radio_forms` (imported at the top) writes the group the way PDF describes it: one field (the
 # parent) holding the buttons as kids, each kid carrying the one state it can
 # show. Its drawn states are what names the options.
 
-from radio_forms import radio_pdf as _radio_pdf
 
 
 def _radio_raw(path: str) -> tuple[str, list[str]]:
@@ -737,3 +737,42 @@ def test_a_parent_field_not_redacted_keeps_its_value(tmp_path):
     assert _anywhere(out, "SEGRETO")
     with pymupdf.open(out) as doc:
         assert [w.field_name for w in doc[0].widgets()] == ["nome"]
+
+
+def test_a_field_whose_kids_loop_back_still_saves(tmp_path):
+    """Review 2026-10-19 (GLM 13): a /Kids cycle made the pruning recurse forever."""
+    source = str(tmp_path / "ciclo.pdf")
+    out = str(tmp_path / "copia.pdf")
+    _acrobat_style_field(source)
+    with pikepdf.open(source, allow_overwriting_input=True) as pdf:
+        parent = pdf.Root.AcroForm.Fields[0]
+        # The parent lists itself among its kids, next to its real widget.
+        parent.Kids.append(parent)
+        pdf.save(source)
+    model = DocumentModel()
+    model.open(source)
+
+    save_as(model, out)
+
+    with pymupdf.open(out) as doc:
+        assert [w.field_name for w in doc[0].widgets()] == ["nome"]
+
+
+def test_a_checkbox_value_is_always_text():
+    """Review 2026-10-19 (GLM 7): a bool from PyMuPDF must not reach Field.value."""
+    from types import SimpleNamespace
+
+    from plico.model.forms import _describe
+
+    widget = SimpleNamespace(
+        field_name="accetto",
+        rect=pymupdf.Rect(0, 0, 20, 20),
+        field_type=pymupdf.PDF_WIDGET_TYPE_CHECKBOX,
+        choice_values=None,
+        field_flags=0,
+    )
+    for raw, expected in ((True, CHECKED), (False, ""), ("Yes", "Yes"), (None, "")):
+        widget.field_value = raw
+        field = _describe(widget, None)
+        assert field is not None and field.value == expected
+        assert isinstance(field.value, str)

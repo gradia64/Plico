@@ -69,6 +69,7 @@ from .widgets.form_panel import FormPanel
 from .widgets.ocr import OcrDialog, OcrTask
 from .widgets.page_view import PageView
 from .widgets.sign import SignatureDialog, SignDialog
+from .widgets.thumbnail_bar import ThumbnailBar, ThumbnailCache
 from .widgets.toast import Toast
 
 
@@ -87,7 +88,6 @@ def _host_path(path: str) -> str:
         return os.fsdecode(os.getxattr(path, "user.document-portal.host-path"))
     except (OSError, AttributeError):
         return path
-from .widgets.thumbnail_bar import ThumbnailBar, ThumbnailCache
 
 
 class MainWindow(QMainWindow):
@@ -1406,6 +1406,25 @@ class MainWindow(QMainWindow):
         QThreadPool.globalInstance().start(task)
 
     def _on_compression_finished(self, preview: CompressionPreview) -> None:
+        """The run is over: handle its result, then forget the run.
+
+        Forgotten at the END, not in :meth:`_close_progress`: that runs first,
+        and the result is read against the run's options and overwritten
+        sources (a review proposed clearing them there, which would have
+        broken both).
+        """
+        try:
+            self._handle_compression(preview)
+        finally:
+            self._forget_compression()
+
+    def _forget_compression(self) -> None:
+        """No run in progress: no destination, options or sources from the last."""
+        self._compression_path = ""
+        self._compression_options = None
+        self._compression_overwritten = []
+
+    def _handle_compression(self, preview: CompressionPreview) -> None:
         """The compressed file exists: show what it really gained, then keep it.
 
         The work is already done when the question is asked, so the numbers are
@@ -1479,6 +1498,7 @@ class MainWindow(QMainWindow):
 
     def _on_compression_failed(self, message: str) -> None:
         self._close_progress()
+        self._forget_compression()
         QMessageBox.critical(
             self,
             self.tr("Errore"),
@@ -2132,6 +2152,13 @@ class MainWindow(QMainWindow):
         """
         # A compression job is running in the thread pool and is writing a
         # file: waiting for it keeps the process from exiting mid-write.
+        #
+        # A review read this as "the window freezes on close during an OCR run
+        # or a compression". From the interface it cannot happen: both run
+        # under a WINDOW-MODAL progress dialog, and Qt drops the close request
+        # of a window blocked by a modal one (Ctrl+Q is blocked with the rest
+        # of the input). What reaches this line with work in the pool is a
+        # logout or a signal, and there waiting is exactly what must happen.
         QThreadPool.globalInstance().waitForDone()
         if not self._thread.isRunning():
             self._remove_scratch()

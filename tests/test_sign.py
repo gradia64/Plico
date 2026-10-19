@@ -871,3 +871,19 @@ def test_the_verification_dialog_opens_on_an_encrypted_document(qapp, certificat
     texts = [w.text() for w in dialog.findChildren(QLabel)]
     assert any("password" in text for text in texts), texts
     dialog.deleteLater()
+
+
+def test_the_certificate_dialog_offers_only_what_plico_reads(qapp, monkeypatch) -> None:
+    """Review 2026-10-19 (R-09): .pem was offered, then refused as unreadable."""
+    seen: list[str] = []
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda _parent, _title, _dir, filters: seen.append(filters) or ("", "")),
+    )
+    dialog = SignDialog([(595.0, 842.0)])
+    dialog._browse()
+    dialog.deleteLater()
+
+    assert "*.p12" in seen[0] and "*.pfx" in seen[0]
+    assert "*.pem" not in seen[0]

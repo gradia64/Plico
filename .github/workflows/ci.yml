@@ -21,9 +21,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The lowest version pyproject.toml accepts, and the one of the
-        # Flatpak's BaseApp.
-        python: ["3.11", "3.13"]
+        # Every version pyproject.toml declares: 3.11 is the lowest (and the
+        # one PYSIDE-3474 bites), 3.13 the Flatpak's, 3.12 and 3.14 because a
+        # classifier is a promise (3.14 is also the development machine's).
+        python: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v5
 
@@ -81,7 +82,7 @@ jobs:
       - name: Flatpak manifest schema
         run: |
           curl -sSfL -o /tmp/schema.json \
-            https://raw.githubusercontent.com/flatpak/flatpak-builder/main/data/flatpak-manifest.schema.json
+            https://raw.githubusercontent.com/flatpak/flatpak-builder/bd35975d1b089960251809a5bec738ded3cd6f46/data/flatpak-manifest.schema.json
           python3 -c "
           import json, jsonschema
           schema = json.load(open('/tmp/schema.json'))

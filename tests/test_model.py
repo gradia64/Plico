@@ -1,7 +1,7 @@
 """Model, commands and save layer: pure logic, testable without a UI.
 
-The tests marked BUG document the defects found in review: they fail with
-the current code and turn green once the corresponding fix is applied.
+The tests marked BUG document defects found in earlier reviews. They used to
+fail and went green with the fixes; they stay as regression tests.
 """
 
 import pymupdf
@@ -64,9 +64,9 @@ def test_parse_ranges_reversed_raises():
         parse_page_ranges("5-2", 10)
 
 def test_parse_ranges_out_of_bounds_raises():
-    # BUG 4: today the range is materialized BEFORE validation,
-    # so "1-5000000" builds half a million indices before
-    # refusing. The contract is already correct (ValueError); the fix makes it O(1).
+    # BUG 4 (fixed): the range used to be materialised BEFORE validation, so
+    # "1-5000000" built five million indices before refusing. The bounds are
+    # now checked first, and the refusal costs nothing.
     with pytest.raises(ValueError):
         parse_page_ranges("1-5000000", 3)
 
@@ -102,11 +102,10 @@ def test_parse_ranges_whitespace_ok_and_bounds_inclusive():
 # --- commands and model consistency -----------------------------------------
 
 def test_delete_keeps_page_sizes_aligned(mixed_model):
-    """BUG 1: page_sizes does not follow pages in structural commands.
+    """BUG 1 (fixed): page_sizes did not follow pages in structural commands.
 
-    Fails with the current code (page_sizes stays at 3 after the delete).
-    With fix 1 it turns green and then obsolete: the size will migrate
-    onto the item and page_sizes will disappear altogether.
+    After a delete it stayed at 3 entries. The size now lives on the item and
+    page_sizes is derived from the pages, so the two cannot drift apart.
     """
     DeletePage(mixed_model, 0).redo()
     assert len(mixed_model.page_sizes) == len(mixed_model.pages)
@@ -583,3 +582,25 @@ def test_a_merge_after_an_undone_one_gets_a_fresh_source_id(
     assert mixed_model.pages[-1].source_id == 2
     assert mixed_model.source_for(mixed_model.pages[-1]) == second
     assert mixed_model.sources_at(first) == [], "nessuna pagina legge il file tolto"
+
+
+def test_undoing_an_empty_append_takes_no_page(tmp_path):
+    """Review 2026-10-19 (GLM 11) feared ``pages[-0:]``, i.e. every page.
+
+    The slice is ``pages[len(pages) - count:]``: with no pages to take back it
+    is ``pages[len:]``, empty. Pinned here so that it stays so.
+    """
+    path = str(tmp_path / "a.pdf")
+    with pymupdf.open() as doc:
+        for _ in range(3):
+            doc.new_page()
+        doc.save(path)
+    model = DocumentModel()
+    model.open(path)
+    before = list(model.pages)
+
+    command = AppendDocument(model, len(model.sources), str(tmp_path / "vuoto.pdf"), [])
+    command.redo()
+    command.undo()
+
+    assert model.pages == before

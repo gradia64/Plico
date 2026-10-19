@@ -16,7 +16,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
-import flathub_manifest as fm
+import flathub_manifest as fm  # noqa: E402 -- tools/ is on the path only from here
 
 PYPROJECT = '[project]\nname = "plico"\nversion = "1.2.3"\n'
 SHOT = "https://raw.githubusercontent.com/gradia64/Plico/{0}/flatpak/screenshots/main.png"

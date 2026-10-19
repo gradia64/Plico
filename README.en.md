@@ -475,8 +475,8 @@ flatpak run io.github.gradia64.plico
 ```
 
 The store **screenshots** live in `flatpak/screenshots/` and are produced by
-`tools/screenshots.py` from the real app; in the metainfo they point at
-`main`, and at release time they are pinned to the tag.
+`tools/screenshots.py` from the real app; in the metainfo they point at the
+tag of the latest release, and every release moves them to its new tag.
 
 ### Releasing
 
@@ -559,7 +559,7 @@ only the tool is needed): without it, `tests/test_i18n.py` skips exactly
 the check that warns when a new string is missing from the catalog.
 
 ```
-# 1. re-extract strings after touching the code (212 messages),
+# 1. re-extract strings after touching the code,
 #    into all four catalogs
 for l in en es fr de; do
     pylupdate6 -no-obsolete src/plico -ts src/plico/translations/plico_$l.ts

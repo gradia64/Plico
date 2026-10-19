@@ -219,12 +219,15 @@ def _embedded_font(page: pymupdf.Page, name: str) -> pymupdf.Font | None:
         if _font_key(basefont) != _font_key(name) or ftype == "Type3":
             continue
         _, ext, _, buffer = page.parent.extract_font(xref)
+        # A candidate that cannot be used is skipped, not the end of the
+        # search: after a merge a page can carry the same base font twice, a
+        # broken copy and a good one (reported by a review).
         if ext in ("n/a", "") or not buffer:
-            return None
+            continue
         try:
             return pymupdf.Font(fontbuffer=buffer)
-        except Exception:  # noqa: BLE001 -- a damaged program is just unusable
-            return None
+        except Exception:  # noqa: BLE001, S112 -- a damaged program is just unusable
+            continue
     return None
 
 

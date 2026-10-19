@@ -832,8 +832,20 @@ class PageView(QScrollArea):
         self._anchor_on(first_page)
 
     def _on_page_changed(self, row: int) -> None:
-        """A page changed in place (rotation, redaction, OCR): re-measure, repaint."""
-        self.refresh_geometry()
+        """A page changed in place (rotation, redaction, OCR): re-measure, repaint.
+
+        Only a rotation changes a page's size, and only then is the whole
+        layout redone. Every keystroke in a form field arrives here too, and
+        relaying out all the pages for each one cost O(pages) per key on the
+        300-page documents the project targets (reported by a review).
+        """
+        if 0 <= row < len(self._canvases):
+            canvas = self._canvases[row]
+            size = self._oriented_size(canvas.item)
+            if size != (canvas.width_pt, canvas.height_pt):
+                self.refresh_geometry()
+        else:
+            self.refresh_geometry()
         # A redaction changes no size, so setFixedSize() leaves the label
         # exactly as it was and nothing would repaint without this nudge.
         if 0 <= row < len(self._canvases):
@@ -1088,9 +1100,11 @@ class PageView(QScrollArea):
             c.height_px = h_px
             y_px += h_px + spacing
 
-        # The editor is a child of its page, so scrolling moves it for free;
-        # a new size or zoom has to move it explicitly.
+        # The editors are children of their page, so scrolling moves them for
+        # free; a new size or zoom has to move them explicitly -- the field
+        # editor too, which stayed at the old zoom's geometry (review R-07).
         self._place_text_editor()
+        self._place_field_editor()
 
         # Request visible renders
         self._apply_pending_scroll()
@@ -1736,6 +1750,9 @@ class PageView(QScrollArea):
         self._cache_bytes = 0
         self._search_hits = {}
         self._search_current = None
+        # A field of the closed document must not come out highlighted on a
+        # page of the next one that happens to have one with the same name.
+        self._selected_field = None
         self.update()
 
     def reset(self) -> None:
@@ -1744,6 +1761,7 @@ class PageView(QScrollArea):
         Wipes the render cache too: keys are built from source identity, so
         a re-opened document would otherwise hit the old document's pixmaps.
         """
+        # Only the clearing. The model's pages read here would still be the
+        # previous document's -- the caller sets the new ones right after, and
+        # ``changed`` rebuilds the view from them (reported by two reviews).
         self.clear()
-        if self._model is not None:
-            self._items = list(self._model.pages)

@@ -18,9 +18,9 @@ jobs:
     name: README multilingue (switcher + struttura)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -50,10 +50,15 @@ jobs:
                   "fences": len(re.findall(r'^```', text, re.M)),
               }
 
+          # Blocking, as the job's name says: a warning nobody reads, followed
+          # by an unconditional "struttura allineata", told the opposite of
+          # the truth (reported by a review).
           base = stats["README.md"]
-          for f in files[1:]:
-              if stats[f] != base:
-                  print(f"WARNING: {f}: struttura non allineata -> {stats[f]} vs {base}")
+          misaligned = [f for f in files[1:] if stats[f] != base]
+          for f in misaligned:
+              print(f"{f}: struttura non allineata -> {stats[f]} vs {base}")
+          if misaligned:
+              sys.exit(1)
 
           print("OK: 5 varianti presenti, switcher coerenti, struttura allineata")
           for f in files:

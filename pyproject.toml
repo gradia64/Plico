@@ -56,6 +56,11 @@ build-backend = "setuptools.build_meta"
 line-length = 100
 target-version = "py311"
 
+[tool.ruff.lint]
+# ruff 0.17's default rules no longer include E402, and an import left below
+# a function went unnoticed (reported by two reviews).
+extend-select = ["E402"]
+
 [tool.mypy]
 python_version = "3.11"
 warn_return_any = true

@@ -163,8 +163,14 @@ def prune_fields(doc: pymupdf.Document) -> None:
         if annot_type == pymupdf.PDF_ANNOT_WIDGET  # type: ignore[attr-defined]
     }
     kept_nodes: set[int] = set()
+    # A malformed field whose /Kids reaches back to itself would recurse until
+    # RecursionError: a node met again is a leaf, alive only as a widget.
+    visited: set[int] = set()
 
     def keep(xref: int) -> bool:
+        if xref in visited:
+            return xref in live
+        visited.add(xref)
         kids_kind, kids = doc.xref_get_key(xref, "Kids")
         if kids_kind != "array":
             alive = xref in live

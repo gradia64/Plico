@@ -27,7 +27,8 @@ testati: aprire (anche i file **cifrati**, con la password), unire più PDF
 (l'unione si **annulla** con Ctrl+Z come ogni altra modifica), ruotare,
 eliminare, riordinare, dividere (estrarre un sottoinsieme), comprimere in
 salvataggio, annulla/ripristina, rendering asincrono, cache, integrazione
-desktop KDE, packaging Flatpak. Versione `0.1.0`, licenza GPL-3.0-or-later.
+desktop KDE, packaging Flatpak. Versione `0.1.1` (tag `v0.1.1` firmato), licenza
+GPL-3.0-or-later.
 
 Della roadmap lunga (§12) sono già dentro anche le voci che non erano
 nell'MVP: compilazione dei form, redazione vera, modifica minima del testo,
@@ -42,9 +43,17 @@ PAdES**. Restano le rifiniture, elencate in §12.
 plico/
 ├── pyproject.toml            # packaging, dipendenze, ruff/mypy/pytest, data-files
 ├── README.md                 # presentazione per l'utente (in italiano)
+├── README.{en,fr,de,es}.md   # le stesse, nelle altre quattro lingue
 ├── CONTESTO.md               # questo file
 ├── LICENSE                   # GPL v3
-├── flatpak/                  # packaging: manifest, metadati AppStream, .desktop, icona
+├── flatpak/                  # packaging: manifest, metadati AppStream, .desktop, icona,
+│                             #   fontconfig-local.conf, screenshots/
+├── tools/
+│   ├── screenshots.py        # gli screenshot dello store, dall'app vera e offscreen
+│   └── flathub_manifest.py   # il manifest per Flathub da un tag firmato (§11)
+├── .github/
+│   ├── allowed_signers       # le chiavi SSH che firmano i tag di rilascio
+│   └── workflows/            # ci.yml, flatpak.yml, readme-i18n.yml
 ├── src/plico/
 │   ├── app.py                # entry point: QApplication + apertura da riga di comando
 │   ├── i18n.py               # cataloghi .qm: dove cercarli, quali chiedere, caricarli
@@ -70,24 +79,34 @@ plico/
 │       ├── form_panel.py     # dock «Modulo»: un editor per ogni campo della pagina
 │       ├── ocr.py            # dialogo pagine/lingua e task di riconoscimento
 │       ├── sign.py           # dialoghi di firma e di verifica delle firme
-│       └── compress.py       # dialogo delle opzioni, format_size, task sul thread pool
-└── tests/
-    ├── test_model.py         # modello, comandi, salvataggio, parse_page_ranges (45)
+│       ├── compress.py       # dialogo delle opzioni, format_size, task sul thread pool
+│       ├── find_bar.py       # la barra di Ctrl+F: testo, «n di m», avanti/indietro
+│       └── toast.py          # l'avviso sopra la pagina (segni, OCR, anteprima)
+└── tests/                    # conteggi: pytest --collect-only -q (19 ottobre 2026)
+    ├── conftest.py           # per tutti: impostazioni in un INI temporaneo, conferma «sì»
+    ├── radio_forms.py        # helper: gruppi di radio costruiti a mano (PyMuPDF non sa)
+    ├── test_model.py         # modello, comandi, salvataggio, parse_page_ranges (47)
     ├── test_worker.py        # il worker di rendering in isolamento (11)
     ├── test_optimize.py      # i livelli di compressione e optimize_in_place (16)
     ├── test_redact.py        # redazione vera, zone ritoccabili, righe vicine, OCR (61)
-    ├── test_forms.py         # campi AcroForm: letti, scritti, riletti, redatti, riordinati (34)
-    ├── test_textedit.py      # uno span sostituito: testo, sfondo, font, spazio (33)
+    ├── test_redaction_preview.py  # anteprima, conferma e avvisi delle cancellazioni (13)
+    ├── test_forms.py         # campi AcroForm: letti, scritti, riletti, redatti, riordinati (38)
+    ├── test_form_panel.py    # il dock «Modulo»: cosa mostra prima di essere toccato (3)
+    ├── test_textedit.py      # uno span sostituito: testo, sfondo, font, spazio (34)
     ├── test_images.py        # immagini → PDF: DPI, foto ridotte, EXIF, JPEG intatti (13)
     ├── test_ocr.py           # OCR: spazio pagina, strato invisibile, undo, lingua (21)
-    ├── test_sign.py          # certificati, firma, seconda firma, verdetto, firme vecchie (33)
+    ├── test_sign.py          # certificati, firma, verdetto, campi vuoti, PDF cifrati (39)
     ├── test_edit_text.py     # EditText e salvataggio: undo, redazioni, estrai, comprimi (21)
+    ├── test_search.py        # Ctrl+F: occorrenze, F3, Esc, ricerca rifatta (9)
     ├── test_i18n.py          # cataloghi: estrazione, nomi, caricamento, traduzione (8)
     ├── test_translations.py  # le quattro lingue: complete, segnaposto, menu veri (24)
-    └── test_integration.py   # MainWindow vera, offscreen: 161 test end-to-end
+    ├── test_flathub_manifest.py  # il manifest per Flathub e i controlli del rilascio (15)
+    ├── test_packaging.py     # il Flatpak esclude i font web dell'host (2)
+    ├── test_pyside_refcount.py   # PYSIDE-3474: emit() non deve perdere True (1)
+    └── test_integration.py   # MainWindow vera, offscreen: test end-to-end (168)
 ```
 
-Gate di qualità attuale: **531 passed, 1 skipped** (con `lrelease` dell'SDK nel `PATH`), `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **543 passed, 1 skipped** (con `lrelease` dell'SDK nel `PATH`), `ruff` pulito, `mypy` pulito
 (27 file sorgente). Uno `skip` è il test delle icone, che vuole un tema che
 fornisca `object-rotate-*`. Gli altri skip possibili dipendono da
 strumenti che mancano (§9): `pylupdate6` e `lrelease`/`pyside6-lrelease` in
@@ -1366,8 +1385,52 @@ descrive un sintomo vero, ma la correzione proposta (svuotare la cache) non
 cambia niente: le miniature disegnano solo la sorgente e non hanno mai
 mostrato quelle modifiche. Servirebbe lo stesso meccanismo dell'anteprima delle
 cancellazioni. L'osservazione 1 di DeepSeek («test delle traduzioni sempre
-saltati in CI») è falsa: in CI `pyside6-lrelease` è nel `PATH`. Le anomalie
-minori e di pulizia delle due review restano da fare.
+saltati in CI») è falsa: in CI `pyside6-lrelease` è nel `PATH`.
+
+Le anomalie minori, corrette nello stesso modo (verificate, poi corrette con un
+test che fallisce senza la correzione dove un test ha senso):
+
+- **R-06** (`test_form_panel.py`): un campo scelta vuoto mostrava la prima
+  opzione; ora, come i radio, ha una voce vuota in testa.
+- **R-07** (`test_integration.py`): `_relayout()` riposiziona anche l'editor
+  del campo, non solo quello del testo.
+- **R-09** (`test_sign.py`): il selettore del certificato non offre più `.pem`.
+- **R-08, GLM 10** (`test_integration.py`): `PageView.reset()` è solo `clear()`,
+  e `clear()` dimentica il campo selezionato.
+- **GLM 6** (`test_integration.py`): `page_changed` rifà il layout di tutte le
+  pagine solo se la pagina ha cambiato dimensioni, cioè per una rotazione; un
+  tasto in un campo costava O(pagine).
+- **GLM 2** (`conftest.py`): ogni finestra dei test legge e scrive un INI
+  temporaneo, mai `~/.config/Plico`.
+- **GLM 8** (`test_textedit.py`): `_embedded_font()` salta una copia
+  inutilizzabile del font invece di fermarsi.
+- **GLM 13** (`test_forms.py`): `prune_fields()` non ricorre all'infinito su
+  un `/Kids` che torna su sé stesso.
+- **GLM 21**: lo stato della compressione si azzera **alla fine** della
+  gestione del risultato (`_forget_compression()`). La correzione proposta,
+  azzerarlo in `_close_progress()`, avrebbe rotto la compressione: quel
+  metodo gira prima che il risultato venga letto.
+- **GLM 7**: con PyMuPDF 1.28 una casella restituisce già `"Yes"`/`"Off"`;
+  `_describe()` normalizza comunque un eventuale `bool`.
+- **R-10 = GLM 14**: l'import a metà di `main_window.py` è al suo posto, e
+  `[tool.ruff.lint] extend-select = ["E402"]`: le regole di default di ruff
+  0.17 non lo comprendono più. Ne ha trovati altri due nei test.
+- **CI**: matrice 3.11–3.14 come i classifier (GLM 20); schema dei manifest
+  fissato al commit `bd35975` di flatpak-builder (GLM 19); `readme-i18n.yml`
+  con le stesse versioni delle Actions (GLM 18) e controllo di struttura
+  **bloccante**, senza l'«OK» stampato comunque (GLM 5).
+- **Documentazione e test**: questa §2 (GLM 4), versione, numero di messaggi
+  tolto dai README invece che aggiornato, screenshot fissati al tag (GLM 15),
+  docstring di `test_i18n.py` e `test_model.py`, il nome di un test che non
+  misurava niente, un `assert` su un valore di pytest (GLM 3, 16, 17, 22).
+
+Non corrette, perché la review sbaglia: **GLM 11** (`AppendDocument.undo()`
+con zero pagine cancellerebbe tutto): la fetta è `pages[len(pages) - 0:]`,
+cioè vuota; un test lo fissa. **R-11** (la finestra si blocca chiudendola
+durante OCR o compressione): entrambi girano sotto un dialogo
+**window-modal**, e Qt scarta la richiesta di chiusura di una finestra
+bloccata da un modale; `Ctrl+Q` è bloccato con il resto dell'input. Un
+commento in `shutdown_worker()` lo spiega.
 
 ## 10. Insidie già pagate (leggere prima di scrivere codice)
 
@@ -1854,7 +1917,9 @@ nessuno lo fa, e la barra degli strumenti usciva di sole scritte). Generarli è
 stato anche un collaudo: hanno mostrato che *adatta alla larghezza* rendeva la
 pagina allo zoom vecchio (segni e campi fuori posto) e che un campo cambiato
 mostrava il valore vecchio sotto il nuovo — tutti e due corretti, con il loro
-test. Gli URL nel metainfo puntano a `main`: al rilascio vanno fissati al tag.
+test. Gli URL nel metainfo sono fissati al tag dell'ultimo rilascio (oggi
+`v0.1.1`): `tools/flathub_manifest.py` rifiuta un tag i cui screenshot puntano
+altrove, quindi a ogni rilascio vanno spostati sul tag nuovo.
 
 **CI** (`.github/workflows/`). `ci.yml`, a ogni push e pull request: test su
 Python 3.11 e 3.13 (le librerie di sistema di §9 più Tesseract, e PyQt6 per

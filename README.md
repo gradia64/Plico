@@ -485,8 +485,8 @@ flatpak run io.github.gradia64.plico
 ```
 
 Gli **screenshot** dello store stanno in `flatpak/screenshots/` e li produce
-`tools/screenshots.py` dall'app vera; nel metainfo puntano a `main`, e al
-rilascio vanno fissati al tag.
+`tools/screenshots.py` dall'app vera; nel metainfo puntano al tag
+dell'ultimo rilascio, e a ogni rilascio vanno spostati sul tag nuovo.
 
 ### Rilasciare
 
@@ -569,7 +569,7 @@ lo strumento): senza, `tests/test_i18n.py` salta proprio il controllo che
 avvisa quando una stringa nuova manca dal catalogo.
 
 ```bash
-# 1. riestrarre le stringhe dopo aver toccato il codice (212 messaggi),
+# 1. riestrarre le stringhe dopo aver toccato il codice,
 #    in tutti e quattro i cataloghi
 for l in en es fr de; do
     pylupdate6 -no-obsolete src/plico -ts src/plico/translations/plico_$l.ts

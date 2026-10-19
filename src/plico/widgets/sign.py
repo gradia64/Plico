@@ -136,7 +136,11 @@ class SignDialog(QDialog):
             self,
             self.tr("Scegli il certificato"),
             "",
-            self.tr("Certificati (*.p12 *.pfx *.pem);;Tutti i file (*)"),
+            # PKCS#12 only: a .pem holds no private key Plico can use, and
+            # offering it led straight to "cannot read the certificate"
+            # (reported by a review). The trusted roots, which ARE .pem, have
+            # their own dialog.
+            self.tr("Certificati (*.p12 *.pfx);;Tutti i file (*)"),
         )
         if path:
             self._certificate.setText(path)

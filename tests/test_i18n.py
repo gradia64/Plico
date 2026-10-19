@@ -1,10 +1,10 @@
 """Translations: extracted from the sources, compiled, loaded.
 
-Nothing here needs a translated catalog to exist: the catalogs are the place
-for a translation, and today English is empty. What is tested is the
-machinery -- the strings are extractable, the shipped catalog is the one the
-sources produce, the loader asks for the right names -- so that a translation
-is only a matter of filling the file in.
+Nothing here depends on what the catalogs say: test_translations.py checks
+the English, Spanish, French and German ones. What is tested is the machinery
+-- the strings are extractable, the shipped catalog is the one the sources
+produce, the loader asks for the right names -- so that a new language is only
+a matter of filling a file in.
 """
 
 import shutil
@@ -108,8 +108,7 @@ def test_the_environment_variable_comes_first(tmp_path, monkeypatch):
 
 def test_without_a_catalog_nothing_is_loaded(qapp, monkeypatch):
     """No catalogs installed is the normal case, and it must not raise."""
-    empty = monkeypatch.setenv(i18n.ENV_DIR, str(Path("/nonexistent/plico")))
-    assert empty is None
+    monkeypatch.setenv(i18n.ENV_DIR, str(Path("/nonexistent/plico")))
 
     assert i18n.install_translators(qapp) == []
 

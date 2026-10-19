@@ -494,7 +494,8 @@ flatpak run io.github.gradia64.plico
 
 Les **captures d'écran** du store sont dans `flatpak/screenshots/` et sont
 produites par `tools/screenshots.py` depuis la vraie app ; dans le metainfo
-elles pointent sur `main`, et au lancement elles sont fixées au tag.
+elles pointent sur le tag de la dernière version, et chaque version les déplace
+sur son nouveau tag.
 
 ### Publier
 
@@ -582,7 +583,7 @@ l'outil est nécessaire) : sans lui, `tests/test_i18n.py` saute justement le
 contrôle qui avertit quand une chaîne nouvelle manque au catalogue.
 
 ```
-# 1. réextraire les chaînes après avoir touché au code (212 messages),
+# 1. réextraire les chaînes après avoir touché au code,
 #    dans les quatre catalogues
 for l in en es fr de; do
     pylupdate6 -no-obsolete src/plico -ts src/plico/translations/plico_$l.ts

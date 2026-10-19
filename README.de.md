@@ -505,7 +505,7 @@ flatpak run io.github.gradia64.plico
 
 Die **Screenshots** des Stores liegen in `flatpak/screenshots/` und werden von
 `tools/screenshots.py` aus der echten App erzeugt; im Metainfo zeigen sie auf
-`main`, und beim Release werden sie auf das Tag festgezurrt.
+das Tag des letzten Releases, und jedes Release setzt sie auf sein neues Tag.
 
 ### Veröffentlichen
 
@@ -592,7 +592,7 @@ Werkzeug wird gebraucht): ohne es überspringt `tests/test_i18n.py` genau die
 Prüfung, die warnt, wenn eine neue Zeichenkette im Katalog fehlt.
 
 ```
-# 1. Strings nach Codeänderungen neu extrahieren (212 Meldungen),
+# 1. Strings nach Codeänderungen neu extrahieren,
 #    in alle vier Kataloge
 for l in en es fr de; do
     pylupdate6 -no-obsolete src/plico -ts src/plico/translations/plico_$l.ts

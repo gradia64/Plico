@@ -125,7 +125,13 @@ def _describe(widget: pymupdf.Widget, doc: pymupdf.Document) -> Field | None:
         return None
 
     kind = _KINDS.get(widget.field_type, UNKNOWN)
-    value = widget.field_value or ""
+    raw = widget.field_value
+    # PyMuPDF 1.28 answers a checkbox with its state name ("Yes"/"Off"), but
+    # the type is not promised and older releases gave a bool: a True that
+    # reached Field.value would break the first caller treating it as text.
+    if isinstance(raw, bool):
+        raw = CHECKED if raw else ""
+    value = raw or ""
     options = tuple(widget.choice_values or ())
     if kind == RADIO:
         # One button of a group: the one state it can show is its own entry in

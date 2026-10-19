@@ -160,9 +160,12 @@ class FormPanel(QWidget):
         if field.kind == CHOICE:
             combo = QComboBox()
             options = list(field.options)
-            if value and value not in options:
+            if value not in options:
                 # A choice whose stored value is not among the options: keep it
-                # visible rather than silently dropping what the file says.
+                # visible rather than silently dropping what the file says. An
+                # EMPTY value goes in the same way, as RADIO does: without it
+                # the combo showed the first option as if it had been chosen,
+                # and touching the combo saved it (reported by a review).
                 options.insert(0, value)
             combo.addItems(options)
             combo.setCurrentText(value)

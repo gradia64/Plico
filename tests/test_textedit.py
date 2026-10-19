@@ -391,3 +391,24 @@ def test_the_room_ends_at_the_page_edge_on_a_rotated_page(rotation):
     span = _span(page, "Corto")
 
     assert span.bbox[2] + span.room <= 595 - 36
+
+
+def test_a_broken_copy_of_a_font_does_not_hide_the_good_one():
+    """Review 2026-10-19 (GLM 8): the search stopped at the first unusable copy."""
+    good = pymupdf.Font("helv").buffer
+
+    class Document:
+        def extract_font(self, xref):
+            return ("", "n/a", "", b"") if xref == 1 else ("", "cff", "", good)
+
+    class Page:
+        parent = Document()
+
+        def get_fonts(self):
+            return [
+                (1, "n/a", "Type1", "ABCDEF+Helvetica", "F1", ""),
+                (2, "cff", "Type1", "ABCDEF+Helvetica", "F2", ""),
+            ]
+
+    font = textedit._embedded_font(Page(), "Helvetica")
+    assert font is not None, "la seconda copia, quella buona, va usata"
