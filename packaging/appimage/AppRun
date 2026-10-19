@@ -1,0 +1,17 @@
+#!/bin/sh
+# Avvio dell'AppImage di Plico. Il runtime monta l'immagine e imposta APPIMAGE
+# (il file .AppImage) e APPDIR (il punto di montaggio).
+HERE="$(dirname "$(readlink -f "$0")")"
+
+# solo il Python e il Qt dell'AppImage: niente moduli, plugin Qt o
+# impostazioni del sistema, che potrebbero essere di versioni diverse
+unset PYTHONHOME PYTHONPATH PYTHONSTARTUP \
+      QT_PLUGIN_PATH QT_QPA_PLATFORM_PLUGIN_PATH QML2_IMPORT_PATH
+
+# i dati di lingua dell'OCR inclusi nell'immagine, se l'utente non ne ha
+# scelto un'altra cartella: Tesseract è dentro MuPDF, servono solo questi
+: "${PLICO_TESSDATA:=$HERE/usr/share/tessdata}"
+export PLICO_TESSDATA
+
+# -E ignora le altre variabili PYTHON*, -s i pacchetti in ~/.local
+exec "$HERE/usr/python/bin/python3" -E -s "$HERE/usr/share/plico/launcher.py" "$@"

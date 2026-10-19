@@ -7,6 +7,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # release.yml builds the bundle it attaches to a release with this same job
+  workflow_call:
 
 # Read the code and nothing else: the cache and the uploaded artifact go
 # through the runner's own token, not GITHUB_TOKEN.
@@ -86,8 +88,12 @@ jobs:
         run: |
           flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo "$WORK/repo"
 
+      # --runtime-repo: installing the bundle fetches org.kde.Platform from
+      # Flathub by itself, instead of failing on a missing runtime
       - name: Bundle
-        run: flatpak build-bundle "$WORK/repo" plico.flatpak "$APP_ID"
+        run: |
+          flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+            "$WORK/repo" plico.flatpak "$APP_ID"
 
       - uses: actions/upload-artifact@v4
         with:

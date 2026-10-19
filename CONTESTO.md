@@ -48,12 +48,17 @@ plico/
 ├── LICENSE                   # GPL v3
 ├── flatpak/                  # packaging: manifest, metadati AppStream, .desktop, icona,
 │                             #   fontconfig-local.conf, screenshots/
+├── packaging/
+│   ├── appimage/             # AppRun, requirements, trim-qt, check-glibc, collaudo (§11 bis)
+│   ├── common/launcher.py    # l'avvio dei pacchetti (AppImage, poi .deb e AUR)
+│   └── release-notes/        # X.Y.Z.md: la descrizione di ogni release GitHub
+├── scripts/                  # build-appimage.sh, release-notes.sh
 ├── tools/
 │   ├── screenshots.py        # gli screenshot dello store, dall'app vera e offscreen
 │   └── flathub_manifest.py   # il manifest per Flathub da un tag firmato (§11)
 ├── .github/
 │   ├── allowed_signers       # le chiavi SSH che firmano i tag di rilascio
-│   └── workflows/            # ci.yml, flatpak.yml, readme-i18n.yml
+│   └── workflows/            # ci.yml, flatpak.yml, release.yml, readme-i18n.yml
 ├── src/plico/
 │   ├── app.py                # entry point: QApplication + apertura da riga di comando
 │   ├── i18n.py               # cataloghi .qm: dove cercarli, quali chiedere, caricarli
@@ -2103,6 +2108,69 @@ creano un repository temporaneo con una chiave SSH usa e getta e verificano
 sia il tag firmato sia i rifiuti.
 
 ---
+
+## 11 bis. Distribuzione: release GitHub, AppImage, bundle Flatpak
+
+**Flathub no (19 ottobre 2026).** La «Generative AI policy» di Flathub vieta
+manifest scritti o assistiti dall'IA (anche dichiarati), vieta che l'IA scriva
+PR, commit, descrizioni o risposte ai revisori, e chiede di dichiarare il codice
+generato; in più rifiuta di norma le app con una storia di sviluppo breve.
+Plico non rientra: l'invio è stato fermato prima di aprire la PR (il ramo
+`add-plico` è rimasto sul fork `gradia64/flathub`). `tools/flathub_manifest.py`
+e il manifest restano, ma **non** vanno usati per un invio a Flathub. La strada
+è quella di OllaDesk: pacchetti propri, allegati alle release.
+
+**`.github/workflows/release.yml`**, sui tag `v*`:
+
+- `verify`: tag annotato e firmato con una chiave SSH di
+  `.github/allowed_signers` (`git tag -v`), versione uguale in
+  `pyproject.toml`, `plico.__version__` e metainfo, screenshot fissati al tag
+  (le funzioni di `tools/flathub_manifest.py`), note di rilascio in
+  `packaging/release-notes/X.Y.Z.md` (`scripts/release-notes.sh`, come in
+  OllaDesk: sezioni `## …` e link «Full Changelog»);
+- `appimage`: `scripts/build-appimage.sh`, poi
+  `packaging/appimage/smoke-test.sh`;
+- `flatpak`: richiama `flatpak.yml` (`workflow_call`); il bundle ha
+  `--runtime-repo` di Flathub, così l'installazione scarica il runtime da sé;
+- `publish`: `SHA256SUMS`, attestazione di provenienza
+  (`actions/attest-build-provenance`, si verifica con `gh attestation
+  verify`) e release su GitHub. Nessuna chiave di firma nella CI: diversamente
+  da OllaDesk, che firma gli allegati con una sottochiave GPG.
+
+A mano (`workflow_dispatch`) costruisce e collauda senza pubblicare. Il tag
+`v0.1.3` è stato creato prima di questo workflow: la prima release con i
+pacchetti è la successiva.
+
+**AppImage** (`scripts/build-appimage.sh`, ripreso da OllaDesk: stesso Python
+portatile 3.12 di python-build-standalone, stesse librerie xcb da Ubuntu 22.04,
+`check-glibc.py` che vieta oltre la 2.34, build riproducibile da
+`SOURCE_DATE_EPOCH`). Differenze:
+
+- `packaging/appimage/requirements.in`: PySide6-Essentials 6.11.2 (come il
+  Flatpak), `pymupdf==1.28.2`, `pikepdf`, e pyHanko 0.37 con certvalidator e
+  certifi **alle stesse versioni del modulo Flatpak**: una sola combinazione
+  per i due pacchetti. `--lock` rigenera `requirements.txt` con gli hash;
+- i cataloghi `.ts` si compilano con il `lrelease` di PySide6 **prima** di
+  `trim-qt.py`, che toglie `Qt/libexec`; `trim-qt.py` tiene QtCore, QtGui,
+  QtWidgets, i cataloghi `qtbase_{it,en,fr,de,es}` (OllaDesk li toglie tutti) e
+  il plugin TIFF;
+- **Tesseract non c'è**, perché non serve: la wheel di PyMuPDF lo ha dentro
+  MuPDF. Con `LD_DEBUG=libs` un OCR vero non carica mai `libtesseract`.
+  Servono solo i dati di lingua (`tessdata_fast`, le cinque lingue del
+  Flatpak, stessi SHA-256) in `usr/share/tessdata`, che l'AppRun indica con
+  `PLICO_TESSDATA`. **Da verificare**: se vale anche per il Flatpak, la
+  compilazione di leptonica e Tesseract nel manifest (§11) è superflua;
+- `smoke-test.sh` fa girare **l'intera suite** con il Python, Qt, PyMuPDF,
+  pikepdf e pyHanko dell'AppImage e con il `plico` che c'è dentro (pytest
+  messo per l'occasione in una cartella temporanea; niente pytest-qt, che
+  vorrebbe QtTest e che nessun test usa). La prima volta ha trovato il plugin
+  TIFF tolto. `smoke_check.py` prova anche un OCR vero con i dati inclusi.
+  Risultato in locale: 584 passati, 13 saltati (quelli che vogliono
+  `lrelease`/`pylupdate6` o un tema di icone).
+
+Prossimi: PKGBUILD per l'AUR e `.deb`. Per l'AUR, `makepkg` verifica i tag
+solo con chiavi PGP (`validpgpkeys`): servirà la chiave di rilascio di
+OllaDesk, o un controllo del tarball per SHA-256.
 
 ## 12. Cosa manca
 

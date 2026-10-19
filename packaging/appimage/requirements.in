@@ -1,0 +1,21 @@
+# Dipendenze dell'AppImage (scripts/build-appimage.sh). Versioni fissate a
+# mano, come nel Flatpak e nella CI; requirements.txt con gli hash si
+# rigenera con: scripts/build-appimage.sh --lock. Le dipendenze indirette
+# (cryptography, asn1crypto, lxml…) le sceglie pip al momento del --lock:
+# controllarne le versioni nel diff prima del commit.
+#
+# Solo PySide6-Essentials: il pacchetto PySide6 completo porta anche gli
+# Addons (WebEngine, 3D, Multimedia…), centinaia di MB che Plico non usa.
+# 6.11.2 come il Flatpak; il Python dell'AppImage è il 3.12, dove 6.12
+# andrebbe anche bene (PYSIDE-3474 colpisce solo fino al 3.11), ma una
+# versione sola per AppImage e Flatpak è una cosa in meno da provare.
+# Le wheel di PySide6 richiedono glibc >= 2.34 (manylinux_2_34).
+PySide6-Essentials==6.11.2
+# sotto 2.0, come pyproject.toml: la 2.0 porta onnxruntime e numpy
+pymupdf==1.28.2
+pikepdf==10.17.0
+# pyHanko e certifi come nel modulo del Flatpak (python3-pyhanko.json): una
+# sola combinazione per AppImage e Flatpak, e niente certifi di un giorno
+pyhanko==0.37.0
+pyhanko-certvalidator==0.32.1
+certifi==2026.7.22

@@ -1,0 +1,176 @@
+# Release: sui tag v*, i pacchetti costruiti dal tag e allegati alla release
+# GitHub. Ripreso dal release.yml di OllaDesk, con due differenze:
+#
+# - il tag è firmato con la chiave SSH del maintainer (.github/allowed_signers),
+#   non con GPG: qui lo si VERIFICA, e un tag non firmato o firmato da altri
+#   ferma tutto;
+# - gli allegati non li firma una chiave nella CI: hanno SHA256SUMS e
+#   un'attestazione di provenienza di GitHub, che lega ogni file a questo
+#   workflow e al commit del tag. Si verifica con
+#   gh attestation verify <file> -R gradia64/Plico
+#   Così la CI non ha nessun segreto da custodire.
+#
+# Allegati: Plico-X.Y.Z-x86_64.AppImage, Plico-X.Y.Z-x86_64.flatpak,
+# SHA256SUMS. Il PKGBUILD per l'AUR e il .deb verranno dopo.
+#
+# A mano (workflow_dispatch) costruisce e collauda gli stessi pacchetti dal
+# ramo scelto, senza pubblicare niente: per provare il packaging prima di un tag.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read   # solo publish alza i permessi
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false   # una release a metà non si interrompe
+
+jobs:
+  verify:
+    name: Tag firmato e versione
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Tag annotato, firmato da una chiave di .github/allowed_signers
+        run: |
+          # checkout può riscrivere il tag come leggero: si riprende l'oggetto
+          # tag annotato com'è sul server prima di verificarne la firma
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          if [ "$(git cat-file -t "$GITHUB_REF_NAME")" != tag ]; then
+            echo "::error::$GITHUB_REF_NAME è un tag leggero: serve git tag -s"
+            exit 1
+          fi
+          git -c gpg.ssh.allowedSignersFile=.github/allowed_signers tag -v "$GITHUB_REF_NAME"
+
+      # gli stessi controlli di tools/flathub_manifest.py: versione in
+      # pyproject.toml, in plico.__version__ e nell'ultima <release> della
+      # metainfo, screenshot fissati al tag
+      - name: Il tag corrisponde alla versione del codice
+        run: |
+          python3 - "$GITHUB_REF_NAME" <<'PY'
+          import re, sys
+          from pathlib import Path
+          sys.path.insert(0, "tools")
+          import flathub_manifest as fm
+          tag = sys.argv[1]
+          metainfo = Path(fm.METAINFO).read_text()
+          version = fm.check_versions(tag, Path("pyproject.toml").read_text(), metainfo)
+          fm.check_screenshots(tag, metainfo)
+          code = re.search(r'__version__ = "(.+)"', Path("src/plico/__init__.py").read_text())
+          if not code or code.group(1) != version:
+              sys.exit(f"src/plico/__init__.py dice {code and code.group(1)}, il tag {version}")
+          print("versione", version, "ok")
+          PY
+
+      - name: Note di rilascio presenti
+        run: scripts/release-notes.sh "$GITHUB_REF_NAME" > /dev/null
+
+  appimage:
+    name: AppImage
+    needs: verify
+    # sui tag dopo verify; a mano senza (verify lì è saltato)
+    if: >-
+      !cancelled()
+      && (needs.verify.result == 'success'
+          || (github.event_name == 'workflow_dispatch' && needs.verify.result == 'skipped'))
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # SOURCE_DATE_EPOCH dall'ultimo commit
+
+      # librerie di sistema che l'AppImage non include (GL, xkbcommon, D-Bus,
+      # fontconfig), appstream per validare i metadati dell'AppDir, file per
+      # appimagetool, xvfb per il collaudo su X11
+      - name: Dipendenze di sistema
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends appstream desktop-file-utils \
+            file libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1 xvfb \
+            fonts-dejavu-core
+
+      # download fissati per SHA-256 (scripts/build-appimage.sh e
+      # packaging/appimage/requirements.txt)
+      - name: AppImage
+        run: scripts/build-appimage.sh
+
+      # controlli con il Python dell'AppImage, l'intera suite di test con le
+      # sue librerie, avvio offscreen e su X11
+      - name: Collaudo dell'AppImage
+        run: packaging/appimage/smoke-test.sh dist/Plico-*-x86_64.AppImage
+
+      - name: SHA-256
+        run: sha256sum dist/*.AppImage | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appimage
+          path: dist/*.AppImage
+          retention-days: 14
+
+  flatpak:
+    name: Flatpak
+    needs: verify
+    if: >-
+      !cancelled()
+      && (needs.verify.result == 'success'
+          || (github.event_name == 'workflow_dispatch' && needs.verify.result == 'skipped'))
+    # la stessa build di ogni push su main: artefatto «plico-flatpak»
+    uses: ./.github/workflows/flatpak.yml
+
+  publish:
+    name: Release su GitHub
+    needs: [verify, appimage, flatpak]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write        # creare la release e caricare i file
+      id-token: write        # attestazione di provenienza
+      attestations: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: appimage
+          path: dist/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: plico-flatpak
+          path: flatpak-bundle/
+
+      - name: Nomi e SHA256SUMS
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mv flatpak-bundle/plico.flatpak "dist/Plico-${version}-x86_64.flatpak"
+          cd dist
+          sha256sum Plico-* > SHA256SUMS
+          cat SHA256SUMS | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/Plico-*
+
+      - name: Allega alla release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          scripts/release-notes.sh "$tag" > "$RUNNER_TEMP/note.md"
+          # una release già esistente (creata a mano, o un rilancio) resta
+          # com'è: si caricano solo i file
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" dist/* --clobber
+          else
+            gh release create "$tag" dist/* --verify-tag --title "Plico ${tag#v}" \
+              --notes-file "$RUNNER_TEMP/note.md"
+          fi

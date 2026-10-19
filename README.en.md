@@ -394,6 +394,24 @@ mistaken for a signed document.
 
 ## Installation
 
+Every [release](https://github.com/gradia64/Plico/releases) has two packages
+for Linux x86_64, built from the signed tag:
+
+- **AppImage** (`Plico-X.Y.Z-x86_64.AppImage`): a single file with Python,
+  Qt, PyMuPDF and the OCR language data inside. Make it executable
+  (`chmod +x Plico-X.Y.Z-x86_64.AppImage`) and run it. Needs glibc 2.34 or
+  later: Debian 12, Ubuntu 22.04, Fedora 35 or newer.
+- **Flatpak** (`Plico-X.Y.Z-x86_64.flatpak`): `flatpak install --user
+  Plico-X.Y.Z-x86_64.flatpak` fetches the KDE runtime it needs from Flathub.
+  It does not update itself: a new version is installed the same way.
+
+Next to them are `SHA256SUMS` and, for each file, a GitHub provenance
+attestation: `gh attestation verify Plico-X.Y.Z-x86_64.AppImage -R
+gradia64/Plico` checks that the file was produced by this repository's CI
+from that tag.
+
+From source, for development:
+
 ```
 pip install -e ".[dev]"
 ```

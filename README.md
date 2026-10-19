@@ -405,6 +405,24 @@ firmato.
 
 ## Installazione
 
+Ogni [release](https://github.com/gradia64/Plico/releases) ha due pacchetti
+per Linux x86_64, costruiti dal tag firmato:
+
+- **AppImage** (`Plico-X.Y.Z-x86_64.AppImage`): un file solo, con dentro
+  Python, Qt, PyMuPDF e i dati di lingua dell'OCR. Si rende eseguibile
+  (`chmod +x Plico-X.Y.Z-x86_64.AppImage`) e si avvia. Richiede glibc 2.34 o
+  successiva: Debian 12, Ubuntu 22.04, Fedora 35 o più recenti.
+- **Flatpak** (`Plico-X.Y.Z-x86_64.flatpak`): `flatpak install --user
+  Plico-X.Y.Z-x86_64.flatpak` scarica da Flathub il runtime KDE che gli serve.
+  Non si aggiorna da solo: la versione nuova si installa allo stesso modo.
+
+Accanto ci sono `SHA256SUMS` e, per ogni file, un'attestazione di
+provenienza di GitHub: `gh attestation verify Plico-X.Y.Z-x86_64.AppImage -R
+gradia64/Plico` controlla che il file l'abbia prodotto la CI di questo
+repository da quel tag.
+
+Da sorgente, per lo sviluppo:
+
 ```bash
 pip install -e ".[dev]"
 ```
