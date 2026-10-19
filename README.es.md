@@ -27,6 +27,13 @@ comprimirlos.
 - **Extraer páginas** (dividir) en un archivo nuevo con un rango como
   `1-3,5,8` — el orden escrito se conserva, así que también sirve para
   reordenar
+- **Ajustes** (*Ajustes → Configurar Plico…*, `Ctrl+Mayús+,`): el idioma de
+  la interfaz — automático, es decir el del sistema, o uno entre italiano,
+  inglés, francés, alemán y español; con una lengua de sistema que Plico no
+  tiene se usa el inglés — y el icono en el área de notificación. Con el
+  icono también se puede hacer que la X reduzca Plico al área de notificación
+  en lugar de cerrarlo: se sale desde *Archivo → Salir* (`Ctrl+Q`) o desde
+  «Salir» en el menú del icono. El idioma cambia en el próximo inicio
 - **Deshacer/Rehacer** completo, respaldado por `QUndoStack`
 - **Renderizado asíncrono** en un hilo separado — la interfaz nunca se bloquea
 - **Renderizado perezoso**: solo se renderizan las páginas visibles, no todo
@@ -414,7 +421,7 @@ El empaquetado está en `flatpak/` y está pensado para publicarse en Flathub.
 | `io.github.gradia64.plico.metainfo.xml` | metadatos AppStream |
 | `io.github.gradia64.plico.svg` | icono |
 
-Siete decisiones no obvias:
+Ocho decisiones no obvias:
 
 - **`base: io.qt.PySide.BaseApp`** en lugar de instalar PySide6 con pip. La
   BaseApp de Flathub ya contiene PySide6 compilado y alineado con el Qt de
@@ -453,6 +460,11 @@ Siete decisiones no obvias:
   en cambio la real, que el portal expone en el atributo extendido
   `user.document-portal.host-path`. El lanzador usa `%F`, así que un doble
   clic ya llega como ruta exportada en el portal.
+- **`--talk-name=org.kde.StatusNotifierWatcher`**, el único permiso D-Bus: sin
+  él, dentro de la sandbox el área de notificación no existe y el icono de
+  los Ajustes no aparece (probado en Plasma). Qt registra el icono con su
+  nombre único en el bus, así que no hace falta poseer otros nombres. El icono
+  es opcional y está apagado por defecto.
 
 Compilar e instalar en tu propia cuenta:
 

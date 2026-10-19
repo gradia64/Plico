@@ -30,6 +30,14 @@ Komprimieren nutzt.
 - **Seiten extrahieren** (teilen) in eine neue Datei mit einem Bereich wie
   `1-3,5,8` — die getippte Reihenfolge wird beibehalten, es dient also auch
   zum Neuordnen
+- **Einstellungen** (*Einstellungen → Plico konfigurieren…*, `Ctrl+Umschalt+,`):
+  die Sprache der Oberfläche — automatisch, also die des Systems, oder eine von
+  Italienisch, Englisch, Französisch, Deutsch und Spanisch; bei einer
+  Systemsprache, die Plico nicht hat, wird Englisch verwendet — und das Icon im
+  Benachrichtigungsbereich. Mit dem Icon kann das X Plico auch in den
+  Benachrichtigungsbereich minimieren statt zu schließen: beendet wird über
+  *Datei → Beenden* (`Ctrl+Q`) oder «Beenden» im Menü des Icons. Die Sprache
+  ändert sich beim nächsten Start
 - **Rückgängig/Wiederholen** komplett, gestützt auf `QUndoStack`
 - **Asynchrones Rendering** in einem separaten Thread — die Oberfläche
   blockiert nie
@@ -437,7 +445,7 @@ veröffentlicht zu werden.
 | `io.github.gradia64.plico.metainfo.xml` | AppStream-Metadaten |
 | `io.github.gradia64.plico.svg` | Icon |
 
-Sieben nicht offensichtliche Entscheidungen:
+Acht nicht offensichtliche Entscheidungen:
 
 - **`base: io.qt.PySide.BaseApp`** statt PySide6 mit pip zu installieren. Die
   BaseApp von Flathub enthält PySide6 bereits kompiliert und auf das Qt von
@@ -481,6 +489,11 @@ Sieben nicht offensichtliche Entscheidungen:
   erweiterten Attribut `user.document-portal.host-path` bereitstellt. Der
   Launcher nutzt `%F`, so dass ein Doppelklick bereits als im Portal
   exportierter Pfad ankommt.
+- **`--talk-name=org.kde.StatusNotifierWatcher`**, die einzige D-Bus-Berechtigung:
+  ohne sie existiert der Benachrichtigungsbereich in der Sandbox nicht und das
+  Icon der Einstellungen erscheint nie (getestet unter Plasma). Qt registriert
+  das Icon unter seinem eindeutigen Bus-Namen, daher müssen keine weiteren
+  Namen besessen werden. Das Icon ist optional und standardmäßig aus.
 
 Bauen und für den eigenen Benutzer installieren:
 

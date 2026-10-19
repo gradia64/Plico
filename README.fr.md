@@ -29,6 +29,14 @@ Un véritable éditeur PDF natif pour Linux, construit avec **Qt6** et
 - **Extraire des pages** (diviser) dans un nouveau fichier avec une plage
   comme `1-3,5,8` — l'ordre tapé est conservé, donc ça sert aussi à
   réordonner
+- **Paramètres** (*Paramètres → Configurer Plico…*, `Ctrl+Maj+,`) : la langue
+  de l'interface — automatique, c'est-à-dire celle du système, ou l'une parmi
+  italien, anglais, français, allemand et espagnol ; avec une langue du
+  système que Plico n'a pas, on utilise l'anglais — et l'icône dans la zone de
+  notification. Avec l'icône, on peut aussi faire que le X réduise Plico dans
+  la zone de notification au lieu de le fermer : on quitte depuis
+  *Fichier → Quitter* (`Ctrl+Q`) ou depuis « Quitter » dans le menu de
+  l'icône. La langue change au prochain démarrage
 - **Annuler/Refaire** complet, grâce à `QUndoStack`
 - **Rendu asynchrone** dans un thread séparé — l'interface ne se bloque jamais
 - **Rendu paresseux** : seules les pages visibles sont rendues, pas tout le
@@ -428,7 +436,7 @@ L'empaquetage est dans `flatpak/` et est pensé pour être publié sur Flathub.
 | `io.github.gradia64.plico.metainfo.xml` | métadonnées AppStream |
 | `io.github.gradia64.plico.svg` | icône |
 
-Sept choix non évidents :
+Huit choix non évidents :
 
 - **`base: io.qt.PySide.BaseApp`** au lieu d'installer PySide6 avec pip. La
   BaseApp de Flathub contient déjà PySide6 compilé et aligné sur le Qt de
@@ -470,6 +478,11 @@ Sept choix non évidents :
   les dialogues il utilise plutôt le vrai, que le portail expose dans
   l'attribut étendu `user.document-portal.host-path`. Le lanceur utilise
   `%F`, donc un double-clic arrive déjà comme chemin exporté dans le portail.
+- **`--talk-name=org.kde.StatusNotifierWatcher`**, la seule permission D-Bus :
+  sans elle, dans la sandbox la zone de notification n'existe pas et l'icône
+  des Paramètres n'apparaît jamais (testé sur Plasma). Qt enregistre l'icône
+  sous son nom unique sur le bus, donc il n'y a pas d'autre nom à posséder.
+  L'icône est facultative et désactivée par défaut.
 
 Construire et installer pour ton propre utilisateur :
 
