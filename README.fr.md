@@ -406,6 +406,33 @@ pris pour un document signé.
 
 ## Installation
 
+Chaque [release](https://github.com/gradia64/Plico/releases) propose ces
+paquets pour Linux x86_64, construits depuis le tag signé :
+
+- **AppImage** (`Plico-X.Y.Z-x86_64.AppImage`) : un seul fichier, avec dedans
+  Python, Qt, PyMuPDF et les données de langue de l'OCR. On le rend
+  exécutable (`chmod +x Plico-X.Y.Z-x86_64.AppImage`) et on le lance. Requiert
+  glibc 2.34 ou plus récent : Debian 12, Ubuntu 22.04, Fedora 35 ou plus.
+- **Debian et Ubuntu** (`plico_X.Y.Z_amd64.deb`) : le même contenu que
+  l'AppImage, installé dans `/opt/plico` avec le menu et l'icône ;
+  `sudo apt install ./plico_X.Y.Z_amd64.deb`. Mêmes exigences que l'AppImage ;
+  ne se met pas à jour tout seul.
+- **Flatpak** (`Plico-X.Y.Z-x86_64.flatpak`) : `flatpak install --user
+  Plico-X.Y.Z-x86_64.flatpak` télécharge depuis Flathub le runtime KDE dont
+  il a besoin. Ne se met pas à jour tout seul : la nouvelle version
+  s'installe de la même manière.
+- **Arch Linux** : le paquet `plico` de l'AUR (`paru -S plico`, ou un autre
+  helper) se construit depuis le tag signé, que `makepkg` vérifie avec la clé
+  de release ; le paquet déjà construit est aussi parmi les fichiers joints de
+  la release (`pacman -U plico-X.Y.Z-1-any.pkg.tar.zst`).
+
+À côté se trouvent `SHA256SUMS` et, pour chaque fichier, une attestation de
+provenance GitHub : `gh attestation verify Plico-X.Y.Z-x86_64.AppImage -R
+gradia64/Plico` vérifie que le fichier a été produit par la CI de ce dépôt
+depuis ce tag.
+
+Depuis les sources, pour le développement :
+
 ```
 pip install -e ".[dev]"
 ```

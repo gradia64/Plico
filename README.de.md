@@ -414,6 +414,33 @@ wurde, wird nicht mit einem signierten Dokument verwechselt.
 
 ## Installation
 
+Jede [Release](https://github.com/gradia64/Plico/releases) bietet diese
+Pakete für Linux x86_64, gebaut vom signierten Tag:
+
+- **AppImage** (`Plico-X.Y.Z-x86_64.AppImage`): eine einzige Datei, mit
+  Python, Qt, PyMuPDF und den Sprachdaten des OCR darin. Ausführbar machen
+  (`chmod +x Plico-X.Y.Z-x86_64.AppImage`) und starten. Benötigt glibc 2.34
+  oder neuer: Debian 12, Ubuntu 22.04, Fedora 35 oder neuer.
+- **Debian und Ubuntu** (`plico_X.Y.Z_amd64.deb`): derselbe Inhalt wie das
+  AppImage, installiert in `/opt/plico` mit Menüeintrag und Icon;
+  `sudo apt install ./plico_X.Y.Z_amd64.deb`. Dieselben Voraussetzungen wie
+  das AppImage; aktualisiert sich nicht selbst.
+- **Flatpak** (`Plico-X.Y.Z-x86_64.flatpak`): `flatpak install --user
+  Plico-X.Y.Z-x86_64.flatpak` lädt die KDE-Runtime von Flathub, die es
+  braucht. Aktualisiert sich nicht selbst: die neue Version wird genauso
+  installiert.
+- **Arch Linux**: das Paket `plico` aus dem AUR (`paru -S plico` oder ein
+  anderer Helper) wird vom signierten Tag gebaut, den `makepkg` mit dem
+  Release-Schlüssel prüft; das bereits gebaute Paket ist auch bei den
+  Release-Anhängen (`pacman -U plico-X.Y.Z-1-any.pkg.tar.zst`).
+
+Daneben gibt es `SHA256SUMS` und für jede Datei eine Herkunftsbescheinigung
+von GitHub: `gh attestation verify Plico-X.Y.Z-x86_64.AppImage -R
+gradia64/Plico` prüft, dass die Datei von der CI dieses Repositories von
+diesem Tag erzeugt wurde.
+
+Aus dem Quellcode, für die Entwicklung:
+
 ```
 pip install -e ".[dev]"
 ```
