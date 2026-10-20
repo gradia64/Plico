@@ -119,7 +119,7 @@ plico/
     └── test_integration.py   # MainWindow vera, offscreen: test end-to-end (168)
 ```
 
-Gate di qualità attuale: **601 passed, 1 skipped** (con `lrelease` dell'SDK nel `PATH`), `ruff` pulito, `mypy` pulito
+Gate di qualità attuale: **602 passed, 1 skipped** (con `lrelease` dell'SDK nel `PATH`), `ruff` pulito, `mypy` pulito
 (30 file sorgente). Uno `skip` è il test delle icone, che vuole un tema che
 fornisca `object-rotate-*`. Gli altri skip possibili dipendono da
 strumenti che mancano (§9): `pylupdate6` e `lrelease`/`pyside6-lrelease` in
