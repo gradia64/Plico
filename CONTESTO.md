@@ -51,9 +51,10 @@ plico/
 ├── packaging/
 │   ├── appimage/             # AppRun, requirements, trim-qt, check-glibc, collaudo (§11 bis)
 │   ├── arch/PKGBUILD.in      # il modello del PKGBUILD dell'AUR (§11 bis)
-│   ├── common/launcher.py    # l'avvio dei pacchetti (AppImage, poi .deb e AUR)
+│   ├── common/launcher.py    # l'avvio dei pacchetti (AppImage, .deb, AUR)
+│   ├── deb/                  # collaudo del .deb e tag lintian accettati (§11 bis)
 │   └── release-notes/        # X.Y.Z.md: la descrizione di ogni release GitHub
-├── scripts/                  # build-appimage.sh, *-aur.sh, build-arch.sh, release, chiavi
+├── scripts/                  # build-appimage.sh, build-deb.sh, *-aur.sh, build-arch.sh, release, chiavi
 ├── tools/
 │   ├── screenshots.py        # gli screenshot dello store, dall'app vera e offscreen
 │   └── flathub_manifest.py   # il manifest per Flathub da un tag firmato (§11)
@@ -2218,7 +2219,21 @@ costruisce il pacchetto con il `PKGBUILD.in` del ramo e la versione del tag
 pubblica. Per questo l'environment `release` accetta anche il ramo `main`, oltre
 ai tag `v*`.
 
-Prossimo: `.deb`.
+**.deb** (`scripts/build-deb.sh`, `packaging/deb/`): autosufficiente, è
+l'AppDir dell'AppImage (già provato con la suite) in `/opt/plico`, con
+`/usr/bin/plico` collegato all'AppRun e desktop, icona e metainfo in
+`/usr/share`; amd64, circa 87 MB. Non le librerie Python della distribuzione:
+pyHanko 0.37 vuole cryptography ≥ 48 (Debian 13 ha la 43, Ubuntu 26.04 la 46,
+e senza si ferma all'import: `mldsa`), e Ubuntu 24.04 e Debian 12 non hanno
+PySide6. `Depends` elenca solo ciò che l'albero chiede al sistema (glibc ≥
+2.34, GL/EGL, X11/xcb, Wayland, fontconfig, glib, dbus…) più `tzdata`: il
+Python incluso legge i fusi del sistema e pyHanko ne apre uno all'import.
+`packaging/deb/smoke-test.sh` fa girare lintian (con i tag inevitabili per un
+albero in `/opt` in `lintian-suppress`), poi in Ubuntu 22.04 e 24.04, Debian
+12 e 13 puliti installa con apt, controlla con ldd che nessuna libreria manchi,
+esegue `smoke_check.py` dell'AppImage (con `PLICO_ICON`), avvia `plico` e
+verifica che `apt purge` non lasci niente. In `release.yml` sta nel job
+dell'AppImage, che ha già l'AppDir.
 
 ## 12. Cosa manca
 

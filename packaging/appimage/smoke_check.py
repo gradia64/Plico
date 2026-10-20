@@ -1,7 +1,9 @@
 """Controlli dentro l'AppImage, eseguiti con il suo Python (smoke-test.sh).
 
 APPDIR viene dall'ambiente, come lo imposterebbe il runtime, e così
-PLICO_TESSDATA, che l'AppRun punta ai dati di lingua inclusi.
+PLICO_TESSDATA, che l'AppRun punta ai dati di lingua inclusi. Li usa anche il
+collaudo del .deb (packaging/deb/smoke-test.sh), con APPDIR=/opt/plico e
+l'icona, che lì sta in /usr/share, in PLICO_ICON.
 """
 import os
 import sys
@@ -26,7 +28,8 @@ from plico.model import ocr  # noqa: E402
 from plico.widgets.help_window import help_page  # noqa: E402
 
 # l'icona e i formati che servono a «Crea da immagini»
-icon = APPDIR / "usr/share/icons/hicolor/scalable/apps/io.github.gradia64.plico.svg"
+icon = Path(os.environ.get(
+    "PLICO_ICON", APPDIR / "usr/share/icons/hicolor/scalable/apps/io.github.gradia64.plico.svg"))
 assert not QIcon(str(icon)).pixmap(64, 64).isNull(), "icona SVG non caricata"
 formats = {bytes(f).decode() for f in QImageReader.supportedImageFormats()}
 assert {"svg", "png", "jpeg", "gif"} <= formats, formats

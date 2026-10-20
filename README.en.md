@@ -394,13 +394,17 @@ mistaken for a signed document.
 
 ## Installation
 
-Every [release](https://github.com/gradia64/Plico/releases) has two packages
+Every [release](https://github.com/gradia64/Plico/releases) has these packages
 for Linux x86_64, built from the signed tag:
 
 - **AppImage** (`Plico-X.Y.Z-x86_64.AppImage`): a single file with Python,
   Qt, PyMuPDF and the OCR language data inside. Make it executable
   (`chmod +x Plico-X.Y.Z-x86_64.AppImage`) and run it. Needs glibc 2.34 or
   later: Debian 12, Ubuntu 22.04, Fedora 35 or newer.
+- **Debian and Ubuntu** (`plico_X.Y.Z_amd64.deb`): the same contents as the
+  AppImage, installed in `/opt/plico` with the menu entry and icon;
+  `sudo apt install ./plico_X.Y.Z_amd64.deb`. Same requirements as the
+  AppImage; it does not update itself.
 - **Flatpak** (`Plico-X.Y.Z-x86_64.flatpak`): `flatpak install --user
   Plico-X.Y.Z-x86_64.flatpak` fetches the KDE runtime it needs from Flathub.
   It does not update itself: a new version is installed the same way.
@@ -518,8 +522,8 @@ tag of the latest release, and every release moves them to its new tag.
 ### Releasing
 
 A release is a signed `vX.Y.Z` tag: from there `.github/workflows/release.yml`
-verifies the signature and the version, builds and tests the AppImage and the
-Flatpak bundle, and attaches them to the GitHub release with `SHA256SUMS` and
+verifies the signature and the version, builds and tests the AppImage, the
+`.deb`, the Flatpak bundle and the Arch package, and attaches them to the GitHub release with `SHA256SUMS` and
 a provenance attestation. Before tagging, check that:
 
 - the version is the same in `pyproject.toml`, in `src/plico/__init__.py` and

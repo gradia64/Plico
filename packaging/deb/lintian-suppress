@@ -1,0 +1,13 @@
+dir-or-file-in-opt
+embedded-library
+executable-not-elf-or-script
+hardening-no-pie
+no-manual-page
+package-installs-python-pycache-dir
+python3-script-but-no-python3-dep
+script-not-executable
+shared-library-is-executable
+shared-library-lacks-prerequisites
+shell-script-fails-syntax-check
+unstripped-binary-or-object
+unusual-interpreter

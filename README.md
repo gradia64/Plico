@@ -405,13 +405,17 @@ firmato.
 
 ## Installazione
 
-Ogni [release](https://github.com/gradia64/Plico/releases) ha due pacchetti
+Ogni [release](https://github.com/gradia64/Plico/releases) ha questi pacchetti
 per Linux x86_64, costruiti dal tag firmato:
 
 - **AppImage** (`Plico-X.Y.Z-x86_64.AppImage`): un file solo, con dentro
   Python, Qt, PyMuPDF e i dati di lingua dell'OCR. Si rende eseguibile
   (`chmod +x Plico-X.Y.Z-x86_64.AppImage`) e si avvia. Richiede glibc 2.34 o
   successiva: Debian 12, Ubuntu 22.04, Fedora 35 o più recenti.
+- **Debian e Ubuntu** (`plico_X.Y.Z_amd64.deb`): lo stesso contenuto
+  dell'AppImage, installato in `/opt/plico` con il menu e l'icona;
+  `sudo apt install ./plico_X.Y.Z_amd64.deb`. Stessi requisiti dell'AppImage;
+  non si aggiorna da solo.
 - **Flatpak** (`Plico-X.Y.Z-x86_64.flatpak`): `flatpak install --user
   Plico-X.Y.Z-x86_64.flatpak` scarica da Flathub il runtime KDE che gli serve.
   Non si aggiorna da solo: la versione nuova si installa allo stesso modo.
@@ -528,8 +532,8 @@ dell'ultimo rilascio, e a ogni rilascio vanno spostati sul tag nuovo.
 ### Rilasciare
 
 Una release è un tag `vX.Y.Z` firmato: da lì `.github/workflows/release.yml`
-verifica la firma e la versione, costruisce e collauda AppImage e bundle
-Flatpak, e li allega alla release su GitHub con `SHA256SUMS` e
+verifica la firma e la versione, costruisce e collauda AppImage, `.deb`,
+bundle Flatpak e pacchetto Arch, e li allega alla release su GitHub con `SHA256SUMS` e
 un'attestazione di provenienza. Prima del tag controlla che:
 
 - la versione sia la stessa in `pyproject.toml`, in `src/plico/__init__.py` e

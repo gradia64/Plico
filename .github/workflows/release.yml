@@ -12,10 +12,10 @@
 #   gh attestation verify <file> -R gradia64/Plico
 #   Così la CI non ha nessun segreto da custodire.
 #
-# Allegati: Plico-X.Y.Z-x86_64.AppImage, Plico-X.Y.Z-x86_64.flatpak,
+# Allegati: Plico-X.Y.Z-x86_64.AppImage, plico_X.Y.Z_amd64.deb (lo stesso
+# albero dell'AppImage in /opt/plico), Plico-X.Y.Z-x86_64.flatpak,
 # plico-X.Y.Z-1-any.pkg.tar.zst (Arch), SHA256SUMS. Il PKGBUILD va sull'AUR
-# (scripts/publish-aur.sh) se c'è il secret AUR_SSH_PRIVATE_KEY. Il .deb verrà
-# dopo.
+# (scripts/publish-aur.sh) se c'è il secret AUR_SSH_PRIVATE_KEY.
 #
 # A mano (workflow_dispatch) costruisce e collauda gli stessi pacchetti dal
 # ramo scelto, senza pubblicare niente: per provare il packaging prima di un tag.
@@ -91,7 +91,7 @@ jobs:
         run: scripts/release-notes.sh "$TAG" > /dev/null
 
   appimage:
-    name: AppImage
+    name: AppImage e .deb
     needs: verify
     # sui tag dopo verify; a mano senza (verify lì è saltato)
     if: >-
@@ -124,13 +124,29 @@ jobs:
       - name: Collaudo dell'AppImage
         run: packaging/appimage/smoke-test.sh dist/Plico-*-x86_64.AppImage
 
+      # lo stesso albero (build/appimage/AppDir), già provato con la suite,
+      # in /opt/plico
+      - name: Pacchetto .deb
+        run: scripts/build-deb.sh
+
+      # lintian, poi installazione, librerie, avvio e rimozione in Ubuntu
+      # 22.04 e 24.04, Debian 12 e 13
+      - name: Collaudo del .deb
+        run: packaging/deb/smoke-test.sh dist/plico_*_amd64.deb
+
       - name: SHA-256
-        run: sha256sum dist/*.AppImage | tee -a "$GITHUB_STEP_SUMMARY"
+        run: sha256sum dist/*.AppImage dist/*.deb | tee -a "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         with:
           name: appimage
           path: dist/*.AppImage
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb
+          path: dist/*.deb
           retention-days: 14
 
   flatpak:
@@ -197,6 +213,11 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
+          name: deb
+          path: dist/
+
+      - uses: actions/download-artifact@v4
+        with:
           name: plico-flatpak
           path: flatpak-bundle/
 
@@ -213,13 +234,14 @@ jobs:
           mkdir -p build/aur
           cp arch/build/aur/PKGBUILD arch/build/aur/.SRCINFO build/aur/
           cd dist
-          sha256sum Plico-* plico-*.pkg.tar.zst > SHA256SUMS
+          sha256sum Plico-* plico_*.deb plico-*.pkg.tar.zst > SHA256SUMS
           cat SHA256SUMS | tee -a "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
             dist/Plico-*
+            dist/plico_*.deb
             dist/plico-*.pkg.tar.zst
 
       - name: Allega alla release
