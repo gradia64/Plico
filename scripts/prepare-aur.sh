@@ -9,6 +9,9 @@
 # genera anche .SRCINFO.
 #
 # Uso: scripts/prepare-aur.sh [cartella di uscita]   (default build/aur)
+#
+# La versione è quella di src/plico/__init__.py; PLICO_VERSION la sostituisce
+# (release.yml a mano, per pubblicare su AUR un tag già uscito).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -17,9 +20,9 @@ OUT="${1:-build/aur}"
 # shellcheck source=scripts/release-keys.sh
 . "$ROOT/scripts/release-keys.sh"
 
-VERSION="$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/plico/__init__.py)"
-if [ -z "$VERSION" ]; then
-    echo "versione non leggibile da src/plico/__init__.py" >&2
+VERSION="${PLICO_VERSION:-$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/plico/__init__.py)}"
+if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "versione non valida: '$VERSION'" >&2
     exit 1
 fi
 

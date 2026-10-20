@@ -19,12 +19,22 @@
 #
 # A mano (workflow_dispatch) costruisce e collauda gli stessi pacchetti dal
 # ramo scelto, senza pubblicare niente: per provare il packaging prima di un tag.
+# Con aur_tag (un tag già pubblicato, es. v0.1.4) fa invece solo l'AUR:
+# verifica la firma di quel tag, costruisce e collauda il pacchetto Arch con il
+# PKGBUILD.in del ramo e, dopo l'approvazione nell'environment release, pubblica
+# il PKGBUILD su AUR. Serve per la prima pubblicazione di un tag uscito prima
+# del job arch e per correggere il PKGBUILD senza un nuovo rilascio.
 name: Release
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      aur_tag:
+        description: "Solo AUR: tag già pubblicato da mettere su AUR (es. v0.1.4); vuoto = prova dei pacchetti"
+        required: false
+        default: ""
 
 permissions:
   contents: read   # solo publish alza i permessi
@@ -36,26 +46,33 @@ concurrency:
 jobs:
   verify:
     name: Tag firmato e versione
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || inputs.aur_tag != ''
     runs-on: ubuntu-24.04
+    env:
+      TAG: ${{ inputs.aur_tag || github.ref_name }}
     steps:
+      - name: Nome del tag
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "tag non valido: $TAG" >&2; exit 1; }
+
       - uses: actions/checkout@v5
         with:
+          ref: refs/tags/${{ env.TAG }}
           fetch-depth: 0
 
       - name: Tag annotato e firmato dalla sottochiave dei tag
         run: |
           # checkout può riscrivere il tag come leggero: si riprende l'oggetto
           # tag annotato com'è sul server prima di verificarne la firma
-          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
-          scripts/verify-tag.sh "$GITHUB_REF_NAME"
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          scripts/verify-tag.sh "$TAG"
 
       # gli stessi controlli di tools/flathub_manifest.py: versione in
       # pyproject.toml, in plico.__version__ e nell'ultima <release> della
       # metainfo, screenshot fissati al tag
       - name: Il tag corrisponde alla versione del codice
         run: |
-          python3 - "$GITHUB_REF_NAME" <<'PY'
+          python3 - "$TAG" <<'PY'
           import re, sys
           from pathlib import Path
           sys.path.insert(0, "tools")
@@ -71,14 +88,14 @@ jobs:
           PY
 
       - name: Note di rilascio presenti
-        run: scripts/release-notes.sh "$GITHUB_REF_NAME" > /dev/null
+        run: scripts/release-notes.sh "$TAG" > /dev/null
 
   appimage:
     name: AppImage
     needs: verify
     # sui tag dopo verify; a mano senza (verify lì è saltato)
     if: >-
-      !cancelled()
+      !cancelled() && inputs.aur_tag == ''
       && (needs.verify.result == 'success'
           || (github.event_name == 'workflow_dispatch' && needs.verify.result == 'skipped'))
     runs-on: ubuntu-24.04
@@ -120,7 +137,7 @@ jobs:
     name: Flatpak
     needs: verify
     if: >-
-      !cancelled()
+      !cancelled() && inputs.aur_tag == ''
       && (needs.verify.result == 'success'
           || (github.event_name == 'workflow_dispatch' && needs.verify.result == 'skipped'))
     # la stessa build di ogni push su main: artefatto «plico-flatpak»
@@ -128,8 +145,10 @@ jobs:
 
   arch:
     name: Pacchetto Arch
-    # solo sui tag: il PKGBUILD clona da GitHub il tag v<versione> firmato e
-    # ne verifica la firma (?signed + validpgpkeys), come ogni utente AUR
+    # solo dopo verify (sui tag o con aur_tag): il PKGBUILD clona da GitHub il
+    # tag v<versione> firmato e ne verifica la firma (?signed + validpgpkeys),
+    # come ogni utente AUR. Con aur_tag script e PKGBUILD.in sono quelli del
+    # ramo, la versione quella del tag
     needs: verify
     runs-on: ubuntu-24.04
     container: archlinux:base-devel
@@ -138,8 +157,10 @@ jobs:
 
       # poi check() (l'intera suite), namcap, installazione di prova e avvio
       - name: PKGBUILD e pacchetto Arch
+        env:
+          TAG: ${{ inputs.aur_tag || github.ref_name }}
         run: |
-          scripts/prepare-aur.sh
+          PLICO_VERSION="${TAG#v}" scripts/prepare-aur.sh
           scripts/build-arch.sh
 
       - uses: actions/upload-artifact@v4
@@ -224,4 +245,32 @@ jobs:
             echo "::notice::secret AUR_SSH_PRIVATE_KEY assente: pubblicazione su AUR saltata"
             exit 0
           fi
+          scripts/publish-aur.sh
+
+  aur:
+    name: Solo AUR (a mano)
+    needs: [verify, arch]
+    if: github.event_name == 'workflow_dispatch' && inputs.aur_tag != ''
+    runs-on: ubuntu-24.04
+    # come publish: aspetta l'approvazione del maintainer, e solo qui c'è il
+    # secret dell'AUR
+    environment: release
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: arch
+          path: arch/
+
+      - name: Pubblica su AUR
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          if [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
+            echo "::error::secret AUR_SSH_PRIVATE_KEY assente nell'environment release"
+            exit 1
+          fi
+          mkdir -p build/aur
+          cp arch/build/aur/PKGBUILD arch/build/aur/.SRCINFO build/aur/
           scripts/publish-aur.sh

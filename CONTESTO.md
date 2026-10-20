@@ -2211,7 +2211,12 @@ cerca già). `check()` fa girare l'intera suite. In `release.yml` il job
 pacchetto; `publish` lo allega alla release e, con il secret
 `AUR_SSH_PRIVATE_KEY` nell'environment `release`, pubblica PKGBUILD e
 `.SRCINFO` sull'AUR (`ssh://aur@aur.archlinux.org/plico.git`, chiave host
-fissata in `publish-aur.sh`).
+fissata in `publish-aur.sh`). Lanciato a mano con l'input `aur_tag` (un tag
+già uscito, es. `v0.1.4`), `release.yml` fa solo l'AUR: verifica quel tag,
+costruisce il pacchetto con il `PKGBUILD.in` del ramo e la versione del tag
+(`PLICO_VERSION` in `prepare-aur.sh`) e, dopo l'approvazione, il job `aur`
+pubblica. Per questo l'environment `release` accetta anche il ramo `main`, oltre
+ai tag `v*`.
 
 Prossimo: `.deb`.
 
