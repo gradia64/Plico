@@ -83,7 +83,7 @@
       <caption xml:lang="es">Un documento con sus páginas, ajustado al ancho de la ventana</caption>
       <caption xml:lang="fr">Un document et ses pages, ajusté à la largeur de la fenêtre</caption>
       <caption xml:lang="de">Ein Dokument mit seinen Seiten, an die Fensterbreite angepasst</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.3/flatpak/screenshots/main.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.4/flatpak/screenshots/main.png</image>
     </screenshot>
     <screenshot>
       <caption>Personal data marked for erasure: on saving it leaves the file</caption>
@@ -91,7 +91,7 @@
       <caption xml:lang="es">Datos personales marcados para borrar: al guardar salen del archivo</caption>
       <caption xml:lang="fr">Données personnelles marquées pour l'effacement : à l'enregistrement, elles quittent le fichier</caption>
       <caption xml:lang="de">Persönliche Daten zum Löschen markiert: Beim Speichern verlassen sie die Datei</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.3/flatpak/screenshots/redact.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.4/flatpak/screenshots/redact.png</image>
     </screenshot>
     <screenshot>
       <caption>Filling in a PDF form, on the page or in the side panel</caption>
@@ -99,7 +99,7 @@
       <caption xml:lang="es">Rellenar un formulario PDF, en la página o en el panel lateral</caption>
       <caption xml:lang="fr">Remplir un formulaire PDF, sur la page ou dans le panneau latéral</caption>
       <caption xml:lang="de">Ein PDF-Formular ausfüllen, auf der Seite oder in der Seitenleiste</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.3/flatpak/screenshots/form.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.4/flatpak/screenshots/form.png</image>
     </screenshot>
     <screenshot>
       <caption>Correcting a line of text where it stands</caption>
@@ -107,7 +107,7 @@
       <caption xml:lang="es">Corregir una línea de texto en su sitio</caption>
       <caption xml:lang="fr">Corriger une ligne de texte là où elle se trouve</caption>
       <caption xml:lang="de">Eine Textzeile direkt an ihrer Stelle korrigieren</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.3/flatpak/screenshots/edit.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.4/flatpak/screenshots/edit.png</image>
     </screenshot>
     <screenshot>
       <caption>Searching the document: every match highlighted, the current one in orange</caption>
@@ -115,7 +115,7 @@
       <caption xml:lang="es">Buscar en el documento: cada coincidencia resaltada, la actual en naranja</caption>
       <caption xml:lang="fr">Rechercher dans le document : chaque occurrence surlignée, l'occurrence courante en orange</caption>
       <caption xml:lang="de">Im Dokument suchen: jeder Treffer hervorgehoben, der aktuelle in Orange</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.3/flatpak/screenshots/search.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.4/flatpak/screenshots/search.png</image>
     </screenshot>
   </screenshots>
 
@@ -209,6 +209,15 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.1.4" date="2026-10-20">
+      <description>
+        <p>The first release with ready-to-use packages: an AppImage and a Flatpak bundle, attached to the GitHub release. The application is the same as 0.1.3.</p>
+        <p xml:lang="it">La prima release con i pacchetti pronti: un'AppImage e un bundle Flatpak, allegati alla release su GitHub. L'applicazione è la stessa della 0.1.3.</p>
+        <p xml:lang="es">La primera versión con paquetes listos: una AppImage y un paquete Flatpak, adjuntos a la versión en GitHub. La aplicación es la misma que la 0.1.3.</p>
+        <p xml:lang="fr">La première version avec des paquets prêts : une AppImage et un paquet Flatpak, joints à la version sur GitHub. L'application est la même que la 0.1.3.</p>
+        <p xml:lang="de">Die erste Version mit fertigen Paketen: ein AppImage und ein Flatpak-Bundle, an die Veröffentlichung auf GitHub angehängt. Die Anwendung ist dieselbe wie 0.1.3.</p>
+      </description>
+    </release>
     <release version="0.1.3" date="2026-10-19">
       <description>
         <p>Settings, a handbook in five languages, and an optional icon in the notification area.</p>

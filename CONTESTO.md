@@ -27,7 +27,7 @@ testati: aprire (anche i file **cifrati**, con la password), unire più PDF
 (l'unione si **annulla** con Ctrl+Z come ogni altra modifica), ruotare,
 eliminare, riordinare, dividere (estrarre un sottoinsieme), comprimere in
 salvataggio, annulla/ripristina, rendering asincrono, cache, integrazione
-desktop KDE, packaging Flatpak. Versione `0.1.3` (tag `v0.1.3` firmato), licenza
+desktop KDE, packaging Flatpak. Versione `0.1.4` (tag `v0.1.4` firmato), licenza
 GPL-3.0-or-later.
 
 Della roadmap lunga (§12) sono già dentro anche le voci che non erano
