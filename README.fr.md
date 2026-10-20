@@ -13,6 +13,16 @@ Un véritable éditeur PDF natif pour Linux, construit avec **Qt6** et
 
 > Le fichier PDF n'est jamais touché tant que tu ne sauvegardes pas.
 
+<p align="center">
+  <img src="flatpak/screenshots/main.png" alt="Plico — fenêtre principale" width="32%" />
+  <img src="flatpak/screenshots/edit.png" alt="Édition de texte" width="32%" />
+  <img src="flatpak/screenshots/redact.png" alt="Rédaction" width="32%" />
+</p>
+<p align="center">
+  <img src="flatpak/screenshots/form.png" alt="Remplissage de formulaire" width="32%" />
+  <img src="flatpak/screenshots/search.png" alt="Recherche dans le document" width="32%" />
+</p>
+
 ## Caractéristiques
 
 - **Tourner, supprimer, réordonner** des pages (glisser-déposer dans la barre

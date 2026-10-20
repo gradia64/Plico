@@ -13,6 +13,16 @@ comprimerli.
 
 > Il file PDF non si tocca mai finché non salvi.
 
+<p align="center">
+  <img src="flatpak/screenshots/main.png" alt="Plico — finestra principale" width="32%" />
+  <img src="flatpak/screenshots/edit.png" alt="Modifica del testo" width="32%" />
+  <img src="flatpak/screenshots/redact.png" alt="Redazione" width="32%" />
+</p>
+<p align="center">
+  <img src="flatpak/screenshots/form.png" alt="Compilazione di un form" width="32%" />
+  <img src="flatpak/screenshots/search.png" alt="Ricerca nel documento" width="32%" />
+</p>
+
 ## Caratteristiche
 
 - **Ruotare, eliminare, riordinare** pagine (drag & drop nella barra miniature)

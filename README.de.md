@@ -13,6 +13,16 @@ Komprimieren nutzt.
 
 > Die PDF-Datei wird erst beim Speichern angefasst.
 
+<p align="center">
+  <img src="flatpak/screenshots/main.png" alt="Plico — Hauptfenster" width="32%" />
+  <img src="flatpak/screenshots/edit.png" alt="Textbearbeitung" width="32%" />
+  <img src="flatpak/screenshots/redact.png" alt="Redaktion" width="32%" />
+</p>
+<p align="center">
+  <img src="flatpak/screenshots/form.png" alt="Formular ausfüllen" width="32%" />
+  <img src="flatpak/screenshots/search.png" alt="Suche im Dokument" width="32%" />
+</p>
+
 ## Funktionen
 
 - **Seiten drehen, löschen, neu anordnen** (Drag & Drop in der

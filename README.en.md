@@ -12,6 +12,16 @@ A true native PDF editor for Linux, built with **Qt6** and **PySide6**, using
 
 > The PDF file is never touched until you save.
 
+<p align="center">
+  <img src="flatpak/screenshots/main.png" alt="Plico — main window" width="32%" />
+  <img src="flatpak/screenshots/edit.png" alt="Text editing" width="32%" />
+  <img src="flatpak/screenshots/redact.png" alt="Redaction" width="32%" />
+</p>
+<p align="center">
+  <img src="flatpak/screenshots/form.png" alt="Filling a form" width="32%" />
+  <img src="flatpak/screenshots/search.png" alt="Search in the document" width="32%" />
+</p>
+
 ## Features
 
 - **Rotate, delete, reorder** pages (drag & drop in the thumbnail bar)
