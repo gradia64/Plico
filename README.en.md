@@ -404,6 +404,10 @@ for Linux x86_64, built from the signed tag:
 - **Flatpak** (`Plico-X.Y.Z-x86_64.flatpak`): `flatpak install --user
   Plico-X.Y.Z-x86_64.flatpak` fetches the KDE runtime it needs from Flathub.
   It does not update itself: a new version is installed the same way.
+- **Arch Linux**: the `plico` package on the AUR (`paru -S plico`, or another
+  helper) is built from the signed tag, which `makepkg` verifies with the
+  release key; the built package is also attached to the release
+  (`pacman -U plico-X.Y.Z-1-any.pkg.tar.zst`).
 
 Next to them are `SHA256SUMS` and, for each file, a GitHub provenance
 attestation: `gh attestation verify Plico-X.Y.Z-x86_64.AppImage -R

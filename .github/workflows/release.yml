@@ -13,7 +13,9 @@
 #   Così la CI non ha nessun segreto da custodire.
 #
 # Allegati: Plico-X.Y.Z-x86_64.AppImage, Plico-X.Y.Z-x86_64.flatpak,
-# SHA256SUMS. Il PKGBUILD per l'AUR e il .deb verranno dopo.
+# plico-X.Y.Z-1-any.pkg.tar.zst (Arch), SHA256SUMS. Il PKGBUILD va sull'AUR
+# (scripts/publish-aur.sh) se c'è il secret AUR_SSH_PRIVATE_KEY. Il .deb verrà
+# dopo.
 #
 # A mano (workflow_dispatch) costruisce e collauda gli stessi pacchetti dal
 # ramo scelto, senza pubblicare niente: per provare il packaging prima di un tag.
@@ -124,15 +126,41 @@ jobs:
     # la stessa build di ogni push su main: artefatto «plico-flatpak»
     uses: ./.github/workflows/flatpak.yml
 
+  arch:
+    name: Pacchetto Arch
+    # solo sui tag: il PKGBUILD clona da GitHub il tag v<versione> firmato e
+    # ne verifica la firma (?signed + validpgpkeys), come ogni utente AUR
+    needs: verify
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    steps:
+      - uses: actions/checkout@v5
+
+      # poi check() (l'intera suite), namcap, installazione di prova e avvio
+      - name: PKGBUILD e pacchetto Arch
+        run: |
+          scripts/prepare-aur.sh
+          scripts/build-arch.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch
+          include-hidden-files: true   # .SRCINFO
+          path: |
+            dist/*.pkg.tar.zst
+            build/aur/PKGBUILD
+            build/aur/.SRCINFO
+          retention-days: 14
+
   publish:
     name: Release su GitHub
-    needs: [verify, appimage, flatpak]
+    needs: [verify, appimage, flatpak, arch]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     # come in OllaDesk: l'ultimo punto di controllo prima di pubblicare. Con
     # «Required reviewers» nelle impostazioni dell'environment, il job aspetta
-    # l'approvazione del maintainer. Nessun secret: la CI non firma niente
-    # (sopra); servirà AUR_SSH_PRIVATE_KEY quando ci sarà il PKGBUILD.
+    # l'approvazione del maintainer. La CI non firma niente (sopra); l'unico
+    # secret è AUR_SSH_PRIVATE_KEY, per pubblicare il PKGBUILD sull'AUR.
     environment: release
     permissions:
       contents: write        # creare la release e caricare i file
@@ -151,17 +179,27 @@ jobs:
           name: plico-flatpak
           path: flatpak-bundle/
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: arch
+          path: arch/
+
       - name: Nomi e SHA256SUMS
         run: |
           version="${GITHUB_REF_NAME#v}"
           mv flatpak-bundle/plico.flatpak "dist/Plico-${version}-x86_64.flatpak"
+          cp arch/dist/*.pkg.tar.zst dist/
+          mkdir -p build/aur
+          cp arch/build/aur/PKGBUILD arch/build/aur/.SRCINFO build/aur/
           cd dist
-          sha256sum Plico-* > SHA256SUMS
+          sha256sum Plico-* plico-*.pkg.tar.zst > SHA256SUMS
           cat SHA256SUMS | tee -a "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/attest-build-provenance@v2
         with:
-          subject-path: dist/Plico-*
+          subject-path: |
+            dist/Plico-*
+            dist/plico-*.pkg.tar.zst
 
       - name: Allega alla release
         env:
@@ -177,3 +215,13 @@ jobs:
             gh release create "$tag" dist/* --verify-tag --title "Plico ${tag#v}" \
               --notes-file "$RUNNER_TEMP/note.md"
           fi
+
+      - name: Pubblica su AUR
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          if [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
+            echo "::notice::secret AUR_SSH_PRIVATE_KEY assente: pubblicazione su AUR saltata"
+            exit 0
+          fi
+          scripts/publish-aur.sh

@@ -50,9 +50,10 @@ plico/
 │                             #   fontconfig-local.conf, screenshots/
 ├── packaging/
 │   ├── appimage/             # AppRun, requirements, trim-qt, check-glibc, collaudo (§11 bis)
+│   ├── arch/PKGBUILD.in      # il modello del PKGBUILD dell'AUR (§11 bis)
 │   ├── common/launcher.py    # l'avvio dei pacchetti (AppImage, poi .deb e AUR)
 │   └── release-notes/        # X.Y.Z.md: la descrizione di ogni release GitHub
-├── scripts/                  # build-appimage.sh, release-notes.sh
+├── scripts/                  # build-appimage.sh, *-aur.sh, build-arch.sh, release, chiavi
 ├── tools/
 │   ├── screenshots.py        # gli screenshot dello store, dall'app vera e offscreen
 │   └── flathub_manifest.py   # il manifest per Flathub da un tag firmato (§11)
@@ -2190,7 +2191,29 @@ non SSH come per `v0.1.0`…`v0.1.3`: il PKGBUILD dell'AUR verifica il tag con
 `user.signingkey` con il `!` (solo quella sottochiave); `allowed_signers` resta
 per i tag vecchi.
 
-Prossimi: PKGBUILD per l'AUR (con `validpgpkeys` = la primaria) e `.deb`.
+**AUR** (`packaging/arch/PKGBUILD.in`, `scripts/prepare-aur.sh`,
+`build-arch.sh`, `publish-aur.sh`, ripresi da OllaDesk). Il PKGBUILD clona il
+tag `v$pkgver` con `?signed` e `validpgpkeys` = la primaria. Tutte le
+dipendenze sono dei repository ufficiali (`pyside6`, `python-pymupdf`,
+`python-pikepdf`, e quelle di pyHanko: `asn1crypto`, `tzlocal`, `aiohttp`,
+`cryptography`, `lxml`, `oscrypto`, `certifi`) tranne tre pacchetti Python
+puri che Arch non ha: `pyhanko`, `pyhanko-certvalidator`, `uritools`. Scelta
+del 20 ottobre 2026 (strada «B»): le loro wheel, alle stesse versioni e SHA-256
+del lock dell'AppImage (`tests/test_packaging.py` lo controlla), stanno in
+`/usr/share/plico/vendor`, e `/usr/bin/plico` mette quella cartella nel
+`PYTHONPATH`. Non in `launcher.py`: il launcher viene dal tag, e un tag vecchio
+non sa di `vendor/`. L'alternativa era dipendere da `python-pyhanko`
+dell'AUR, di un altro maintainer, con altri quattro pacchetti solo-AUR per
+funzioni che Plico non usa. I dati dell'OCR sono `optdepends`
+(`tesseract-data-*`, in `/usr/share/tessdata`, dove `ocr.tessdata_dir()` li
+cerca già). `check()` fa girare l'intera suite. In `release.yml` il job
+`arch` (container `archlinux:base-devel`, solo sui tag) costruisce e prova il
+pacchetto; `publish` lo allega alla release e, con il secret
+`AUR_SSH_PRIVATE_KEY` nell'environment `release`, pubblica PKGBUILD e
+`.SRCINFO` sull'AUR (`ssh://aur@aur.archlinux.org/plico.git`, chiave host
+fissata in `publish-aur.sh`).
+
+Prossimo: `.deb`.
 
 ## 12. Cosa manca
 

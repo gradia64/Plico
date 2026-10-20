@@ -415,6 +415,10 @@ per Linux x86_64, costruiti dal tag firmato:
 - **Flatpak** (`Plico-X.Y.Z-x86_64.flatpak`): `flatpak install --user
   Plico-X.Y.Z-x86_64.flatpak` scarica da Flathub il runtime KDE che gli serve.
   Non si aggiorna da solo: la versione nuova si installa allo stesso modo.
+- **Arch Linux**: il pacchetto `plico` dell'AUR (`paru -S plico`, o un altro
+  helper) si costruisce dal tag firmato, che `makepkg` verifica con la chiave
+  di rilascio; il pacchetto già costruito è anche tra gli allegati della
+  release (`pacman -U plico-X.Y.Z-1-any.pkg.tar.zst`).
 
 Accanto ci sono `SHA256SUMS` e, per ogni file, un'attestazione di
 provenienza di GitHub: `gh attestation verify Plico-X.Y.Z-x86_64.AppImage -R
