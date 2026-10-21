@@ -578,9 +578,9 @@ A ogni rilascio:
 #    metainfo, note in packaging/release-notes/X.Y.Z.md, CHANGELOG.md;
 #    commit e push
 # 2. tag firmato, verificato, pubblicato: il resto lo fa release.yml
-git tag -s v0.1.4 -m "Plico 0.1.4"
-scripts/verify-tag.sh v0.1.4
-git push origin v0.1.4
+git tag -s v0.1.5 -m "Plico 0.1.5"
+scripts/verify-tag.sh v0.1.5
+git push origin v0.1.5
 # 3. a mano, prima di un tag, la stessa build senza pubblicare
 gh workflow run release.yml --ref main
 ```

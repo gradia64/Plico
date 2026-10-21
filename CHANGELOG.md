@@ -6,13 +6,14 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Non rilasciato]
 
+## [0.1.5] — 2026-10-21
+
 ### Aggiunto
 
-- Pacchetto **Debian e Ubuntu** (`plico_X.Y.Z_amd64.deb`): lo stesso
+- Pacchetto **Debian e Ubuntu** (`plico_0.1.5_amd64.deb`): lo stesso
   contenuto dell'AppImage, installato in `/opt/plico` con il menu e l'icona.
 - Pacchetto **Arch Linux** `plico` nell'AUR, costruito dal tag firmato; il
-  pacchetto già costruito è anche tra gli allegati della release. È già
-  pubblicato per la 0.1.4.
+  pacchetto già costruito è anche tra gli allegati della release.
 - Galleria di screenshot in cima ai README.
 
 ### Modificato
@@ -119,7 +120,8 @@ La prima versione.
 - Annulla/ripristina per ogni modifica, rendering asincrono, integrazione
   desktop KDE, interfaccia in cinque lingue, pacchetto Flatpak.
 
-[Non rilasciato]: https://github.com/gradia64/Plico/compare/v0.1.4...HEAD
+[Non rilasciato]: https://github.com/gradia64/Plico/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/gradia64/Plico/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/gradia64/Plico/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/gradia64/Plico/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/gradia64/Plico/compare/v0.1.1...v0.1.2

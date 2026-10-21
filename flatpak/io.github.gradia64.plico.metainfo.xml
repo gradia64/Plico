@@ -83,7 +83,7 @@
       <caption xml:lang="es">Un documento con sus páginas, ajustado al ancho de la ventana</caption>
       <caption xml:lang="fr">Un document et ses pages, ajusté à la largeur de la fenêtre</caption>
       <caption xml:lang="de">Ein Dokument mit seinen Seiten, an die Fensterbreite angepasst</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.4/flatpak/screenshots/main.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.5/flatpak/screenshots/main.png</image>
     </screenshot>
     <screenshot>
       <caption>Personal data marked for erasure: on saving it leaves the file</caption>
@@ -91,7 +91,7 @@
       <caption xml:lang="es">Datos personales marcados para borrar: al guardar salen del archivo</caption>
       <caption xml:lang="fr">Données personnelles marquées pour l'effacement : à l'enregistrement, elles quittent le fichier</caption>
       <caption xml:lang="de">Persönliche Daten zum Löschen markiert: Beim Speichern verlassen sie die Datei</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.4/flatpak/screenshots/redact.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.5/flatpak/screenshots/redact.png</image>
     </screenshot>
     <screenshot>
       <caption>Filling in a PDF form, on the page or in the side panel</caption>
@@ -99,7 +99,7 @@
       <caption xml:lang="es">Rellenar un formulario PDF, en la página o en el panel lateral</caption>
       <caption xml:lang="fr">Remplir un formulaire PDF, sur la page ou dans le panneau latéral</caption>
       <caption xml:lang="de">Ein PDF-Formular ausfüllen, auf der Seite oder in der Seitenleiste</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.4/flatpak/screenshots/form.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.5/flatpak/screenshots/form.png</image>
     </screenshot>
     <screenshot>
       <caption>Correcting a line of text where it stands</caption>
@@ -107,7 +107,7 @@
       <caption xml:lang="es">Corregir una línea de texto en su sitio</caption>
       <caption xml:lang="fr">Corriger une ligne de texte là où elle se trouve</caption>
       <caption xml:lang="de">Eine Textzeile direkt an ihrer Stelle korrigieren</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.4/flatpak/screenshots/edit.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.5/flatpak/screenshots/edit.png</image>
     </screenshot>
     <screenshot>
       <caption>Searching the document: every match highlighted, the current one in orange</caption>
@@ -115,7 +115,7 @@
       <caption xml:lang="es">Buscar en el documento: cada coincidencia resaltada, la actual en naranja</caption>
       <caption xml:lang="fr">Rechercher dans le document : chaque occurrence surlignée, l'occurrence courante en orange</caption>
       <caption xml:lang="de">Im Dokument suchen: jeder Treffer hervorgehoben, der aktuelle in Orange</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.4/flatpak/screenshots/search.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.5/flatpak/screenshots/search.png</image>
     </screenshot>
   </screenshots>
 
@@ -209,6 +209,37 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.1.5" date="2026-10-21">
+      <description>
+        <p>A new icon, packages for Debian, Ubuntu and Arch Linux, and a security update of the bundled certificate authorities.</p>
+        <p xml:lang="it">Un'icona nuova, pacchetti per Debian, Ubuntu e Arch Linux, e un aggiornamento di sicurezza delle autorità di certificazione incluse.</p>
+        <p xml:lang="es">Un icono nuevo, paquetes para Debian, Ubuntu y Arch Linux, y una actualización de seguridad de las autoridades de certificación incluidas.</p>
+        <p xml:lang="fr">Une nouvelle icône, des paquets pour Debian, Ubuntu et Arch Linux, et une mise à jour de sécurité des autorités de certification incluses.</p>
+        <p xml:lang="de">Ein neues Symbol, Pakete für Debian, Ubuntu und Arch Linux sowie ein Sicherheitsupdate der mitgelieferten Zertifizierungsstellen.</p>
+        <ul>
+          <li>A new icon: two sheets and a pencil on a midnight-blue tile</li>
+          <li xml:lang="it">Un'icona nuova: due fogli e una matita su una piastra blu notte</li>
+          <li xml:lang="es">Un icono nuevo: dos hojas y un lápiz sobre una placa azul noche</li>
+          <li xml:lang="fr">Une nouvelle icône : deux feuilles et un crayon sur une plaque bleu nuit</li>
+          <li xml:lang="de">Ein neues Symbol: zwei Blätter und ein Stift auf einer nachtblauen Kachel</li>
+          <li>A .deb package for Debian and Ubuntu, installed in /opt/plico</li>
+          <li xml:lang="it">Un pacchetto .deb per Debian e Ubuntu, installato in /opt/plico</li>
+          <li xml:lang="es">Un paquete .deb para Debian y Ubuntu, instalado en /opt/plico</li>
+          <li xml:lang="fr">Un paquet .deb pour Debian et Ubuntu, installé dans /opt/plico</li>
+          <li xml:lang="de">Ein .deb-Paket für Debian und Ubuntu, installiert in /opt/plico</li>
+          <li>The plico package in the AUR, built from the signed tag</li>
+          <li xml:lang="it">Il pacchetto plico nell'AUR, costruito dal tag firmato</li>
+          <li xml:lang="es">El paquete plico en el AUR, construido a partir de la etiqueta firmada</li>
+          <li xml:lang="fr">Le paquet plico dans l'AUR, construit à partir de l'étiquette signée</li>
+          <li xml:lang="de">Das Paket plico im AUR, gebaut aus dem signierten Tag</li>
+          <li>The certificate authorities used for signatures no longer trust the compromised emSign roots</li>
+          <li xml:lang="it">Le autorità di certificazione usate per le firme non si fidano più delle radici emSign compromesse</li>
+          <li xml:lang="es">Las autoridades de certificación usadas para las firmas ya no confían en las raíces emSign comprometidas</li>
+          <li xml:lang="fr">Les autorités de certification utilisées pour les signatures ne font plus confiance aux racines emSign compromises</li>
+          <li xml:lang="de">Die für Signaturen verwendeten Zertifizierungsstellen vertrauen den kompromittierten emSign-Wurzeln nicht mehr</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.4" date="2026-10-20">
       <description>
         <p>The first release with ready-to-use packages: an AppImage and a Flatpak bundle, attached to the GitHub release. The application is the same as 0.1.3.</p>
