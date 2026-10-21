@@ -19,6 +19,13 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
 
 - Icona nuova: due fogli e una matita su una piastra blu notte.
 
+### Sicurezza
+
+- AppImage, `.deb` e Flatpak includono `certifi` 2026.10.19: la versione
+  precedente si fidava delle radici emSign, le cui chiavi intermedie sono
+  state compromesse
+  ([GHSA-6q48-6c7w-9gw2](https://github.com/advisories/GHSA-6q48-6c7w-9gw2)).
+
 ## [0.1.4] — 2026-10-20
 
 La prima release con i pacchetti pronti da scaricare. L'applicazione è la
