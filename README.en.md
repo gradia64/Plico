@@ -540,7 +540,9 @@ a provenance attestation. Before tagging, check that:
   in the last `<release>` of the metainfo, with the screenshots pinned to the
   tag;
 - the notes exist in `packaging/release-notes/X.Y.Z.md` (`## …` sections and
-  the "Full Changelog" link): they are the release description.
+  the "Full Changelog" link): they are the release description;
+- in `CHANGELOG.md` the "Non rilasciato" (unreleased) entries have moved
+  under the new version, with its date and comparison link.
 
 Tags are signed with the **Plico release key**, an OpenPGP key that never
 leaves the maintainer's machine: primary
@@ -563,7 +565,8 @@ At every release:
 
 ```
 # 1. version, <release> and screenshot URLs (…/Plico/vX.Y.Z/…) in the
-#    metainfo, notes in packaging/release-notes/X.Y.Z.md; commit and push
+#    metainfo, notes in packaging/release-notes/X.Y.Z.md, CHANGELOG.md;
+#    commit and push
 # 2. signed, verified, published tag: release.yml does the rest
 git tag -s v0.1.4 -m "Plico 0.1.4"
 scripts/verify-tag.sh v0.1.4

@@ -44,6 +44,7 @@ plico/
 ├── pyproject.toml            # packaging, dipendenze, ruff/mypy/pytest, data-files
 ├── README.md                 # presentazione per l'utente (in italiano)
 ├── README.{en,fr,de,es}.md   # le stesse, nelle altre quattro lingue
+├── CHANGELOG.md              # modifiche per versione (Keep a Changelog, in italiano)
 ├── CONTESTO.md               # questo file
 ├── LICENSE                   # GPL v3
 ├── flatpak/                  # packaging: manifest, metadati AppStream, .desktop, icona,

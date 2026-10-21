@@ -549,7 +549,9 @@ un'attestazione di provenienza. Prima del tag controlla che:
 - la versione sia la stessa in `pyproject.toml`, in `src/plico/__init__.py` e
   nell'ultima `<release>` della metainfo, con gli screenshot fissati al tag;
 - ci siano le note in `packaging/release-notes/X.Y.Z.md` (sezioni `## …` e il
-  link «Full Changelog»): sono la descrizione della release.
+  link «Full Changelog»): sono la descrizione della release;
+- in `CHANGELOG.md` le voci di «Non rilasciato» siano passate sotto la
+  versione nuova, con la data e il link di confronto.
 
 I tag si firmano con la **chiave di rilascio di Plico**, una chiave OpenPGP
 che non esce dalla macchina del maintainer: primaria
@@ -573,7 +575,8 @@ A ogni rilascio:
 
 ```bash
 # 1. versione, <release> e URL degli screenshot (…/Plico/vX.Y.Z/…) nella
-#    metainfo, note in packaging/release-notes/X.Y.Z.md; commit e push
+#    metainfo, note in packaging/release-notes/X.Y.Z.md, CHANGELOG.md;
+#    commit e push
 # 2. tag firmato, verificato, pubblicato: il resto lo fa release.yml
 git tag -s v0.1.4 -m "Plico 0.1.4"
 scripts/verify-tag.sh v0.1.4
