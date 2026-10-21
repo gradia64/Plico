@@ -15,6 +15,10 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
   pubblicato per la 0.1.4.
 - Galleria di screenshot in cima ai README.
 
+### Modificato
+
+- Icona nuova: due fogli e una matita su una piastra blu notte.
+
 ## [0.1.4] — 2026-10-20
 
 La prima release con i pacchetti pronti da scaricare. L'applicazione è la

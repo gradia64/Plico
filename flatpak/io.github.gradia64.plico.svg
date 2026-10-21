@@ -1,28 +1,56 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <title>Plico</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#173a7a"/>
+      <stop offset="1" stop-color="#06183a"/>
+    </linearGradient>
+    <linearGradient id="back" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3fa2ff"/>
+      <stop offset="1" stop-color="#0a4fd0"/>
+    </linearGradient>
+    <linearGradient id="page" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#d4e3fa"/>
+    </linearGradient>
+    <linearGradient id="fold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5cc2ff"/>
+      <stop offset="1" stop-color="#1a6ef0"/>
+    </linearGradient>
+  </defs>
 
-  <!-- Pagina con l'angolo piegato: nessun testo, leggibile anche a 16 px -->
-  <path
-    d="M124 64 H316 L388 136 V448 H124 Z"
-    fill="#ffffff"
-    stroke="#17365f"
-    stroke-width="22"
-    stroke-linejoin="round"
-  />
-  <path
-    d="M316 64 H388 V136 Z"
-    fill="#7aa9e0"
-    stroke="#17365f"
-    stroke-width="22"
-    stroke-linejoin="round"
-  />
+  <!-- Piastra -->
+  <rect x="24" y="24" width="464" height="464" rx="104" fill="url(#bg)"/>
 
-  <!-- Righe di testo -->
-  <g stroke="#6f8bab" stroke-width="20" stroke-linecap="round">
-    <path d="M172 214 H340" />
-    <path d="M172 270 H340" />
-    <path d="M172 326 H340" />
-    <path d="M172 382 H286" />
+  <!-- Il plico: due fogli, quello dietro in blu -->
+  <g transform="rotate(-14 256 270)">
+    <rect x="118" y="132" width="240" height="306" rx="22" fill="url(#back)"/>
+  </g>
+  <g transform="rotate(-8 256 256)">
+    <path d="M150 92 H312 L382 162 V408 Q382 426 364 426 H168 Q150 426 150 408 V110 Q150 92 168 92 Z"
+          fill="#041026" opacity="0.35" transform="translate(8 10)"/>
+    <path d="M168 92 H312 L382 162 V408 Q382 426 364 426 H168 Q150 426 150 408 V110 Q150 92 168 92 Z"
+          fill="url(#page)"/>
+    <path d="M312 92 L382 162 H330 Q312 162 312 144 Z" fill="url(#fold)"/>
+    <!-- Righe di testo -->
+    <g stroke="#8fb2ec" stroke-width="20" stroke-linecap="round">
+      <path d="M190 196 H286"/>
+      <path d="M190 246 H340"/>
+      <path d="M190 296 H340"/>
+      <path d="M190 346 H296"/>
+    </g>
+  </g>
+
+  <!-- Matita -->
+  <g transform="translate(268 384) rotate(-48)">
+    <path d="M0 0 L56 -25 H262 Q284 -25 284 -3 V3 Q284 25 262 25 H56 Z"
+          fill="#06132e" stroke="#06132e" stroke-width="14" stroke-linejoin="round"/>
+    <path d="M0 0 L56 -24 V24 Z" fill="#ffffff"/>
+    <path d="M0 0 L20 -8.6 V8.6 Z" fill="#0a55d8"/>
+    <rect x="56" y="-24" width="168" height="24" fill="#38bdff"/>
+    <rect x="56" y="0" width="168" height="24" fill="#0a62e8"/>
+    <rect x="224" y="-24" width="16" height="48" fill="#ffffff"/>
+    <path d="M240 -24 H262 Q282 -24 282 -4 V4 Q282 24 262 24 H240 Z" fill="#82e3ff"/>
   </g>
 </svg>
