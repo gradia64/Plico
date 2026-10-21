@@ -117,7 +117,7 @@ def test_a_compiled_catalog_is_loaded_and_translates(qapp, tmp_path, monkeypatch
     """The whole way round: a .ts with a translation becomes a .qm that is used."""
     tool = shutil.which("lrelease") or shutil.which("pyside6-lrelease")
     if tool is None:
-        pytest.skip("lrelease sta solo nell'ambiente di build di Qt (vedi CONTESTO §11)")
+        pytest.skip("lrelease sta solo nell'ambiente di build di Qt")
 
     source = tmp_path / "plico_it.ts"
     source.write_text(

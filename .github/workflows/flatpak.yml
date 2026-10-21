@@ -83,7 +83,7 @@ jobs:
 
       - name: Lint the build
         # Known so far: the screenshot and icon mirroring errors, which concern Flathub's own media hosting and stay
-        # even with --mirror-screenshots-url (see CONTESTO.md §11).
+        # even with --mirror-screenshots-url.
         continue-on-error: true
         run: |
           flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo "$WORK/repo"

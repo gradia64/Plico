@@ -83,7 +83,7 @@ def test_placeholders_and_accelerators_survive(code):
 def _compiled(tmp_path: Path, code: str) -> Path:
     tool = shutil.which("lrelease") or shutil.which("pyside6-lrelease")
     if tool is None:
-        pytest.skip("lrelease sta solo nell'ambiente di build di Qt (vedi CONTESTO §11)")
+        pytest.skip("lrelease sta solo nell'ambiente di build di Qt")
     target = tmp_path / f"plico_{code}.qm"
     subprocess.run(
         [tool, str(TRANSLATIONS / f"plico_{code}.ts"), "-qm", str(target)],

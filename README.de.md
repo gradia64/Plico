@@ -634,8 +634,9 @@ kennt, bekommt Englisch. Die Strings sind im Code auf Italienisch; die
 Kataloge der anderen Sprachen liegen in
 `src/plico/translations/plico_{en,es,fr,de}.ts` und werden mit Qt Linguist
 oder einem Texteditor bearbeitet. Eine neue Sprache ist eine weitere Datei
-`plico_xx.ts` (CONTESTO.md, «Die Sprachen», sagt, was zusammen aktualisiert
-wird).
+`plico_xx.ts`: Man erzeugt sie mit `pylupdate6`, übersetzt sie und trägt sie
+in `LANGUAGES` in `tests/test_translations.py`, in die `<languages>` des
+Metainfo und in die `[xx]`-Einträge der `.desktop`-Datei ein.
 
 `pylupdate6` kommt mit PyQt6 (`pip install PyQt6` im Venv reicht, nur das
 Werkzeug wird gebraucht): ohne es überspringt `tests/test_i18n.py` genau die

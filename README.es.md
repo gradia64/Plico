@@ -603,7 +603,9 @@ sigue el idioma del sistema, y un idioma que no conoce recibe el inglés. Las
 cadenas están en italiano en el código; los catálogos de los demás idiomas
 están en `src/plico/translations/plico_{en,es,fr,de}.ts` y se modifican con
 Qt Linguist o con un editor de texto. Un idioma nuevo es un archivo
-`plico_xx.ts` más (CONTESTO.md, «Los idiomas», dice qué actualizar junto).
+`plico_xx.ts` más: se crea con `pylupdate6`, se traduce y se añade a
+`LANGUAGES` en `tests/test_translations.py`, a los `<languages>` del metainfo
+y a las entradas `[xx]` del `.desktop`.
 
 `pylupdate6` viene con PyQt6 (`pip install PyQt6` en el venv basta, solo se
 necesita la herramienta): sin ella, `tests/test_i18n.py` se salta justo la

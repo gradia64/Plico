@@ -576,7 +576,7 @@ gh workflow run release.yml --ref main
 ```
 
 Plico is not on Flathub: its generative AI policy rules out manifests written
-with AI assistance (see CONTESTO).
+with AI assistance.
 
 ## Development
 
@@ -610,8 +610,10 @@ Plico speaks **Italian**, **English**, **Spanish**, **French** and **German**:
 it follows the system language, and a language it does not know gets English.
 Strings are in Italian in the code; the other languages' catalogs live in
 `src/plico/translations/plico_{en,es,fr,de}.ts` and are edited with Qt
-Linguist or a text editor. A new language is one more `plico_xx.ts` file
-(CONTESTO.md, "Languages", says what to update together).
+Linguist or a text editor. A new language is one more `plico_xx.ts`
+file: create it with `pylupdate6`, translate it, and add it to `LANGUAGES` in
+`tests/test_translations.py`, to the metainfo `<languages>` and to the `[xx]`
+entries of the `.desktop` file.
 
 `pylupdate6` ships with PyQt6 (`pip install PyQt6` in the venv is enough,
 only the tool is needed): without it, `tests/test_i18n.py` skips exactly

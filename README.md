@@ -586,7 +586,7 @@ gh workflow run release.yml --ref main
 ```
 
 Plico non è su Flathub: la sua politica sull'IA generativa esclude manifest
-scritti con l'assistenza dell'IA (vedi CONTESTO).
+scritti con l'assistenza dell'IA.
 
 ## Sviluppo
 
@@ -620,7 +620,9 @@ Plico parla **italiano**, **inglese**, **spagnolo**, **francese** e
 l'inglese. Le stringhe sono in italiano nel codice; i cataloghi delle altre
 lingue stanno in `src/plico/translations/plico_{en,es,fr,de}.ts` e si
 modificano con Qt Linguist o con un editor di testo. Una lingua nuova è un file
-`plico_xx.ts` in più (CONTESTO.md, «Le lingue», dice cosa aggiornare insieme).
+`plico_xx.ts` in più: lo si crea con `pylupdate6`, si traduce, e lo si
+aggiunge a `LANGUAGES` in `tests/test_translations.py`, alle `<languages>`
+della metainfo e alle voci `[xx]` del `.desktop`.
 
 `pylupdate6` arriva con PyQt6 (`pip install PyQt6` nel venv basta, serve solo
 lo strumento): senza, `tests/test_i18n.py` salta proprio il controllo che

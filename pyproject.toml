@@ -82,7 +82,7 @@ testpaths = ["tests"]
 # both end up with the launcher, the AppStream metadata and the icon in the
 # right place, without duplicating install commands.
 # The catalogs a translator edits travel with the package: the compiled `.qm`
-# files are made at packaging time (see CONTESTO §11), the `.ts` are the source.
+# files are made by each package build (lrelease), the `.ts` are the source.
 [tool.setuptools.package-data]
 plico = ["translations/*.ts", "help/*/index.html"]
 

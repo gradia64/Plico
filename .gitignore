@@ -22,3 +22,6 @@ venv/
 build-dir/
 repo/
 *.flatpak
+
+# Guida di lavoro per chi riprende il progetto: resta locale
+CONTESTO.md

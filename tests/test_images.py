@@ -21,7 +21,7 @@ A4 = (595.0, 842.0)
 @pytest.fixture(scope="module")
 def qapp():
     # A QApplication, never a QCoreApplication: the instance outlives this
-    # module, and test_integration.py needs widgets (see CONTESTO §10).
+    # module, and test_integration.py needs widgets.
     return QApplication.instance() or QApplication([])
 
 
