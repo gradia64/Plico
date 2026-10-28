@@ -74,6 +74,16 @@ warn_unused_configs = true
 # imported as `pymupdf`), so missing stubs must not fail the run.
 ignore_missing_imports = true
 
+# Plico does not use PyQt6: CI installs it only for pylupdate6, and mypy reaches
+# it through a dependency (PIL.ImageQt). The 6.12.0 stubs do not even parse
+# ("'/' parameter must appear before '*' parameter" in QtGui.pyi), which stops
+# the whole run. They are .pyi, which mypy reads even when told to skip unless
+# follow_imports_for_stubs says otherwise.
+[[tool.mypy.overrides]]
+module = ["PyQt6.*"]
+follow_imports = "skip"
+follow_imports_for_stubs = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
