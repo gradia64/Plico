@@ -40,6 +40,10 @@ Komprimieren nutzt.
 - **Seiten extrahieren** (teilen) in eine neue Datei mit einem Bereich wie
   `1-3,5,8` — die getippte Reihenfolge wird beibehalten, es dient also auch
   zum Neuordnen
+- **Suchen** (*Bearbeiten → Suchen…*, `Strg+F`): ein Balken unter der Seite
+  hebt alle Treffer hervor, `Eingabe`/`F3` springt zum nächsten, `Umschalt+F3`
+  zum vorherigen, `Esc` schließt ihn. Er findet auch Wörter, die die OCR
+  gerade erkannt hat, noch vor dem Speichern
 - **Einstellungen** (*Einstellungen → Plico konfigurieren…*, `Ctrl+Umschalt+,`):
   die Sprache der Oberfläche — automatisch, also die des Systems, oder eine von
   Italienisch, Englisch, Französisch, Deutsch und Spanisch; bei einer
@@ -48,6 +52,18 @@ Komprimieren nutzt.
   Benachrichtigungsbereich minimieren statt zu schließen: beendet wird über
   *Datei → Beenden* (`Ctrl+Q`) oder «Beenden» im Menü des Icons. Die Sprache
   ändert sich beim nächsten Start
+- **Plico-Handbuch** (*Hilfe → Plico-Handbuch*, `F1`) auf Italienisch,
+  Englisch, Französisch, Deutsch und Spanisch, in der Sprache der Oberfläche:
+  es öffnet sich in einem Plico-Fenster, auch ohne Netz
+- **Aktualisierungen** (*Hilfe → Nach Aktualisierungen suchen…*): fragt
+  GitHub, ob eine neuere Version erschienen ist, und öffnet deren Seite. In den
+  *Einstellungen* lässt sich eine automatische Prüfung einschalten, höchstens
+  einmal täglich, die eine neue Version mit einem Hinweis über der Seite und
+  dem Eintrag *Hilfe → Plico herunterladen…* meldet. Sie ist **aus**, bis man
+  sie einschaltet: ohne sie verbindet sich Plico mit nichts. Sie ist für die
+  Fälle gedacht, in denen nichts Plico aktualisiert (AppImage, `.deb`, pip);
+  beim AUR-Paket übernimmt das die Paketverwaltung, und das Flatpak, das keinen
+  Netzzugang hat, öffnet die Seite mit den Versionen
 - **Rückgängig/Wiederholen** komplett, gestützt auf `QUndoStack`
 - **Asynchrones Rendering** in einem separaten Thread — die Oberfläche
   blockiert nie

@@ -37,6 +37,10 @@ comprimirlos.
 - **Extraer páginas** (dividir) en un archivo nuevo con un rango como
   `1-3,5,8` — el orden escrito se conserva, así que también sirve para
   reordenar
+- **Buscar** (*Editar → Buscar…*, `Ctrl+F`): una barra bajo la página resalta
+  todas las coincidencias, `Intro`/`F3` pasa a la siguiente, `Mayús+F3` a la
+  anterior, `Esc` cierra. También encuentra las palabras recién reconocidas
+  por el OCR, antes de guardar
 - **Ajustes** (*Ajustes → Configurar Plico…*, `Ctrl+Mayús+,`): el idioma de
   la interfaz — automático, es decir el del sistema, o uno entre italiano,
   inglés, francés, alemán y español; con una lengua de sistema que Plico no
@@ -44,6 +48,17 @@ comprimirlos.
   icono también se puede hacer que la X reduzca Plico al área de notificación
   en lugar de cerrarlo: se sale desde *Archivo → Salir* (`Ctrl+Q`) o desde
   «Salir» en el menú del icono. El idioma cambia en el próximo inicio
+- **Manual de Plico** (*Ayuda → Manual de Plico*, `F1`) en italiano, inglés,
+  francés, alemán y español, en el idioma de la interfaz: se lee en una
+  ventana de Plico, también sin red
+- **Actualizaciones** (*Ayuda → Buscar actualizaciones…*): pregunta a GitHub
+  si ha salido una versión más reciente y abre su página. En *Ajustes* se
+  puede activar una comprobación automática, como máximo una vez al día, que
+  avisa de la versión nueva con un aviso sobre la página y la entrada *Ayuda →
+  Descargar Plico…*. Está **desactivada** hasta que se active: sin ella, Plico
+  no se conecta a nada. Sirve donde nadie actualiza Plico (AppImage, `.deb`,
+  pip); con el paquete del AUR se encarga el gestor de paquetes, y el Flatpak,
+  que no tiene acceso a la red, abre la página de versiones
 - **Deshacer/Rehacer** completo, respaldado por `QUndoStack`
 - **Renderizado asíncrono** en un hilo separado — la interfaz nunca se bloquea
 - **Renderizado perezoso**: solo se renderizan las páginas visibles, no todo

@@ -52,6 +52,14 @@ comprimerli.
 - **Guida** (*Aiuto → Guida di Plico*, `F1`) in italiano, inglese, francese,
   tedesco e spagnolo, nella lingua dell'interfaccia: si legge in una finestra
   di Plico, anche senza rete
+- **Aggiornamenti** (*Aiuto → Cerca aggiornamenti…*): chiede a GitHub se è
+  uscita una versione più recente e apre la sua pagina. In *Impostazioni* si
+  può accendere un controllo automatico, al massimo una volta al giorno, che
+  annuncia la versione nuova con un avviso sopra la pagina e la voce *Aiuto →
+  Scarica Plico…*. È **spento** finché non lo si accende: senza, Plico non si
+  collega a niente. Serve dove nessuno aggiorna Plico (AppImage, `.deb`, pip);
+  con il pacchetto dell'AUR se ne occupa il gestore dei pacchetti, e il
+  Flatpak, che non ha accesso alla rete, apre la pagina delle versioni
 - **Undo/Redo** completo grazie a `QUndoStack`
 - **Rendering asincrono** in un thread separato — l'UI non si blocca mai
 - **Rendering lazy**: si renderizzano solo le pagine visibili, non l'intero

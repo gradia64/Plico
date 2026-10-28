@@ -39,6 +39,10 @@ Un véritable éditeur PDF natif pour Linux, construit avec **Qt6** et
 - **Extraire des pages** (diviser) dans un nouveau fichier avec une plage
   comme `1-3,5,8` — l'ordre tapé est conservé, donc ça sert aussi à
   réordonner
+- **Rechercher** (*Édition → Rechercher…*, `Ctrl+F`) : une barre sous la page
+  met en évidence toutes les occurrences, `Entrée`/`F3` passe à la suivante,
+  `Maj+F3` à la précédente, `Échap` ferme. Il trouve aussi les mots
+  fraîchement reconnus par l'OCR, avant la sauvegarde
 - **Paramètres** (*Paramètres → Configurer Plico…*, `Ctrl+Maj+,`) : la langue
   de l'interface — automatique, c'est-à-dire celle du système, ou l'une parmi
   italien, anglais, français, allemand et espagnol ; avec une langue du
@@ -47,6 +51,18 @@ Un véritable éditeur PDF natif pour Linux, construit avec **Qt6** et
   la zone de notification au lieu de le fermer : on quitte depuis
   *Fichier → Quitter* (`Ctrl+Q`) ou depuis « Quitter » dans le menu de
   l'icône. La langue change au prochain démarrage
+- **Manuel de Plico** (*Aide → Manuel de Plico*, `F1`) en italien, anglais,
+  français, allemand et espagnol, dans la langue de l'interface : il s'ouvre
+  dans une fenêtre de Plico, hors ligne aussi
+- **Mises à jour** (*Aide → Rechercher les mises à jour…*) : demande à GitHub
+  si une version plus récente est sortie et ouvre sa page. Dans *Paramètres*,
+  on peut activer une vérification automatique, au plus une fois par jour, qui
+  signale la nouvelle version par un avis au-dessus de la page et l'entrée
+  *Aide → Télécharger Plico…*. Elle est **désactivée** tant qu'on ne l'active
+  pas : sans elle, Plico ne se connecte à rien. Elle sert là où rien ne met
+  Plico à jour (AppImage, `.deb`, pip) ; avec le paquet de l'AUR s'en occupe le
+  gestionnaire de paquets, et le Flatpak, qui n'a pas accès au réseau, ouvre la
+  page des versions
 - **Annuler/Refaire** complet, grâce à `QUndoStack`
 - **Rendu asynchrone** dans un thread séparé — l'interface ne se bloque jamais
 - **Rendu paresseux** : seules les pages visibles sont rendues, pas tout le

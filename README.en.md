@@ -50,6 +50,14 @@ A true native PDF editor for Linux, built with **Qt6** and **PySide6**, using
 - **Handbook** (_Help → Plico Handbook_, `F1`) in Italian, English, French,
   German and Spanish, in the interface language: it opens in a Plico window,
   offline too
+- **Updates** (_Help → Check for Updates…_): asks GitHub whether a newer
+  version is out and opens its page. In _Settings_ you can switch on an
+  automatic check, at most once a day, which reports a new version with a
+  notice above the page and the _Help → Download Plico…_ entry. It is **off**
+  until you switch it on: without it, Plico connects to nothing. It is for
+  where nothing updates Plico (AppImage, `.deb`, pip); with the AUR package
+  the package manager handles it, and the Flatpak, which has no network
+  access, opens the releases page
 - **Undo/Redo** in full, backed by `QUndoStack`
 - **Asynchronous rendering** in a separate thread — the UI never blocks
 - **Lazy rendering**: only the visible pages are rendered, not the whole
