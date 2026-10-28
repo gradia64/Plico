@@ -63,3 +63,26 @@ def test_the_arch_package_vendors_the_appimage_s_pyhanko():
     assert len(wheels) == 3 and len(sums) == 3
     for (name, version), sha in zip(wheels, sums, strict=True):
         assert pinned[name.lower().replace("_", "-")] == (version, sha), name
+
+
+def test_the_arch_package_suggests_qt_s_own_translations():
+    """Arch's PySide6 reads Qt's catalogs from the system, not from a wheel.
+
+    They are in qt6-translations, which nothing else pulls in: without it OK,
+    Annulla, Sì and No stay in English on a desktop that is not a full KDE.
+    """
+    pkgbuild = (ROOT / "packaging" / "arch" / "PKGBUILD.in").read_text()
+    optdepends = pkgbuild.split("optdepends=(", 1)[1].split("\n)", 1)[0]
+    assert '"qt6-translations: ' in optdepends
+
+
+def test_a_manual_release_run_publishes_nothing():
+    """Only the push of a tag publishes, not a run started by hand on a tag.
+
+    The README promises that a manual run only builds and tests; on a tag it
+    used to upload the files again (--clobber) and push the PKGBUILD to AUR.
+    """
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text()
+    publish = workflow.split("\n  publish:\n", 1)[1].split("\n  aur:\n", 1)[0]
+    condition = next(line for line in publish.splitlines() if line.strip().startswith("if:"))
+    assert "github.event_name == 'push'" in condition

@@ -6,6 +6,15 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Non rilasciato]
 
+### Corretto
+
+- **AppImage**: l'icona di Plico compare nell'area di notifica e sulla
+  finestra; prima c'era quella generica dei PDF.
+- **Firma**: un certificato valido solo da una data futura viene rifiutato
+  subito nel dialogo, invece di far fallire il salvataggio.
+- **AUR**: `qt6-translations` tra le dipendenze facoltative, per avere OK,
+  Annulla, Sì e No nella lingua dell'interfaccia.
+
 ## [0.1.5] — 2026-10-21
 
 ### Aggiunto

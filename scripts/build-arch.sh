@@ -38,13 +38,14 @@ cp "$AUR"/PKGBUILD "$WORK/"
 cp "$PUBKEY" "$WORK/release-key.asc"
 chown -R builder: "$WORK"
 
-su builder -s /bin/bash -c "
+# la cartella come argomento, non dentro il comando: nessun apice da sfuggire
+su builder -s /bin/bash -c '
     set -euo pipefail
-    cd '$WORK'
+    cd "$1"
     gpg --batch --quiet --import release-key.asc
     makepkg --printsrcinfo > .SRCINFO
     makepkg -f --noconfirm
-"
+' _ "$WORK"
 
 # namcap: gli errori (E:) bloccano, gli avvisi (W:) no. Avvisi attesi e
 # innocui: i moduli plico.* e quelli di vendor/ sono privati in /usr/share

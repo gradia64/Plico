@@ -611,7 +611,7 @@ QT_QPA_PLATFORM=offscreen python tools/screenshots.py [it|es|fr|de]
 
 La **CI** (GitHub Actions, `.github/workflows/`) fait la même chose à chaque
 push et pull request : `ci.yml` exécute tests, `ruff` et `mypy` sur Python
-3.11 et 3.13 et valide metainfo, `.desktop` et manifeste ; `flatpak.yml`,
+3.11 à 3.14 et valide metainfo, `.desktop` et manifeste ; `flatpak.yml`,
 sur `main` et à la demande depuis l'onglet Actions, construit le vrai
 Flatpak, le passe au linter de Flathub (`flatpak-builder-lint`) et laisse le
 paquet `plico.flatpak` parmi les artefacts de la run, installable avec

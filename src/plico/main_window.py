@@ -80,14 +80,24 @@ from .widgets.thumbnail_bar import ThumbnailBar, ThumbnailCache
 from .widgets.toast import Toast
 
 
-def _application_icon() -> QIcon:
-    """Plico's icon: from the icon theme where installed, else from a checkout."""
-    icon = QIcon.fromTheme("io.github.gradia64.plico")
-    if icon.isNull():
-        # A checkout run with ``python -m plico.app``: nothing is installed in
-        # the theme, but the SVG is in the repository.
-        source = Path(__file__).resolve().parents[2] / "flatpak" / "io.github.gradia64.plico.svg"
-        if source.is_file():
+def application_icon(package: Path | None = None) -> QIcon:
+    """Plico's icon: from the icon theme where installed, else from beside *package*.
+
+    *package* is the folder of the ``plico`` package, this one by default.
+    """
+    if package is None:
+        package = Path(__file__).resolve().parent
+    name = "io.github.gradia64.plico"
+    icon = QIcon.fromTheme(name)
+    # Qt looks for theme icons only under $XDG_DATA_DIRS. The AppImage carries
+    # its icon in <mount>/usr/share/icons, next to <mount>/usr/share/plico/plico,
+    # and the runtime does not add that to the variable; a checkout run with
+    # ``python -m plico.app`` has the SVG in flatpak/.
+    for source in (
+        package.parents[1] / "icons" / "hicolor" / "scalable" / "apps" / f"{name}.svg",
+        package.parents[1] / "flatpak" / f"{name}.svg",
+    ):
+        if icon.isNull() and source.is_file():
             icon = QIcon(str(source))
     if icon.isNull():
         icon = QIcon.fromTheme("application-pdf")
@@ -2271,7 +2281,7 @@ class MainWindow(QMainWindow):
             app.setQuitOnLastWindowClosed(self._tray is None)
 
     def _build_tray(self) -> QSystemTrayIcon:
-        tray = QSystemTrayIcon(_application_icon(), self)
+        tray = QSystemTrayIcon(application_icon(), self)
         tray.setToolTip(
             self.tr("Plico — clic per mostrare o nascondere, «Esci» dal menu per chiudere")
         )

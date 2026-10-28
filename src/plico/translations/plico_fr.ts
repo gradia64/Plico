@@ -189,121 +189,121 @@ Le fichier n'est pas recompacté : seules les images changent.</translation>
 </context><context>
     <name>MainWindow</name>
     <message>
-        <location filename="../main_window.py" line="1871" />
-        <location filename="../main_window.py" line="1737" />
-        <location filename="../main_window.py" line="1733" />
-        <location filename="../main_window.py" line="197" />
+        <location filename="../main_window.py" line="1876" />
+        <location filename="../main_window.py" line="1742" />
+        <location filename="../main_window.py" line="1738" />
+        <location filename="../main_window.py" line="202" />
         <source>Pronto</source>
         <translation>Prêt</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="239" />
+        <location filename="../main_window.py" line="244" />
         <source>Miniature</source>
         <translation>Miniatures</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="245" />
+        <location filename="../main_window.py" line="250" />
         <source>Storico azioni</source>
         <translation>Historique</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="260" />
+        <location filename="../main_window.py" line="265" />
         <source>Modulo</source>
         <translation>Formulaire</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="321" />
+        <location filename="../main_window.py" line="326" />
         <source>&amp;File</source>
         <translation>&amp;Fichier</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="324" />
+        <location filename="../main_window.py" line="329" />
         <source>A&amp;pri…</source>
         <translation>&amp;Ouvrir…</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="328" />
+        <location filename="../main_window.py" line="333" />
         <source>C&amp;rea da immagini…</source>
         <translation>C&amp;réer à partir d'images…</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="335" />
+        <location filename="../main_window.py" line="340" />
         <source>&amp;Salva</source>
         <translation>&amp;Enregistrer</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="339" />
+        <location filename="../main_window.py" line="344" />
         <source>Salva con &amp;nome…</source>
         <translation>Enregistrer &amp;sous…</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="347" />
+        <location filename="../main_window.py" line="352" />
         <source>&amp;Unisci PDF…</source>
         <translation>F&amp;usionner des PDF…</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="355" />
+        <location filename="../main_window.py" line="360" />
         <source>Es&amp;trai pagine…</source>
         <translation>E&amp;xtraire des pages…</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="363" />
+        <location filename="../main_window.py" line="368" />
         <source>Salva c&amp;ompresso…</source>
         <translation>Enregistrer com&amp;pressé…</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="372" />
+        <location filename="../main_window.py" line="377" />
         <source>&amp;Firma…</source>
         <translation>Si&amp;gner…</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="380" />
+        <location filename="../main_window.py" line="385" />
         <source>&amp;Verifica le firme…</source>
         <translation>&amp;Vérifier les signatures…</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="390" />
+        <location filename="../main_window.py" line="395" />
         <source>&amp;Chiudi</source>
         <translation>&amp;Fermer</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="397" />
+        <location filename="../main_window.py" line="402" />
         <source>&amp;Esci</source>
         <translation>&amp;Quitter</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="398" />
+        <location filename="../main_window.py" line="403" />
         <source>&amp;Modifica</source>
         <translation>É&amp;dition</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2008" />
-        <location filename="../main_window.py" line="400" />
+        <location filename="../main_window.py" line="2013" />
+        <location filename="../main_window.py" line="405" />
         <source>Annulla</source>
         <translation>Annuler</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="405" />
+        <location filename="../main_window.py" line="410" />
         <source>Ripeti</source>
         <translation>Rétablir</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="412" />
+        <location filename="../main_window.py" line="417" />
         <source>&amp;Trova…</source>
         <translation>Rec&amp;hercher…</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="428" />
+        <location filename="../main_window.py" line="433" />
         <source>Elimina pagina</source>
         <translation>Supprimer la page</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="435" />
+        <location filename="../main_window.py" line="440" />
         <source>Cancella &amp;zona</source>
         <translation>Effacer une &amp;zone</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="442" />
+        <location filename="../main_window.py" line="447" />
         <source>Trascina un rettangolo sul contenuto da eliminare: testo e immagini
 sotto di esso spariscono dal file, non vengono solo coperti.
 Un clic su una zona la ripristina. Diventa definitivo solo al salvataggio.</source>
@@ -312,12 +312,12 @@ qui sont dessous disparaissent du fichier, ils ne sont pas seulement masqués.
 Un clic sur une zone la rétablit. Cela devient définitif à l'enregistrement.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="451" />
+        <location filename="../main_window.py" line="456" />
         <source>Cancella &amp;selezione</source>
         <translation>Effacer la &amp;sélection</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="460" />
+        <location filename="../main_window.py" line="465" />
         <source>Trascina sulle parole da eliminare: la selezione si allarga ai
 confini delle parole, così nessuna resta tagliata a metà.
 Un clic su una zona la ripristina. Diventa definitivo solo al salvataggio.</source>
@@ -326,17 +326,17 @@ limites des mots, ainsi aucun ne reste coupé en deux.
 Un clic sur une zone la rétablit. Cela devient définitif à l'enregistrement.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="470" />
+        <location filename="../main_window.py" line="475" />
         <source>Cancella &amp;parola…</source>
         <translation>Effacer un &amp;mot…</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="480" />
+        <location filename="../main_window.py" line="485" />
         <source>&amp;Modifica testo</source>
         <translation>Modifier le &amp;texte</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="486" />
+        <location filename="../main_window.py" line="491" />
         <source>Corregge il testo già presente nel PDF: clic su una riga,
 Invio conferma, Esc annulla. Il testo nuovo entra nel file
 solo al salvataggio.</source>
@@ -345,242 +345,242 @@ Entrée confirme, Échap annule. Le nouveau texte entre dans le fichier
 seulement à l'enregistrement.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="497" />
+        <location filename="../main_window.py" line="502" />
         <source>&amp;Riconosci testo…</source>
         <translation>&amp;Reconnaître le texte…</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="500" />
+        <location filename="../main_window.py" line="505" />
         <source>Legge il testo delle pagine scansionate e lo rende selezionabile,
 cercabile e cancellabile: resta invisibile e non si stampa.</source>
         <translation>Lit le texte des pages numérisées et le rend sélectionnable,
 cherchable et effaçable : il reste invisible et ne s'imprime pas.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="516" />
+        <location filename="../main_window.py" line="521" />
         <source>&amp;Visualizza</source>
         <translation>&amp;Affichage</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="519" />
+        <location filename="../main_window.py" line="524" />
         <source>Adatta alla &amp;larghezza</source>
         <translation>Ajuster à la &amp;largeur</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="527" />
+        <location filename="../main_window.py" line="532" />
         <source>Zoom a&amp;vanti</source>
         <translation>Zoom &amp;avant</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="532" />
+        <location filename="../main_window.py" line="537" />
         <source>Zoom &amp;indietro</source>
         <translation>Zoom a&amp;rrière</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="538" />
+        <location filename="../main_window.py" line="543" />
         <source>&amp;Impostazioni</source>
         <translation>&amp;Configuration</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="540" />
+        <location filename="../main_window.py" line="545" />
         <source>&amp;Configura Plico…</source>
         <translation>&amp;Configurer Plico…</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="544" />
+        <location filename="../main_window.py" line="549" />
         <source>&amp;Aiuto</source>
         <translation>A&amp;ide</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="545" />
+        <location filename="../main_window.py" line="550" />
         <source>&amp;Guida di Plico</source>
         <translation>&amp;Manuel de Plico</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="549" />
+        <location filename="../main_window.py" line="554" />
         <source>&amp;Informazioni su Plico</source>
         <translation>À &amp;propos de Plico</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="556" />
+        <location filename="../main_window.py" line="561" />
         <source>Strumenti</source>
         <translation>Outils</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="563" />
+        <location filename="../main_window.py" line="568" />
         <source>Ruota a destra</source>
         <translation>Pivoter à droite</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="568" />
+        <location filename="../main_window.py" line="573" />
         <source>Ruota a destra 90°</source>
         <translation>Pivoter de 90° à droite</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="572" />
+        <location filename="../main_window.py" line="577" />
         <source>Ruota a sinistra</source>
         <translation>Pivoter à gauche</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="577" />
+        <location filename="../main_window.py" line="582" />
         <source>Ruota a sinistra 90°</source>
         <translation>Pivoter de 90° à gauche</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="603" />
+        <location filename="../main_window.py" line="608" />
         <source>Apri PDF</source>
         <translation>Ouvrir un PDF</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1605" />
-        <location filename="../main_window.py" line="1420" />
-        <location filename="../main_window.py" line="1296" />
-        <location filename="../main_window.py" line="976" />
-        <location filename="../main_window.py" line="605" />
+        <location filename="../main_window.py" line="1610" />
+        <location filename="../main_window.py" line="1425" />
+        <location filename="../main_window.py" line="1301" />
+        <location filename="../main_window.py" line="981" />
+        <location filename="../main_window.py" line="610" />
         <source>File PDF (*.pdf)</source>
         <translation>Fichiers PDF (*.pdf)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1618" />
-        <location filename="../main_window.py" line="1565" />
-        <location filename="../main_window.py" line="1518" />
-        <location filename="../main_window.py" line="1315" />
-        <location filename="../main_window.py" line="1015" />
-        <location filename="../main_window.py" line="948" />
-        <location filename="../main_window.py" line="839" />
-        <location filename="../main_window.py" line="638" />
+        <location filename="../main_window.py" line="1623" />
+        <location filename="../main_window.py" line="1570" />
+        <location filename="../main_window.py" line="1523" />
+        <location filename="../main_window.py" line="1320" />
+        <location filename="../main_window.py" line="1020" />
+        <location filename="../main_window.py" line="953" />
+        <location filename="../main_window.py" line="844" />
+        <location filename="../main_window.py" line="643" />
         <source>Errore</source>
         <translation>Erreur</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="639" />
+        <location filename="../main_window.py" line="644" />
         <source>Impossibile aprire:
 {0}</source>
         <translation>Impossible d'ouvrir :
 {0}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="648" />
+        <location filename="../main_window.py" line="653" />
         <source>Password errata per «{0}».</source>
         <translation>Mot de passe incorrect pour « {0} ».</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="650" />
+        <location filename="../main_window.py" line="655" />
         <source>«{0}» è protetto da una password.</source>
         <translation>« {0} » est protégé par un mot de passe.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="653" />
+        <location filename="../main_window.py" line="658" />
         <source>Documento protetto</source>
         <translation>Document protégé</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="723" />
+        <location filename="../main_window.py" line="728" />
         <source>Aperto: {0}</source>
         <translation>Ouvert : {0}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="775" />
+        <location filename="../main_window.py" line="780" />
         <source>Documento chiuso.</source>
         <translation>Document fermé.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2000" />
-        <location filename="../main_window.py" line="1941" />
-        <location filename="../main_window.py" line="1854" />
-        <location filename="../main_window.py" line="1706" />
-        <location filename="../main_window.py" line="1686" />
-        <location filename="../main_window.py" line="1598" />
-        <location filename="../main_window.py" line="1583" />
-        <location filename="../main_window.py" line="1409" />
-        <location filename="../main_window.py" line="1360" />
-        <location filename="../main_window.py" line="1353" />
-        <location filename="../main_window.py" line="1253" />
-        <location filename="../main_window.py" line="970" />
-        <location filename="../main_window.py" line="961" />
-        <location filename="../main_window.py" line="848" />
-        <location filename="../main_window.py" line="787" />
+        <location filename="../main_window.py" line="2005" />
+        <location filename="../main_window.py" line="1946" />
+        <location filename="../main_window.py" line="1859" />
+        <location filename="../main_window.py" line="1711" />
+        <location filename="../main_window.py" line="1691" />
+        <location filename="../main_window.py" line="1603" />
+        <location filename="../main_window.py" line="1588" />
+        <location filename="../main_window.py" line="1414" />
+        <location filename="../main_window.py" line="1365" />
+        <location filename="../main_window.py" line="1358" />
+        <location filename="../main_window.py" line="1258" />
+        <location filename="../main_window.py" line="975" />
+        <location filename="../main_window.py" line="966" />
+        <location filename="../main_window.py" line="853" />
+        <location filename="../main_window.py" line="792" />
         <source>Attenzione</source>
         <translation>Attention</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2000" />
-        <location filename="../main_window.py" line="1941" />
-        <location filename="../main_window.py" line="1854" />
-        <location filename="../main_window.py" line="1780" />
-        <location filename="../main_window.py" line="1706" />
-        <location filename="../main_window.py" line="1686" />
-        <location filename="../main_window.py" line="1583" />
-        <location filename="../main_window.py" line="1409" />
-        <location filename="../main_window.py" line="1353" />
-        <location filename="../main_window.py" line="1253" />
-        <location filename="../main_window.py" line="970" />
-        <location filename="../main_window.py" line="961" />
-        <location filename="../main_window.py" line="787" />
+        <location filename="../main_window.py" line="2005" />
+        <location filename="../main_window.py" line="1946" />
+        <location filename="../main_window.py" line="1859" />
+        <location filename="../main_window.py" line="1785" />
+        <location filename="../main_window.py" line="1711" />
+        <location filename="../main_window.py" line="1691" />
+        <location filename="../main_window.py" line="1588" />
+        <location filename="../main_window.py" line="1414" />
+        <location filename="../main_window.py" line="1358" />
+        <location filename="../main_window.py" line="1258" />
+        <location filename="../main_window.py" line="975" />
+        <location filename="../main_window.py" line="966" />
+        <location filename="../main_window.py" line="792" />
         <source>Nessun documento aperto.</source>
         <translation>Aucun document ouvert.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="793" />
+        <location filename="../main_window.py" line="798" />
         <source>Unisci PDF</source>
         <translation>Fusionner des PDF</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="795" />
+        <location filename="../main_window.py" line="800" />
         <source>PDF e immagini ({0});;File PDF (*.pdf);;Immagini ({1})</source>
         <translation>PDF et images ({0});;Fichiers PDF (*.pdf);;Images ({1})</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="840" />
+        <location filename="../main_window.py" line="845" />
         <source>Impossibile unire:
 {0}</source>
         <translation>Impossible de fusionner :
 {0}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="849" />
+        <location filename="../main_window.py" line="854" />
         <source>Il documento scelto non contiene pagine.</source>
         <translation>Le document choisi ne contient aucune page.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="880" />
+        <location filename="../main_window.py" line="885" />
         <source>Unite {0} pagine da: {1}</source>
         <translation>{0} pages fusionnées depuis : {1}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="899" />
+        <location filename="../main_window.py" line="904" />
         <source>Crea PDF da immagini</source>
         <translation>Créer un PDF à partir d'images</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="901" />
+        <location filename="../main_window.py" line="906" />
         <source>Immagini ({0})</source>
         <translation>Images ({0})</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="927" />
+        <location filename="../main_window.py" line="932" />
         <source>Creato da {0} immagini, {1} pagine: salvalo con Ctrl+S per tenerlo.</source>
         <translation>Créé à partir de {0} images, {1} pages : enregistrez-le avec Ctrl+S pour le garder.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="949" />
+        <location filename="../main_window.py" line="954" />
         <source>Impossibile creare il PDF:
 {0}</source>
         <translation>Impossible de créer le PDF :
 {0}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="974" />
+        <location filename="../main_window.py" line="979" />
         <source>Salva con nome</source>
         <translation>Enregistrer sous</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="994" />
+        <location filename="../main_window.py" line="999" />
         <source>Il documento è firmato</source>
         <translation>Le document est signé</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="995" />
+        <location filename="../main_window.py" line="1000" />
         <source>Salvare «{0}» così com'è toglie la firma: il file nuovo non è firmato.
 
 Continuare?</source>
@@ -589,88 +589,88 @@ Continuare?</source>
 Continuer ?</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1015" />
+        <location filename="../main_window.py" line="1020" />
         <source>Impossibile salvare:
 {0}</source>
         <translation>Impossible d'enregistrer :
 {0}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1023" />
+        <location filename="../main_window.py" line="1028" />
         <source>Salvato: {0}</source>
         <translation>Enregistré : {0}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1095" />
+        <location filename="../main_window.py" line="1100" />
         <source>Il contenuto di una zona, a pagina {0}, verrà eliminato definitivamente dal file.</source>
         <translation>Le contenu d'une zone, à la page {0}, sera définitivement supprimé du fichier.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1099" />
+        <location filename="../main_window.py" line="1104" />
         <source>Il contenuto di {0} zone, a pagina {1}, verrà eliminato definitivamente dal file.</source>
         <translation>Le contenu de {0} zones, à la page {1}, sera définitivement supprimé du fichier.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1103" />
+        <location filename="../main_window.py" line="1108" />
         <source>Il contenuto di {0} zone, alle pagine {1}, verrà eliminato definitivamente dal file.</source>
         <translation>Le contenu de {0} zones, aux pages {1}, sera définitivement supprimé du fichier.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1110" />
+        <location filename="../main_window.py" line="1115" />
         <source>Testo, immagini e grafica sotto le zone non si potranno più recuperare da quel file. Il documento aperto resta modificabile.</source>
         <translation>Le texte, les images et les graphiques sous les zones ne pourront plus être récupérés depuis ce fichier. Le document ouvert reste modifiable.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1121" />
+        <location filename="../main_window.py" line="1126" />
         <source>Cancellazione definitiva</source>
         <translation>Suppression définitive</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1123" />
+        <location filename="../main_window.py" line="1128" />
         <source>Elimina e salva</source>
         <translation>Supprimer et enregistrer</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1185" />
-        <location filename="../main_window.py" line="1143" />
+        <location filename="../main_window.py" line="1190" />
+        <location filename="../main_window.py" line="1148" />
         <source>Senza titolo</source>
         <translation>Sans titre</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1150" />
+        <location filename="../main_window.py" line="1155" />
         <source> — firmato</source>
         <translation> — signé</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1158" />
+        <location filename="../main_window.py" line="1163" />
         <source> — una cancellazione da applicare</source>
         <translation> — une suppression à appliquer</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1160" />
+        <location filename="../main_window.py" line="1165" />
         <source> — {0} cancellazioni da applicare</source>
         <translation> — {0} suppressions à appliquer</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1367" />
-        <location filename="../main_window.py" line="1188" />
+        <location filename="../main_window.py" line="1372" />
+        <location filename="../main_window.py" line="1193" />
         <source>Modifiche non salvate</source>
         <translation>Modifications non enregistrées</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1189" />
+        <location filename="../main_window.py" line="1194" />
         <source>«{0}» ha modifiche non salvate.
 Vuoi salvarle?</source>
         <translation>« {0} » contient des modifications non enregistrées.
 Voulez-vous les enregistrer ?</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1231" />
+        <location filename="../main_window.py" line="1236" />
         <source>Salvato e riaperto: {0}. Le modifiche ora sono nel file e non si possono più annullare.</source>
         <translation>Enregistré et rouvert : {0}. Les modifications sont désormais dans le fichier et ne peuvent plus être annulées.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1266" />
+        <location filename="../main_window.py" line="1271" />
         <source>«{0}» è già firmato.
 
 Una seconda firma si aggiunge alla prima, non la sostituisce: vuoi continuare?</source>
@@ -679,7 +679,7 @@ Una seconda firma si aggiunge alla prima, non la sostituisce: vuoi continuare?</
 Une deuxième signature s'ajoute à la première, elle ne la remplace pas : voulez-vous continuer ?</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1271" />
+        <location filename="../main_window.py" line="1276" />
         <source>«{0}» è firmato, ma ha modifiche non salvate.
 
 Per firmarle il file va riscritto, e la firma che porta ora verrà tolta: resterà solo la nuova. Vuoi continuare?</source>
@@ -688,34 +688,34 @@ Per firmarle il file va riscritto, e la firma che porta ora verrà tolta: rester
 Pour les signer, le fichier doit être réécrit, et sa signature actuelle sera supprimée : seule la nouvelle restera. Voulez-vous continuer ?</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1278" />
+        <location filename="../main_window.py" line="1283" />
         <source>Documento già firmato</source>
         <translation>Document déjà signé</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1294" />
+        <location filename="../main_window.py" line="1299" />
         <source>Salva e firma</source>
         <translation>Enregistrer et signer</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1315" />
+        <location filename="../main_window.py" line="1320" />
         <source>Impossibile firmare:
 {0}</source>
         <translation>Impossible de signer :
 {0}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1327" />
+        <location filename="../main_window.py" line="1332" />
         <source>Documento firmato: {0}</source>
         <translation>Document signé : {0}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1361" />
+        <location filename="../main_window.py" line="1366" />
         <source>Questo documento non ha ancora un file: salvalo prima di verificarlo.</source>
         <translation>Ce document n'a pas encore de fichier : enregistrez-le avant de le vérifier.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1368" />
+        <location filename="../main_window.py" line="1373" />
         <source>Il file «{0}» non contiene ancora le modifiche non salvate.
 
 Verificare lo stesso la copia che sta su disco?</source>
@@ -724,37 +724,37 @@ Verificare lo stesso la copia che sta su disco?</source>
 Vérifier quand même la copie sur le disque ?</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1533" />
-        <location filename="../main_window.py" line="1505" />
-        <location filename="../main_window.py" line="1448" />
-        <location filename="../main_window.py" line="1418" />
+        <location filename="../main_window.py" line="1538" />
+        <location filename="../main_window.py" line="1510" />
+        <location filename="../main_window.py" line="1453" />
+        <location filename="../main_window.py" line="1423" />
         <source>Salva compresso</source>
         <translation>Enregistrer compressé</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1449" />
+        <location filename="../main_window.py" line="1454" />
         <source>Compressione in corso…</source>
         <translation>Compression en cours…</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1502" />
+        <location filename="../main_window.py" line="1507" />
         <source>Nessuna compressione: {0}</source>
         <translation>Aucune compression : {0}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1519" />
+        <location filename="../main_window.py" line="1524" />
         <source>Impossibile salvare il file compresso:
 {0}</source>
         <translation>Impossible d'enregistrer le fichier compressé :
 {0}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1529" />
+        <location filename="../main_window.py" line="1534" />
         <source>Compresso: {0}</source>
         <translation>Compressé : {0}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1534" />
+        <location filename="../main_window.py" line="1539" />
         <source>Scritto:
 {0}
 
@@ -769,222 +769,222 @@ Après : {2}
 Économisé : {3} ({4} %)</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1547" />
+        <location filename="../main_window.py" line="1552" />
         <source>Questo file non aveva niente da guadagnare: è rimasto di {0}.</source>
         <translation>Ce fichier n'avait rien à gagner : il fait toujours {0}.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1554" />
+        <location filename="../main_window.py" line="1559" />
         <source>Il peso sta nelle immagini delle pagine che non hai scelto: prova con tutte le pagine.</source>
         <translation>Le poids est dans les images des pages que vous n'avez pas choisies : essayez avec toutes les pages.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1566" />
+        <location filename="../main_window.py" line="1571" />
         <source>Impossibile comprimere:
 {0}</source>
         <translation>Impossible de compresser :
 {0}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1603" />
-        <location filename="../main_window.py" line="1588" />
+        <location filename="../main_window.py" line="1608" />
+        <location filename="../main_window.py" line="1593" />
         <source>Estrai pagine</source>
         <translation>Extraire des pages</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1589" />
+        <location filename="../main_window.py" line="1594" />
         <source>Pagine da estrarre (es. 1-3,5,8):</source>
         <translation>Pages à extraire (ex. 1-3,5,8) :</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1614" />
+        <location filename="../main_window.py" line="1619" />
         <source>Estratte {0} pagine in: {1}</source>
         <translation>{0} pages extraites dans : {1}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1619" />
+        <location filename="../main_window.py" line="1624" />
         <source>Impossibile estrarre:
 {0}</source>
         <translation>Impossible d'extraire :
 {0}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1697" />
+        <location filename="../main_window.py" line="1702" />
         <source>Cancella zona: trascina un rettangolo sul contenuto da eliminare; un clic su una zona la ripristina.</source>
         <translation>Effacer une zone : tracez un rectangle sur le contenu à supprimer ; un clic sur une zone la rétablit.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1717" />
+        <location filename="../main_window.py" line="1722" />
         <source>Cancella selezione: trascina sulle parole da eliminare; le zone restano modificabili finché non salvi. Un clic su una zona la ripristina.</source>
         <translation>Effacer la sélection : faites glisser sur les mots à supprimer ; les zones restent modifiables jusqu'à l'enregistrement. Un clic sur une zone la rétablit.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1740" />
+        <location filename="../main_window.py" line="1745" />
         <source>Anteprima: la pagina è come verrà salvata. Una cancellazione da applicare.</source>
         <translation>Aperçu : la page est telle qu'elle sera enregistrée. Une suppression à appliquer.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1742" />
+        <location filename="../main_window.py" line="1747" />
         <source>Anteprima: la pagina è come verrà salvata. {0} cancellazioni da applicare.</source>
         <translation>Aperçu : la page est telle qu'elle sera enregistrée. {0} suppressions à appliquer.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1865" />
+        <location filename="../main_window.py" line="1870" />
         <source>Modifica testo: clic su una riga del documento per correggerla; Invio conferma, Esc annulla.</source>
         <translation>Modifier le texte : cliquez sur une ligne du document pour la corriger ; Entrée confirme, Échap annule.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1883" />
+        <location filename="../main_window.py" line="1888" />
         <source>Zona segnata a pagina {0}: il contenuto sarà eliminato al salvataggio. Esc per vedere l'anteprima.</source>
         <translation>Zone marquée à la page {0} : son contenu sera supprimé à l'enregistrement. Appuyez sur Échap pour voir l'aperçu.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1911" />
+        <location filename="../main_window.py" line="1916" />
         <source>Cancella la selezione su pagina {0}</source>
         <translation>Effacer la sélection sur la page {0}</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1919" />
+        <location filename="../main_window.py" line="1924" />
         <source>{0} parole segnate a pagina {1}: saranno eliminate al salvataggio. Esc per vedere l'anteprima.</source>
         <translation>{0} mots marqués à la page {1} : ils seront supprimés à l'enregistrement. Appuyez sur Échap pour voir l'aperçu.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1924" />
+        <location filename="../main_window.py" line="1929" />
         <source>Una parola segnata a pagina {0}: sarà eliminata al salvataggio. Esc per vedere l'anteprima.</source>
         <translation>Un mot marqué à la page {0} : il sera supprimé à l'enregistrement. Appuyez sur Échap pour voir l'aperçu.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1945" />
+        <location filename="../main_window.py" line="1950" />
         <source>Cancella parola</source>
         <translation>Effacer un mot</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1946" />
+        <location filename="../main_window.py" line="1951" />
         <source>Parola da eliminare in tutte le pagine:</source>
         <translation>Mot à supprimer sur toutes les pages :</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1952" />
+        <location filename="../main_window.py" line="1957" />
         <source>Nessuna occorrenza di «{0}».</source>
         <translation>Aucune occurrence de « {0} ».</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1955" />
+        <location filename="../main_window.py" line="1960" />
         <source>Cancella «{0}»</source>
         <translation>Effacer « {0} »</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1969" />
+        <location filename="../main_window.py" line="1974" />
         <source>Un'occorrenza di «{0}» segnata a pagina {1}: sarà eliminata al salvataggio. La pagina ne mostra già l'anteprima.</source>
         <translation>Une occurrence de « {0} » marquée à la page {1} : elle sera supprimée à l'enregistrement. La page en montre déjà l'aperçu.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1975" />
+        <location filename="../main_window.py" line="1980" />
         <source>{0} occorrenze di «{1}» segnate a pagina {2}: saranno eliminate al salvataggio. La pagina ne mostra già l'anteprima.</source>
         <translation>{0} occurrences de « {1} » marquées à la page {2} : elles seront supprimées à l'enregistrement. La page en montre déjà l'aperçu.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="1980" />
+        <location filename="../main_window.py" line="1985" />
         <source>{0} occorrenze di «{1}» segnate su {2} pagine: saranno eliminate al salvataggio. La pagina ne mostra già l'anteprima.</source>
         <translation>{0} occurrences de « {1} » marquées sur {2} pages : elles seront supprimées à l'enregistrement. La page en montre déjà l'aperçu.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2008" />
+        <location filename="../main_window.py" line="2013" />
         <source>Riconoscimento del testo…</source>
         <translation>Reconnaissance du texte…</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2010" />
+        <location filename="../main_window.py" line="2015" />
         <source>Riconosci testo</source>
         <translation>Reconnaître le texte</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2032" />
+        <location filename="../main_window.py" line="2037" />
         <source>Riconoscimento fallito</source>
         <translation>Échec de la reconnaissance</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2046" />
+        <location filename="../main_window.py" line="2051" />
         <source>Riconoscimento interrotto: nessun testo letto.</source>
         <translation>Reconnaissance interrompue : aucun texte lu.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2048" />
+        <location filename="../main_window.py" line="2053" />
         <source>Nessun testo riconosciuto nelle pagine scelte.</source>
         <translation>Aucun texte reconnu sur les pages choisies.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2054" />
+        <location filename="../main_window.py" line="2059" />
         <source>Riconosci testo su una pagina</source>
         <translation>Reconnaître le texte d'une page</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2056" />
+        <location filename="../main_window.py" line="2061" />
         <source>Riconosci testo su {0} pagine</source>
         <translation>Reconnaître le texte de {0} pages</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2063" />
+        <location filename="../main_window.py" line="2068" />
         <source>Riconosciuto testo su una pagina.</source>
         <translation>Texte reconnu sur une page.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2065" />
+        <location filename="../main_window.py" line="2070" />
         <source>Riconosciuto testo su {0} pagine.</source>
         <translation>Texte reconnu sur {0} pages.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2068" />
+        <location filename="../main_window.py" line="2073" />
         <source>Una pagina senza testo.</source>
         <translation>Une page sans texte.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2070" />
+        <location filename="../main_window.py" line="2075" />
         <source>{0} pagine senza testo.</source>
         <translation>{0} pages sans texte.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2072" />
+        <location filename="../main_window.py" line="2077" />
         <source>Riconoscimento interrotto. </source>
         <translation>Reconnaissance interrompue. </translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2119" />
+        <location filename="../main_window.py" line="2124" />
         <source>Campo «{0}» aggiornato.</source>
         <translation>Champ « {0} » mis à jour.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2225" />
+        <location filename="../main_window.py" line="2230" />
         <source>Lingua</source>
         <translation>Langue</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2226" />
+        <location filename="../main_window.py" line="2231" />
         <source>La nuova lingua sarà usata al prossimo avvio di Plico.</source>
         <translation>La nouvelle langue sera utilisée au prochain démarrage de Plico.</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2240" />
+        <location filename="../main_window.py" line="2245" />
         <source>Informazioni su Plico</source>
         <translation>À propos de Plico</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2241" />
+        <location filename="../main_window.py" line="2246" />
         <source>&lt;h3&gt;Plico {0}&lt;/h3&gt;&lt;p&gt;Un vero editor PDF nativo per Linux.&lt;/p&gt;&lt;p&gt;Licenza GPL-3.0 o successiva.&lt;br&gt;&lt;a href="https://github.com/gradia64/Plico"&gt;github.com/gradia64/Plico&lt;/a&gt;&lt;/p&gt;</source>
         <translation>&lt;h3&gt;Plico {0}&lt;/h3&gt;&lt;p&gt;Un véritable éditeur PDF natif pour Linux.&lt;/p&gt;&lt;p&gt;Licence GPL-3.0 ou ultérieure.&lt;br&gt;&lt;a href="https://github.com/gradia64/Plico"&gt;github.com/gradia64/Plico&lt;/a&gt;&lt;/p&gt;</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2276" />
+        <location filename="../main_window.py" line="2281" />
         <source>Plico — clic per mostrare o nascondere, «Esci» dal menu per chiudere</source>
         <translation>Plico — clic pour afficher ou masquer, « Quitter » dans le menu pour fermer</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2279" />
+        <location filename="../main_window.py" line="2284" />
         <source>Mostra / nascondi</source>
         <translation>Afficher / masquer</translation>
     </message>
     <message>
-        <location filename="../main_window.py" line="2283" />
+        <location filename="../main_window.py" line="2288" />
         <source>Esci</source>
         <translation>Quitter</translation>
     </message>
@@ -1043,32 +1043,32 @@ Il entre dans le fichier seulement à l'enregistrement, comme toute autre modifi
         <translation>Comme dans Extraire des pages : par exemple 3, 4-8 ou 1-3,5.</translation>
     </message>
     <message>
-        <location filename="../widgets/ocr.py" line="129" />
+        <location filename="../widgets/ocr.py" line="128" />
         <source>Pagine:</source>
         <translation>Pages :</translation>
     </message>
     <message>
-        <location filename="../widgets/ocr.py" line="131" />
+        <location filename="../widgets/ocr.py" line="130" />
         <source>Lingua:</source>
         <translation>Langue :</translation>
     </message>
     <message>
-        <location filename="../widgets/ocr.py" line="162" />
+        <location filename="../widgets/ocr.py" line="161" />
         <source>(nessuna lingua installata)</source>
         <translation>(aucune langue installée)</translation>
     </message>
     <message>
-        <location filename="../widgets/ocr.py" line="185" />
+        <location filename="../widgets/ocr.py" line="184" />
         <source>Nessuna lingua installata: metti i file .traineddata di Tesseract in {0}.</source>
         <translation>Aucune langue installée : placez les fichiers .traineddata de Tesseract dans {0}.</translation>
     </message>
     <message>
-        <location filename="../widgets/ocr.py" line="193" />
+        <location filename="../widgets/ocr.py" line="192" />
         <source>{0} pagine, lingua {1}.</source>
         <translation>{0} pages, langue {1}.</translation>
     </message>
     <message>
-        <location filename="../widgets/ocr.py" line="195" />
+        <location filename="../widgets/ocr.py" line="194" />
         <source>Una pagina, lingua {0}.</source>
         <translation>Une page, langue {0}.</translation>
     </message>
@@ -1323,12 +1323,17 @@ Il entre dans le fichier seulement à l'enregistrement, comme toute autre modifi
         <translation>Certificats (*.p12 *.pfx);;Tous les fichiers (*)</translation>
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="167" />
+        <location filename="../widgets/sign.py" line="166" />
         <source>Il certificato è scaduto il {0}.</source>
         <translation>Le certificat a expiré le {0}.</translation>
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="172" />
+        <location filename="../widgets/sign.py" line="174" />
+        <source>Il certificato è valido solo dal {0}.</source>
+        <translation>Le certificat n'est valide qu'à partir du {0}.</translation>
+    </message>
+    <message>
+        <location filename="../widgets/sign.py" line="180" />
         <source>{0}
 valido fino al {1}</source>
         <translation>{0}
@@ -1337,52 +1342,52 @@ valide jusqu'au {1}</translation>
 </context><context>
     <name>SignatureDialog</name>
     <message>
-        <location filename="../widgets/sign.py" line="213" />
+        <location filename="../widgets/sign.py" line="221" />
         <source>Firme del documento</source>
         <translation>Signatures du document</translation>
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="223" />
+        <location filename="../widgets/sign.py" line="231" />
         <source>Aggiungi un certificato fidato…</source>
         <translation>Ajouter un certificat de confiance…</translation>
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="225" />
+        <location filename="../widgets/sign.py" line="233" />
         <source>Chiudi</source>
         <translation>Fermer</translation>
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="240" />
+        <location filename="../widgets/sign.py" line="248" />
         <source>Scegli un certificato da considerare fidato</source>
         <translation>Choisir un certificat auquel faire confiance</translation>
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="266" />
+        <location filename="../widgets/sign.py" line="274" />
         <source>Il documento non contiene firme.</source>
         <translation>Le document ne contient aucune signature.</translation>
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="316" />
+        <location filename="../widgets/sign.py" line="324" />
         <source>La firma è rotta: il contenuto che copriva è stato cambiato dopo la firma.</source>
         <translation>La signature est rompue : le contenu qu'elle couvrait a été modifié après la signature.</translation>
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="324" />
+        <location filename="../widgets/sign.py" line="332" />
         <source>La firma è integra, ma il documento è stato modificato dopo: vale solo per la versione che è stata firmata.</source>
         <translation>La signature est intacte, mais le document a été modifié ensuite : elle ne vaut que pour la version qui a été signée.</translation>
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="333" />
+        <location filename="../widgets/sign.py" line="341" />
         <source>La firma non è valida: non corrisponde al certificato che la porta.</source>
         <translation>La signature n'est pas valide : elle ne correspond pas au certificat qui la porte.</translation>
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="341" />
+        <location filename="../widgets/sign.py" line="349" />
         <source>Firma integra e valida. Il certificato però non è fra quelli che consideri fidati: aggiungi la sua autorità per sapere chi ha firmato.</source>
         <translation>Signature intacte et valide. Mais le certificat ne fait pas partie de ceux auxquels vous faites confiance : ajoutez son autorité pour savoir qui a signé.</translation>
     </message>
     <message>
-        <location filename="../widgets/sign.py" line="349" />
+        <location filename="../widgets/sign.py" line="357" />
         <source>Firma valida e firmatario attendibile.</source>
         <translation>Signature valide et signataire de confiance.</translation>
     </message>

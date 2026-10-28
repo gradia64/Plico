@@ -95,6 +95,21 @@ jobs:
           flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
             "$WORK/repo" plico.flatpak "$APP_ID"
 
+      # The bundle that goes into a release, installed and started like a user
+      # would: a plugin, a library or a permission missing from the sandbox
+      # shows only here. Reaching the event loop is the test -- timeout (124)
+      # means still running; the runtime is installed already.
+      - name: Install and start the bundle
+        run: |
+          flatpak install --user -y --noninteractive --bundle plico.flatpak
+          rc=0
+          dbus-run-session -- timeout 20 flatpak run --env=QT_QPA_PLATFORM=offscreen \
+            "$APP_ID" || rc=$?
+          if [ "$rc" -ne 124 ]; then
+            echo "plico exited at once (code $rc)" >&2
+            exit 1
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: plico-flatpak

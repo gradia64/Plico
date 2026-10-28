@@ -19,6 +19,9 @@
 #
 # A mano (workflow_dispatch) costruisce e collauda gli stessi pacchetti dal
 # ramo scelto, senza pubblicare niente: per provare il packaging prima di un tag.
+# Su un ramo il pacchetto Arch resta fuori: il PKGBUILD clona il tag firmato
+# v<versione>, che prima del rilascio non esiste. Lanciato su un tag lo
+# costruisce, e nemmeno lì pubblica: publish parte solo dal push del tag.
 # Con aur_tag (un tag già pubblicato, es. v0.1.4) fa invece solo l'AUR:
 # verifica la firma di quel tag, costruisce e collauda il pacchetto Arch con il
 # PKGBUILD.in del ramo e, dopo l'approvazione nell'environment release, pubblica
@@ -192,7 +195,9 @@ jobs:
   publish:
     name: Release su GitHub
     needs: [verify, appimage, flatpak, arch]
-    if: startsWith(github.ref, 'refs/tags/')
+    # il push del tag (o il rilancio di quel run), non un dispatch su un tag:
+    # quello è una prova, e non deve ricaricare la release né toccare l'AUR
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     # come in OllaDesk: l'ultimo punto di controllo prima di pubblicare. Con
     # «Required reviewers» nelle impostazioni dell'environment, il job aspetta

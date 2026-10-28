@@ -91,9 +91,14 @@ def test_short_commit_refused():
 
 @pytest.fixture
 def repo(tmp_path, monkeypatch):
-    """A repository with Plico's packaging files and an SSH key that signs tags."""
-    if shutil.which("ssh-keygen") is None:
-        pytest.skip("ssh-keygen non disponibile")
+    """A repository with Plico's packaging files and a release-shaped GPG key.
+
+    The key is a [C] primary with a [S] subkey, like the real one; tags are
+    signed with ``git("tag", "-s", ...)`` by the subkey, and scripts/verify-tag.sh
+    is pointed at this key instead of packaging/plico-release-key.asc.
+    """
+    if shutil.which("gpg") is None:
+        pytest.skip("gpg non disponibile")
     work = tmp_path / "repo"
     (work / "flatpak").mkdir(parents=True)
     for name in (f"{fm.APP_ID}.json", "python3-pymupdf.json", "python3-pikepdf.json",
@@ -102,22 +107,42 @@ def repo(tmp_path, monkeypatch):
     (work / "pyproject.toml").write_text(PYPROJECT)
     (work / fm.METAINFO).write_text(METAINFO)
 
-    key = tmp_path / "key"
-    subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "t@example.org",
-                    "-f", str(key)], check=True)
-    (work / ".github").mkdir()
-    (work / fm.ALLOWED_SIGNERS).write_text(
-        "t@example.org " + " ".join(key.with_suffix(".pub").read_text().split()[:2]) + "\n"
-    )
+    home = tmp_path / "g"
+    home.mkdir(mode=0o700)
+    env = {"GNUPGHOME": str(home), "PATH": "/usr/bin:/bin", "HOME": str(tmp_path)}
+
+    def run(*args: str) -> str:
+        return subprocess.run(args, check=True, capture_output=True, text=True, env=env).stdout
+
+    def gpg(*args: str) -> str:
+        return run("gpg", "--batch", "--passphrase", "", "--pinentry-mode", "loopback", *args)
+
+    def fingerprints(uid: str) -> list[str]:
+        out = gpg("--with-colons", "--with-subkey-fingerprints", "--list-keys", uid)
+        return [line.split(":")[9] for line in out.splitlines() if line.startswith("fpr")]
+
+    gpg("--quick-generate-key", "Release <t@example.org>", "ed25519", "cert", "1y")
+    primary = fingerprints("t@example.org")[0]
+    gpg("--quick-add-key", primary, "ed25519", "sign", "1y")
+    subkey = fingerprints("t@example.org")[1]
+    gpg("--quick-generate-key", "Stranger <s@example.org>", "ed25519", "sign", "1y")
+    public = tmp_path / "release.asc"
+    public.write_text(gpg("--armor", "--export", primary))
+    monkeypatch.setenv("PLICO_RELEASE_KEY", str(public))
+    monkeypatch.setenv("PLICO_RELEASE_PRIMARY", primary)
+    monkeypatch.setenv("PLICO_TAG_SIGNING_SUBKEYS", subkey)
+    # The machine's keyring holds both keys, the stranger's too: what the
+    # check trusts must be the release key alone.
+    monkeypatch.setenv("GNUPGHOME", str(home))
 
     def git(*args):
-        subprocess.run(["git", "-C", str(work), *args], check=True, capture_output=True)
+        run("git", "-C", str(work), *args)
 
     git("init", "-q")
     git("config", "user.name", "T")
     git("config", "user.email", "t@example.org")
-    git("config", "gpg.format", "ssh")
-    git("config", "user.signingkey", str(key))
+    git("config", "gpg.format", "openpgp")
+    git("config", "user.signingkey", f"{subkey}!")
     git("config", "commit.gpgSign", "false")
     git("config", "tag.gpgSign", "false")
     git("add", ".")
@@ -151,6 +176,21 @@ def test_unsigned_tag_refused(repo, tmp_path):
     assert not out.exists()
     # The dry run is still possible, on purpose.
     assert fm.main(["v1.2.3", str(out), "--offline", "--allow-unsigned"]) == 0
+
+
+def test_tag_signed_by_another_key_refused(repo, tmp_path):
+    """A valid signature is not enough: it must be the release key's.
+
+    The old check ran ``git tag -v``, which trusts any key in the machine's
+    keyring -- and the release tags, OpenPGP since 0.1.4, were not even
+    compared with the key in the repository.
+    """
+    _, git = repo
+    git("-c", "user.signingkey=s@example.org", "tag", "-s", "-m", "Plico 1.2.3", "v1.2.3")
+    out = tmp_path / "flathub"
+
+    assert fm.main(["v1.2.3", str(out), "--offline"]) == 1
+    assert not out.exists()
 
 
 def test_lightweight_tag_refused(repo, tmp_path):

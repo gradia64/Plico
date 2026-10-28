@@ -159,14 +159,22 @@ class SignDialog(QDialog):
             self._identity_label.setStyleSheet(_BAD)
             self._identity_label.setText(str(error))
             return
-        expired = identity.not_after < datetime.now(identity.not_after.tzinfo)
-        self._identity = None if expired else identity
-        if expired:
+        now = datetime.now(identity.not_after.tzinfo)
+        if identity.not_after < now:
             self._identity_label.setStyleSheet(_BAD)
             self._identity_label.setText(
                 self.tr("Il certificato è scaduto il {0}.").format(_date(identity.not_after))
             )
             return
+        # Issued for later, or a clock that is wrong: a signature made now
+        # would not verify, and saying so only after the save is too late.
+        if identity.not_before > now:
+            self._identity_label.setStyleSheet(_BAD)
+            self._identity_label.setText(
+                self.tr("Il certificato è valido solo dal {0}.").format(_date(identity.not_before))
+            )
+            return
+        self._identity = identity
         self._identity_label.setStyleSheet(_GOOD)
         self._identity_label.setText(
             self.tr("{0}\nvalido fino al {1}").format(

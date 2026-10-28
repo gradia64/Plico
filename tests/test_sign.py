@@ -52,10 +52,13 @@ def _bytes(path: str) -> bytes:
         return handle.read()
 
 
-def _build_certificate(path, name: x509.Name, days: int = 3650) -> None:
-    """Write a self-signed PKCS#12 at *path*, plus its PEM next to it."""
+def _build_certificate(path, name: x509.Name, days: int = 3650, starts: int = -1) -> None:
+    """Write a self-signed PKCS#12 at *path*, plus its PEM next to it.
+
+    The certificate is valid from *starts* days from now for *days* days.
+    """
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    now = datetime.datetime.now(datetime.UTC)
+    now = datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=starts + 1)
     certificate = (
         x509.CertificateBuilder()
         .subject_name(name)
@@ -388,6 +391,22 @@ def test_the_signing_dialog_refuses_a_certificate_it_cannot_read(qapp) -> None:
 
     assert not dialog._ok.isEnabled()
     assert "firma.p12" in dialog._identity_label.text()
+
+
+def test_the_signing_dialog_refuses_a_certificate_not_yet_valid(qapp, tmp_path) -> None:
+    """Only the expiry was checked: «Firma» lit up, and failed at the save."""
+    path = str(tmp_path / "futuro.p12")
+    _build_certificate(
+        path, x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Mario Rossi")]), starts=30
+    )
+    dialog = SignDialog([(595.0, 842.0)])
+    dialog._certificate.setText(path)
+    dialog._password.setText(PASSWORD)
+
+    dialog._read()
+
+    assert not dialog._ok.isEnabled()
+    assert "valido solo dal" in dialog._identity_label.text()
 
 
 def test_the_signing_dialog_reads_the_certificate_and_builds_the_request(

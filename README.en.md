@@ -571,7 +571,8 @@ At every release:
 git tag -s v0.1.5 -m "Plico 0.1.5"
 scripts/verify-tag.sh v0.1.5
 git push origin v0.1.5
-# 3. by hand, before a tag, the same build without publishing
+# 3. by hand, before a tag, the same builds without publishing (except the
+#    Arch package: the PKGBUILD clones the signed tag, not there yet)
 gh workflow run release.yml --ref main
 ```
 
@@ -597,8 +598,8 @@ QT_QPA_PLATFORM=offscreen python tools/screenshots.py [it|es|fr|de]
 ```
 
 **CI** (GitHub Actions, `.github/workflows/`) does the same on every push
-and pull request: `ci.yml` runs tests, `ruff` and `mypy` on Python 3.11 and
-3.13 and validates metainfo, `.desktop` and manifest; `flatpak.yml`, on
+and pull request: `ci.yml` runs tests, `ruff` and `mypy` on Python 3.11 to
+3.14 and validates metainfo, `.desktop` and manifest; `flatpak.yml`, on
 `main` and on demand from the Actions tab, builds the real Flatpak, passes it
 to Flathub's linter (`flatpak-builder-lint`) and leaves the `plico.flatpak`
 package among the run's artifacts, installable with

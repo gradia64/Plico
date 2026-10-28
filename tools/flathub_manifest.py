@@ -18,14 +18,16 @@ these mistakes is cheap now and a new release later:
   ``<release>`` of the AppStream metainfo, all three the same;
 - the store screenshots in the metainfo point at the tag, not at ``main``:
   Flathub mirrors them at build time, and ``main`` keeps moving;
-- the tag is annotated and its signature verifies against
-  ``.github/allowed_signers`` (``--allow-unsigned`` to skip, for a dry run);
+- the tag is annotated and signed by a tag subkey of the release key in
+  ``packaging/plico-release-key.asc``, checked by ``scripts/verify-tag.sh``
+  as release.yml does (``--allow-unsigned`` to skip, for a dry run);
 - the remote has the same tag object (``--offline`` to skip): a tag only on
   this machine cannot be fetched by Flathub's builders.
 """
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -39,7 +41,8 @@ APP_ID = "io.github.gradia64.plico"
 MANIFEST = f"flatpak/{APP_ID}.json"
 METAINFO = f"flatpak/{APP_ID}.metainfo.xml"
 URL = "https://github.com/gradia64/Plico.git"
-ALLOWED_SIGNERS = ".github/allowed_signers"
+# Of this checkout, never of ROOT: the tests point ROOT at a scratch repository.
+VERIFY_TAG = Path(__file__).resolve().parent.parent / "scripts" / "verify-tag.sh"
 
 
 class ReleaseError(Exception):
@@ -114,9 +117,15 @@ def _check_tag(tag: str, allow_unsigned: bool, offline: bool) -> str:
     if _git("cat-file", "-t", obj).strip() != "tag":
         raise ReleaseError(f"{tag} è un tag leggero: serve un tag annotato (git tag -s)")
     if not allow_unsigned:
-        # The signers file of the tagged tree would let a tag vouch for
-        # itself; the one of the working tree is the one the releaser trusts.
-        _git("-c", f"gpg.ssh.allowedSignersFile={ROOT / ALLOWED_SIGNERS}", "tag", "-v", tag)
+        # The key of the working tree, not of the tagged tree, which would let
+        # a tag vouch for itself; and in a keyring of its own, not the
+        # machine's, where any key could be.
+        result = subprocess.run(
+            [str(VERIFY_TAG), tag], capture_output=True, text=True, check=False,
+            env={**os.environ, "PLICO_REPO": str(ROOT)},
+        )
+        if result.returncode != 0:
+            raise ReleaseError(result.stderr.strip())
     if not offline:
         remote = _git("ls-remote", "origin", ref).split()
         if not remote or remote[0] != obj:

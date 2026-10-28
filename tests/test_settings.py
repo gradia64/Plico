@@ -7,12 +7,16 @@ quitting. Offscreen there is no notification area, so the tests that need one
 pretend there is.
 """
 
+import shutil
+from pathlib import Path
+
 import pytest
 from PySide6.QtCore import QLocale
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox, QSystemTrayIcon
 
 from plico import i18n, preferences
-from plico.main_window import MainWindow
+from plico.main_window import MainWindow, application_icon
 from plico.widgets.settings_dialog import Choices, SettingsDialog
 
 
@@ -146,6 +150,25 @@ def test_with_close_to_tray_the_x_only_hides(window, tray_available):
     assert mw._thread.isRunning(), "Plico resta attivo"
     assert tray_available == [], "nascondere non esce"
     assert not QApplication.instance().quitOnLastWindowClosed()
+
+
+def test_the_appimage_finds_its_own_icon(qapp, tmp_path, monkeypatch):
+    """Not in the icon theme, but in the image's usr/share/icons.
+
+    The AppImage runtime does not put its usr/share in XDG_DATA_DIRS, where Qt
+    looks for theme icons: tray and window showed a generic PDF icon.
+    """
+    monkeypatch.setattr(QIcon, "fromTheme", staticmethod(lambda *args: QIcon()))
+    share = tmp_path / "usr" / "share"
+    package = share / "plico" / "plico"
+    package.mkdir(parents=True)
+    assert application_icon(package).isNull()
+
+    apps = share / "icons" / "hicolor" / "scalable" / "apps"
+    apps.mkdir(parents=True)
+    svg = Path(__file__).resolve().parents[1] / "flatpak" / "io.github.gradia64.plico.svg"
+    shutil.copy(svg, apps)
+    assert not application_icon(package).pixmap(64, 64).isNull()
 
 
 def test_the_icon_alone_leaves_the_x_quitting(window, tray_available):

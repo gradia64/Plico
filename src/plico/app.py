@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QApplication
 
 from . import preferences
 from .i18n import LANGUAGES, chosen_locale, install_qt_translator, install_translators
-from .main_window import MainWindow
+from .main_window import MainWindow, application_icon
 from .model import is_image
 
 #: The application id: the name of the .desktop file, of the Flatpak and of the
@@ -94,6 +94,9 @@ def main() -> int:
     app = QApplication.instance() or QApplication(sys.argv)
     # Before the first window: the strings are read while it is built.
     apply_language(app, language)
+    # The window's own icon, where the desktop does not find the .desktop
+    # file: an AppImage nobody integrated, for one.
+    QApplication.setWindowIcon(application_icon())
     window = MainWindow()
     window.show()
 
