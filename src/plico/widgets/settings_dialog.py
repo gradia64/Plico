@@ -1,9 +1,11 @@
-"""«Impostazioni»: the language, and the icon in the notification area.
+"""«Impostazioni»: the language, the icon in the notification area, updates.
 
 Few choices on purpose, the same ones OllaDesk offers in the same words, so
 that the two applications of the same author behave alike: a language follows
 the system unless the user picks one, and the tray is an opt-in that can make
-the window's X hide Plico instead of quitting it.
+the window's X hide Plico instead of quitting it. The daily check for a new
+version is an opt-in too, offered only where no package manager updates Plico
+(see :mod:`plico.updates`).
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import i18n, preferences
+from .. import i18n, preferences, updates
 
 
 @dataclass(frozen=True)
@@ -33,12 +35,18 @@ class Choices:
     language: str
     tray_icon: bool
     close_to_tray: bool
+    check_updates: bool = False
 
 
 class SettingsDialog(QDialog):
-    """Language and tray, with the current choices filled in."""
+    """Language, tray and updates, with the current choices filled in."""
 
-    def __init__(self, current: Choices, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        current: Choices,
+        parent: QWidget | None = None,
+        source: updates.Channel = updates.Channel.PYTHON,
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle(self.tr("Impostazioni"))
 
@@ -90,6 +98,35 @@ class SettingsDialog(QDialog):
             missing.setWordWrap(True)
             tray_layout.addWidget(missing)
 
+        self._check_updates = QCheckBox(
+            self.tr("Controlla una volta al giorno se c'è una nuova versione")
+        )
+        self._check_updates.setChecked(current.check_updates)
+        updates_box = QGroupBox(self.tr("Aggiornamenti"))
+        updates_layout = QVBoxLayout(updates_box)
+        updates_layout.addWidget(self._check_updates)
+        if updates.automatic_allowed(source):
+            note = self.tr(
+                "Plico chiede a GitHub il numero dell'ultima versione e non invia "
+                "nient'altro. Finché la casella è vuota, non si collega a niente."
+            )
+        else:
+            self._check_updates.setChecked(False)
+            self._check_updates.setEnabled(False)
+            if source is updates.Channel.FLATPAK:
+                note = self.tr(
+                    "Questo pacchetto Flatpak non ha accesso alla rete: «Aiuto → "
+                    "Cerca aggiornamenti…» apre la pagina delle versioni."
+                )
+            else:
+                note = self.tr(
+                    "Plico è installato dal gestore dei pacchetti del sistema, che lo "
+                    "tiene aggiornato."
+                )
+        updates_note = QLabel(note)
+        updates_note.setWordWrap(True)
+        updates_layout.addWidget(updates_note)
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
@@ -99,6 +136,7 @@ class SettingsDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(language_box)
         layout.addWidget(tray_box)
+        layout.addWidget(updates_box)
         layout.addWidget(buttons)
 
     def choices(self) -> Choices:
@@ -108,4 +146,5 @@ class SettingsDialog(QDialog):
             language=str(self._language.currentData() or preferences.AUTOMATIC),
             tray_icon=tray_icon,
             close_to_tray=tray_icon and self._close_to_tray.isChecked(),
+            check_updates=self._check_updates.isEnabled() and self._check_updates.isChecked(),
         )

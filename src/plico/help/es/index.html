@@ -25,6 +25,7 @@ hasta que guardas.</p>
 <li><a href="#ocr">Reconocer el texto de un escaneo</a></li>
 <li><a href="#sign">Firmar y verificar</a></li>
 <li><a href="#settings">Configuración</a></li>
+<li><a href="#updates">Actualizaciones</a></li>
 <li><a href="#files">Dónde están los archivos</a></li>
 <li><a href="#keys">Atajos de teclado</a></li>
 </ul>
@@ -174,7 +175,26 @@ icono también se puede elegir que la <b>X</b> de la ventana minimice Plico en
 el área de notificación en lugar de cerrarlo: un clic en el icono vuelve a
 abrir la ventana, y se sale con <b>Archivo → Salir</b> (<code>Ctrl+Q</code>) o
 con «Salir» en el menú del icono.</li>
+<li><b>Actualizaciones</b>: una comprobación diaria de versiones nuevas, apagada hasta que la actives (ver más abajo).</li>
 </ul>
+
+<h2 id="updates">Actualizaciones</h2>
+
+<p><b>Ayuda → Buscar actualizaciones…</b> pregunta a GitHub cuál es la última
+versión de Plico y dice si hay una más reciente, con un botón que abre su
+página. Es la única petición de red que hace Plico, y solo sale cuando la
+pides: no envía nada sobre ti ni sobre tus documentos.</p>
+
+<p>En <b>Configuración → Configurar Plico…</b> se puede pedir a Plico que lo
+compruebe solo, como mucho una vez al día: la casilla queda vacía hasta que la
+marques. Cuando sale una versión nueva, un aviso sobre la página lo dice una
+vez, y <b>Ayuda → Descargar Plico</b> queda en el menú hasta que actualices.</p>
+
+<p>Depende de cómo instalaste Plico: la AppImage y el paquete
+<code>.deb</code> no se actualizan solos, y la comprobación diaria es para
+ellos. El paquete de AUR lo actualiza el gestor de paquetes, así que allí no
+se ofrece la casilla. El paquete Flatpak no tiene acceso a la red: la orden
+abre la página de versiones en el navegador, para compararla con la tuya.</p>
 
 <h2 id="files">Dónde están los archivos</h2>
 

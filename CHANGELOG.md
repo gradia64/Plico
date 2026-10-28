@@ -6,6 +6,17 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Non rilasciato]
 
+### Aggiunto
+
+- **Aggiornamenti**: *Aiuto → Cerca aggiornamenti…* chiede a GitHub se è
+  uscita una versione più recente e apre la sua pagina. In *Impostazioni* si
+  può accendere un controllo automatico, al massimo una volta al giorno, che
+  annuncia una versione nuova con un avviso sopra la pagina e la voce *Aiuto →
+  Scarica Plico*. È spento finché non lo si accende: senza, Plico non si
+  collega a niente. Lo si offre dove nessuno aggiorna Plico (AppImage, `.deb`,
+  pip); il pacchetto dell'AUR lo aggiorna il gestore dei pacchetti, e il
+  Flatpak, che non ha accesso alla rete, apre la pagina delle versioni.
+
 ### Corretto
 
 - **AppImage**: l'icona di Plico compare nell'area di notifica e sulla

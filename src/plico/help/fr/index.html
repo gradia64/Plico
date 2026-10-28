@@ -25,6 +25,7 @@ Le fichier d'origine n'est jamais modifié tant que vous n'enregistrez pas.</p>
 <li><a href="#ocr">Reconnaître le texte d'un scan</a></li>
 <li><a href="#sign">Signer et vérifier</a></li>
 <li><a href="#settings">Configuration</a></li>
+<li><a href="#updates">Mises à jour</a></li>
 <li><a href="#files">Où sont les fichiers</a></li>
 <li><a href="#keys">Raccourcis clavier</a></li>
 </ul>
@@ -180,7 +181,29 @@ l'icône, on peut aussi choisir que le <b>X</b> de la fenêtre réduise Plico
 dans la zone de notification au lieu de le fermer : un clic sur l'icône
 rouvre la fenêtre, et on quitte par <b>Fichier → Quitter</b>
 (<code>Ctrl+Q</code>) ou par « Quitter » dans le menu de l'icône.</li>
+<li><b>Mises à jour</b> : une vérification quotidienne des nouvelles versions, désactivée tant que vous ne l'activez pas (voir ci-dessous).</li>
 </ul>
+
+<h2 id="updates">Mises à jour</h2>
+
+<p><b>Aide → Rechercher les mises à jour…</b> demande à GitHub quelle est la
+dernière version de Plico et indique s'il en existe une plus récente, avec un
+bouton qui ouvre sa page. C'est la seule requête réseau de Plico, et elle ne
+part que lorsque vous la demandez : elle n'envoie rien sur vous ni sur vos
+documents.</p>
+
+<p>Dans <b>Configuration → Configurer Plico…</b>, on peut demander à Plico de
+vérifier tout seul, au plus une fois par jour : la case reste vide tant que
+vous ne la cochez pas. Quand une nouvelle version sort, un message au-dessus
+de la page le dit une fois, et <b>Aide → Télécharger Plico</b> reste dans le
+menu jusqu'à la mise à jour.</p>
+
+<p>Cela dépend de la façon dont Plico est installé : l'AppImage et le paquet
+<code>.deb</code> ne se mettent pas à jour seuls, et la vérification
+quotidienne est faite pour eux. Le paquet de l'AUR est mis à jour par le
+gestionnaire de paquets, la case n'y est donc pas proposée. Le paquet Flatpak
+n'a pas accès au réseau : la commande ouvre la page des versions dans le
+navigateur, pour la comparer avec la vôtre.</p>
 
 <h2 id="files">Où sont les fichiers</h2>
 

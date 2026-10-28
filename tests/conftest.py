@@ -31,3 +31,17 @@ def _private_settings(monkeypatch, tmp_path):
     monkeypatch.setattr(
         MainWindow, "_settings", lambda self: QSettings(ini, QSettings.Format.IniFormat)
     )
+
+
+@pytest.fixture(autouse=True)
+def _no_network(monkeypatch):
+    """No test asks GitHub: the update checks get a network that is down.
+
+    The tests about the checks put their own answer in its place.
+    """
+    from plico import updates
+
+    def offline(timeout: float = updates.TIMEOUT_S) -> updates.Release:
+        raise updates.UpdateError("network disabled in the tests")
+
+    monkeypatch.setattr(updates, "fetch_latest", offline)

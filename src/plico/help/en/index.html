@@ -25,6 +25,7 @@ save.</p>
 <li><a href="#ocr">Recognizing the text of a scan</a></li>
 <li><a href="#sign">Signing and verifying</a></li>
 <li><a href="#settings">Settings</a></li>
+<li><a href="#updates">Updates</a></li>
 <li><a href="#files">Where the files are</a></li>
 <li><a href="#keys">Keyboard shortcuts</a></li>
 </ul>
@@ -170,7 +171,26 @@ you can also choose that the window's <b>X</b> minimizes Plico to the
 notification area instead of closing it: a click on the icon reopens the
 window, and you quit from <b>File → Quit</b> (<code>Ctrl+Q</code>) or from
 «Quit» in the icon's menu.</li>
+<li><b>Updates</b>: a daily check for new versions, off until you turn it on (see below).</li>
 </ul>
+
+<h2 id="updates">Updates</h2>
+
+<p><b>Help → Check for Updates…</b> asks GitHub which is the latest version of
+Plico and tells you whether there is a newer one, with a button that opens its
+page. It is the only network request Plico makes, and it goes out only when you
+ask: it sends nothing about you or your documents.</p>
+
+<p>In <b>Settings → Configure Plico…</b> you can have Plico check by itself, at
+most once a day: the box stays unchecked until you tick it. When a new version
+comes out, a note over the page says so once, and <b>Help → Download
+Plico</b> stays in the menu until you update.</p>
+
+<p>It depends on how you installed Plico: the AppImage and the
+<code>.deb</code> package do not update themselves, and the daily check is
+there for them. The AUR package is updated by the package manager, so the box
+is not offered there. The Flatpak package has no network access: the command
+opens the releases page in the browser, to compare it with yours.</p>
 
 <h2 id="files">Where the files are</h2>
 

@@ -120,6 +120,10 @@ def test_the_handbook_names_the_commands_as_the_menus_do(qapp, tmp_path, code):
             for action in menu.actions()
             if action.text()
         }
+        # From «Help», the update commands: the handbook says how to use them.
+        # The download entry names no version until one is found.
+        for action in (window._check_updates_act, window._download_act):
+            names.add(" ".join(action.text().replace("&", "").rstrip("…").split()))
         lowered = text.lower()
         missing = sorted(name for name in names if name.lower() not in lowered)
         assert not missing, f"{code}: comandi non nominati nella guida: {missing}"

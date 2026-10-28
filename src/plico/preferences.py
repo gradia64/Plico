@@ -15,6 +15,16 @@ TRAY_ICON = "tray/icona"
 #: Whether the window's X hides it in the tray instead of quitting.
 CLOSE_TO_TRAY = "tray/chiudi_nella_tray"
 
+#: Whether Plico asks GitHub, once a day, if a newer version is out. Off by
+#: default: Plico makes no request the user did not ask for.
+CHECK_UPDATES = "aggiornamenti/controlla"
+#: When GitHub was last asked (seconds since the epoch), answered or not.
+UPDATES_LAST = "aggiornamenti/ultimo_controllo"
+#: The newer version the last check found, so the menu offers it at once.
+UPDATES_FOUND = "aggiornamenti/versione_trovata"
+#: The version the toast already announced: once per version, not per start.
+UPDATES_ANNOUNCED = "aggiornamenti/versione_annunciata"
+
 AUTOMATIC = "auto"
 
 

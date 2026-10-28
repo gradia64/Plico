@@ -2,6 +2,7 @@
 
 import os
 import tempfile
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -14,10 +15,20 @@ from PySide6.QtCore import (
     QThread,
     QThreadPool,
     QTimer,
+    QUrl,
 )
-from PySide6.QtGui import QAction, QIcon, QKeySequence, QSessionManager, QUndoStack, QWindow
+from PySide6.QtGui import (
+    QAction,
+    QDesktopServices,
+    QIcon,
+    QKeySequence,
+    QSessionManager,
+    QUndoStack,
+    QWindow,
+)
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QDialog,
     QDockWidget,
     QFileDialog,
@@ -35,7 +46,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from . import __version__, preferences
+from . import __version__, preferences, updates
 from .model import (
     IMAGE_SUFFIXES,
     AddRedaction,
@@ -303,6 +314,21 @@ class MainWindow(QMainWindow):
         self._tray_retries = [5_000, 30_000]
         self._sync_tray()
 
+        # --- a newer Plico: asked of GitHub only if the user wants it ---
+        self._update_source = updates.channel()
+        self._update_checker = updates.UpdateChecker(self)
+        self._update_checker.answered.connect(self._on_update_answer)
+        self._update_checker.failed.connect(self._on_update_failure)
+        self._show_found_update()
+        # A few seconds after the start, not during it: the document the user
+        # opened comes first. Then once an hour, for a Plico left running in
+        # the tray for days; :func:`updates.due` keeps it to a request a day.
+        QTimer.singleShot(5_000, self._maybe_check_updates)
+        self._update_timer = QTimer(self)
+        self._update_timer.setInterval(60 * 60 * 1000)
+        self._update_timer.timeout.connect(self._maybe_check_updates)
+        self._update_timer.start()
+
     # ------------------------------------------------------------------ #
     #  Menus & Toolbar
     # ------------------------------------------------------------------ #
@@ -555,6 +581,18 @@ class MainWindow(QMainWindow):
         self._help_act = self._act(self.tr("&Guida di Plico"), "help-contents", "", self._open_help)
         self._help_act.setShortcut(QKeySequence(QKeySequence.StandardKey.HelpContents))
         help_menu.addAction(self._help_act)
+        help_menu.addSeparator()
+        self._check_updates_act = self._act(
+            self.tr("Cerca &aggiornamenti…"), "system-software-update", "", self._check_updates
+        )
+        help_menu.addAction(self._check_updates_act)
+        # Shown only once a newer version is known; its text names it.
+        self._download_act = self._act(
+            self.tr("&Scarica Plico {0}…").format(""), "download", "", self._open_found_update
+        )
+        self._download_act.setVisible(False)
+        help_menu.addAction(self._download_act)
+        help_menu.addSeparator()
         help_menu.addAction(
             self._act(self.tr("&Informazioni su Plico"), "help-about", "", self._about)
         )
@@ -2209,15 +2247,16 @@ class MainWindow(QMainWindow):
             language=preferences.language(s),
             tray_icon=preferences.flag(s, preferences.TRAY_ICON),
             close_to_tray=preferences.flag(s, preferences.CLOSE_TO_TRAY),
+            check_updates=self._automatic_updates(),
         )
 
     def _close_to_tray(self) -> bool:
         return preferences.flag(self._settings(), preferences.CLOSE_TO_TRAY)
 
     def _open_settings(self) -> None:
-        """Impostazioni: language and tray, saved and applied on OK."""
+        """Impostazioni: language, tray and updates, saved and applied on OK."""
         before = self._choices()
-        dialog = SettingsDialog(before, self)
+        dialog = SettingsDialog(before, self, self._update_source)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         after = dialog.choices()
@@ -2225,8 +2264,12 @@ class MainWindow(QMainWindow):
         s.setValue(preferences.LANGUAGE, after.language)
         s.setValue(preferences.TRAY_ICON, after.tray_icon)
         s.setValue(preferences.CLOSE_TO_TRAY, after.close_to_tray)
+        if updates.automatic_allowed(self._update_source):
+            s.setValue(preferences.CHECK_UPDATES, after.check_updates)
         s.sync()
         self._sync_tray()
+        # Just turned on: the first check now, not in an hour.
+        self._maybe_check_updates()
         if after.language != before.language:
             # Every string was read when the window was built: changing them
             # all now would mean rebuilding it, document and undo included.
@@ -2255,6 +2298,146 @@ class MainWindow(QMainWindow):
                 '<a href="https://github.com/gradia64/Plico">github.com/gradia64/Plico</a></p>'
             ).format(__version__),
         )
+
+    # ------------------------------------------------------------------ #
+    #  A newer version
+    # ------------------------------------------------------------------ #
+
+    def _automatic_updates(self) -> bool:
+        """The daily check: chosen by the user, and only where nothing else updates."""
+        return updates.automatic_allowed(self._update_source) and preferences.flag(
+            self._settings(), preferences.CHECK_UPDATES
+        )
+
+    def _maybe_check_updates(self) -> None:
+        """The daily check, if it is on and a day has gone by since the last request."""
+        if not self._automatic_updates() or self._update_checker.is_running():
+            return
+        last = self._settings().value(preferences.UPDATES_LAST)
+        try:
+            when = float(last) if last is not None else None
+        except (TypeError, ValueError):
+            when = None
+        if updates.due(when, time.time()):
+            self._start_update_check(manual=False)
+
+    def _start_update_check(self, manual: bool) -> None:
+        if not self._update_checker.start(manual):
+            return
+        # Recorded at the request, not at the answer: a failure counts too,
+        # or a machine without network would ask every hour.
+        s = self._settings()
+        s.setValue(preferences.UPDATES_LAST, time.time())
+        s.sync()
+
+    def _check_updates(self) -> None:
+        """Aiuto → Cerca aggiornamenti…: one request, because the user asked."""
+        if not updates.can_fetch(self._update_source):
+            self._offer_releases_page()
+            return
+        if self._update_checker.is_running():
+            return
+        self._status.setText(self.tr("Ricerca di una nuova versione…"))
+        self._start_update_check(manual=True)
+
+    def _offer_releases_page(self) -> None:
+        """The Flatpak has no network: the page, and the version to compare with."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setWindowTitle(self.tr("Cerca aggiornamenti"))
+        box.setText(
+            self.tr(
+                "Questo è Plico {0}. Il pacchetto Flatpak non ha accesso alla rete, "
+                "quindi Plico non può chiedere da sé se c'è una versione più recente: "
+                "la pagina delle versioni lo dice."
+            ).format(__version__)
+        )
+        page = box.addButton(self.tr("Apri la pagina"), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(QMessageBox.StandardButton.Close)
+        box.exec()
+        if box.clickedButton() is page:
+            QDesktopServices.openUrl(QUrl(updates.RELEASES_PAGE))
+
+    def _on_update_answer(self, release: updates.Release, manual: bool) -> None:
+        s = self._settings()
+        if updates.is_newer(release.version):
+            s.setValue(preferences.UPDATES_FOUND, release.version)
+        else:
+            s.remove(preferences.UPDATES_FOUND)
+        s.sync()
+        self._show_found_update()
+        if manual:
+            self._status.setText(self.tr("Pronto"))
+            self._tell_update_result(release)
+        elif updates.is_newer(release.version):
+            if s.value(preferences.UPDATES_ANNOUNCED) != release.version:
+                s.setValue(preferences.UPDATES_ANNOUNCED, release.version)
+                s.sync()
+                self._notify(
+                    self.tr("È disponibile Plico {0}: Aiuto → Scarica Plico {0}.").format(
+                        release.version
+                    )
+                )
+
+    def _on_update_failure(self, reason: str, manual: bool) -> None:
+        """Silent unless the user asked: no network is not news."""
+        if not manual:
+            return
+        self._status.setText(self.tr("Pronto"))
+        QMessageBox.warning(
+            self,
+            self.tr("Cerca aggiornamenti"),
+            self.tr("Non è stato possibile controllare gli aggiornamenti.\n{0}").format(reason),
+        )
+
+    def _tell_update_result(self, release: updates.Release) -> None:
+        """The answer to «Cerca aggiornamenti…», with the daily check on offer."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setWindowTitle(self.tr("Cerca aggiornamenti"))
+        page = None
+        if updates.is_newer(release.version):
+            if self._update_source is updates.Channel.SYSTEM:
+                text = self.tr(
+                    "È disponibile Plico {0} (questo è {1}). Il gestore dei pacchetti "
+                    "del sistema lo installerà con il prossimo aggiornamento."
+                )
+            else:
+                text = self.tr("È disponibile Plico {0} (questo è {1}).")
+            box.setText(text.format(release.version, __version__))
+            page = box.addButton(self.tr("Apri la pagina"), QMessageBox.ButtonRole.AcceptRole)
+        else:
+            box.setText(self.tr("Plico {0} è la versione più recente.").format(__version__))
+        box.addButton(QMessageBox.StandardButton.Close)
+        # Where the daily check is offered and still off, this is the moment
+        # to say it exists: the user has just shown they care.
+        daily = None
+        if updates.automatic_allowed(self._update_source) and not self._automatic_updates():
+            daily = QCheckBox(self.tr("Controlla una volta al giorno"))
+            box.setCheckBox(daily)
+        box.exec()
+        if daily is not None and daily.isChecked():
+            s = self._settings()
+            s.setValue(preferences.CHECK_UPDATES, True)
+            s.sync()
+        if page is not None and box.clickedButton() is page:
+            QDesktopServices.openUrl(QUrl(release.url))
+
+    def _found_update(self) -> str | None:
+        """The newer version the last check found, if it is still newer than this one."""
+        found = self._settings().value(preferences.UPDATES_FOUND)
+        return found if isinstance(found, str) and updates.is_newer(found) else None
+
+    def _show_found_update(self) -> None:
+        found = self._found_update()
+        self._download_act.setVisible(found is not None)
+        if found is not None:
+            self._download_act.setText(self.tr("&Scarica Plico {0}…").format(found))
+
+    def _open_found_update(self) -> None:
+        found = self._found_update()
+        if found is not None:
+            QDesktopServices.openUrl(QUrl(updates.release_page(found)))
 
     def _sync_tray(self) -> None:
         """Show or remove the tray icon, as the settings say."""

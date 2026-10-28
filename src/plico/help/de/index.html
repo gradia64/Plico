@@ -25,6 +25,7 @@ verändert, solange Sie nicht speichern.</p>
 <li><a href="#ocr">Den Text eines Scans erkennen</a></li>
 <li><a href="#sign">Signieren und prüfen</a></li>
 <li><a href="#settings">Einstellungen</a></li>
+<li><a href="#updates">Aktualisierungen</a></li>
 <li><a href="#files">Wo die Dateien sind</a></li>
 <li><a href="#keys">Tastenkürzel</a></li>
 </ul>
@@ -182,7 +183,28 @@ Symbol lässt sich auch festlegen, dass das <b>X</b> des Fensters Plico in den
 Benachrichtigungsbereich minimiert, statt es zu schließen: Ein Klick auf das
 Symbol öffnet das Fenster wieder, beendet wird mit <b>Datei → Beenden</b>
 (<code>Strg+Q</code>) oder mit „Beenden“ im Menü des Symbols.</li>
+<li><b>Aktualisierungen</b>: eine tägliche Prüfung auf neue Versionen, aus, bis Sie sie einschalten (siehe unten).</li>
 </ul>
+
+<h2 id="updates">Aktualisierungen</h2>
+
+<p><b>Hilfe → Nach Aktualisierungen suchen…</b> fragt GitHub nach der
+neuesten Version von Plico und sagt, ob es eine neuere gibt, mit einer
+Schaltfläche, die ihre Seite öffnet. Es ist die einzige Netzwerkanfrage von
+Plico, und sie geht nur hinaus, wenn Sie sie anfordern: Sie sendet nichts über
+Sie oder Ihre Dokumente.</p>
+
+<p>Unter <b>Einstellungen → Plico einrichten…</b> kann Plico selbst prüfen,
+höchstens einmal am Tag: Das Kästchen bleibt leer, bis Sie es ankreuzen.
+Erscheint eine neue Version, sagt ein Hinweis über der Seite es einmal, und
+<b>Hilfe → Plico herunterladen</b> bleibt im Menü, bis Sie aktualisieren.</p>
+
+<p>Es hängt davon ab, wie Plico installiert wurde: Das AppImage und das
+<code>.deb</code>-Paket aktualisieren sich nicht selbst, und für sie ist die
+tägliche Prüfung gedacht. Das AUR-Paket aktualisiert die Paketverwaltung,
+dort wird das Kästchen daher nicht angeboten. Das Flatpak-Paket hat keinen
+Netzwerkzugriff: Der Befehl öffnet die Seite mit den Versionen im Browser,
+zum Vergleich mit Ihrer.</p>
 
 <h2 id="files">Wo die Dateien sind</h2>
 
