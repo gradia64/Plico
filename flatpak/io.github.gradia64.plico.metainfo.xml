@@ -83,7 +83,7 @@
       <caption xml:lang="es">Un documento con sus páginas, ajustado al ancho de la ventana</caption>
       <caption xml:lang="fr">Un document et ses pages, ajusté à la largeur de la fenêtre</caption>
       <caption xml:lang="de">Ein Dokument mit seinen Seiten, an die Fensterbreite angepasst</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.5/flatpak/screenshots/main.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.6/flatpak/screenshots/main.png</image>
     </screenshot>
     <screenshot>
       <caption>Personal data marked for erasure: on saving it leaves the file</caption>
@@ -91,7 +91,7 @@
       <caption xml:lang="es">Datos personales marcados para borrar: al guardar salen del archivo</caption>
       <caption xml:lang="fr">Données personnelles marquées pour l'effacement : à l'enregistrement, elles quittent le fichier</caption>
       <caption xml:lang="de">Persönliche Daten zum Löschen markiert: Beim Speichern verlassen sie die Datei</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.5/flatpak/screenshots/redact.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.6/flatpak/screenshots/redact.png</image>
     </screenshot>
     <screenshot>
       <caption>Filling in a PDF form, on the page or in the side panel</caption>
@@ -99,7 +99,7 @@
       <caption xml:lang="es">Rellenar un formulario PDF, en la página o en el panel lateral</caption>
       <caption xml:lang="fr">Remplir un formulaire PDF, sur la page ou dans le panneau latéral</caption>
       <caption xml:lang="de">Ein PDF-Formular ausfüllen, auf der Seite oder in der Seitenleiste</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.5/flatpak/screenshots/form.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.6/flatpak/screenshots/form.png</image>
     </screenshot>
     <screenshot>
       <caption>Correcting a line of text where it stands</caption>
@@ -107,7 +107,7 @@
       <caption xml:lang="es">Corregir una línea de texto en su sitio</caption>
       <caption xml:lang="fr">Corriger une ligne de texte là où elle se trouve</caption>
       <caption xml:lang="de">Eine Textzeile direkt an ihrer Stelle korrigieren</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.5/flatpak/screenshots/edit.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.6/flatpak/screenshots/edit.png</image>
     </screenshot>
     <screenshot>
       <caption>Searching the document: every match highlighted, the current one in orange</caption>
@@ -115,7 +115,7 @@
       <caption xml:lang="es">Buscar en el documento: cada coincidencia resaltada, la actual en naranja</caption>
       <caption xml:lang="fr">Rechercher dans le document : chaque occurrence surlignée, l'occurrence courante en orange</caption>
       <caption xml:lang="de">Im Dokument suchen: jeder Treffer hervorgehoben, der aktuelle in Orange</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.5/flatpak/screenshots/search.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.6/flatpak/screenshots/search.png</image>
     </screenshot>
   </screenshots>
 
@@ -209,6 +209,32 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.1.6" date="2026-10-28">
+      <description>
+        <p>Plico can tell when a newer version is out, and a few fixes.</p>
+        <p xml:lang="it">Plico sa dire quando è uscita una versione più recente, e qualche correzione.</p>
+        <p xml:lang="es">Plico puede avisar cuando sale una versión más reciente, y algunas correcciones.</p>
+        <p xml:lang="fr">Plico peut signaler qu'une version plus récente est sortie, et quelques corrections.</p>
+        <p xml:lang="de">Plico kann melden, wenn eine neuere Version erschienen ist, dazu einige Korrekturen.</p>
+        <ul>
+          <li>Help → Check for Updates, and an optional daily check, off by default</li>
+          <li xml:lang="it">Aiuto → Cerca aggiornamenti, e un controllo giornaliero facoltativo, spento di default</li>
+          <li xml:lang="es">Ayuda → Buscar actualizaciones, y una comprobación diaria opcional, desactivada por defecto</li>
+          <li xml:lang="fr">Aide → Rechercher les mises à jour, et une vérification quotidienne facultative, désactivée par défaut</li>
+          <li xml:lang="de">Hilfe → Nach Aktualisierungen suchen, und eine optionale tägliche Prüfung, standardmäßig aus</li>
+          <li>The AppImage shows Plico's own icon in the tray and on the window</li>
+          <li xml:lang="it">L'AppImage mostra l'icona di Plico nell'area di notifica e sulla finestra</li>
+          <li xml:lang="es">La AppImage muestra el icono de Plico en el área de notificación y en la ventana</li>
+          <li xml:lang="fr">L'AppImage affiche l'icône de Plico dans la zone de notification et sur la fenêtre</li>
+          <li xml:lang="de">Das AppImage zeigt Plicos eigenes Symbol im Benachrichtigungsbereich und am Fenster</li>
+          <li>A certificate that is not valid yet is refused before signing</li>
+          <li xml:lang="it">Un certificato non ancora valido viene rifiutato prima della firma</li>
+          <li xml:lang="es">Un certificado que aún no es válido se rechaza antes de firmar</li>
+          <li xml:lang="fr">Un certificat pas encore valide est refusé avant la signature</li>
+          <li xml:lang="de">Ein noch nicht gültiges Zertifikat wird vor dem Signieren abgelehnt</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.5" date="2026-10-21">
       <description>
         <p>A new icon, packages for Debian, Ubuntu and Arch Linux, and a security update of the bundled certificate authorities.</p>

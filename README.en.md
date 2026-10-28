@@ -568,9 +568,9 @@ At every release:
 #    metainfo, notes in packaging/release-notes/X.Y.Z.md, CHANGELOG.md;
 #    commit and push
 # 2. signed, verified, published tag: release.yml does the rest
-git tag -s v0.1.5 -m "Plico 0.1.5"
-scripts/verify-tag.sh v0.1.5
-git push origin v0.1.5
+git tag -s v0.1.6 -m "Plico 0.1.6"
+scripts/verify-tag.sh v0.1.6
+git push origin v0.1.6
 # 3. by hand, before a tag, the same builds without publishing (except the
 #    Arch package: the PKGBUILD clones the signed tag, not there yet)
 gh workflow run release.yml --ref main

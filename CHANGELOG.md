@@ -6,6 +6,8 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Non rilasciato]
 
+## [0.1.6] — 2026-10-28
+
 ### Aggiunto
 
 - **Aggiornamenti**: *Aiuto → Cerca aggiornamenti…* chiede a GitHub se è
@@ -140,7 +142,8 @@ La prima versione.
 - Annulla/ripristina per ogni modifica, rendering asincrono, integrazione
   desktop KDE, interfaccia in cinque lingue, pacchetto Flatpak.
 
-[Non rilasciato]: https://github.com/gradia64/Plico/compare/v0.1.5...HEAD
+[Non rilasciato]: https://github.com/gradia64/Plico/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/gradia64/Plico/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/gradia64/Plico/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/gradia64/Plico/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/gradia64/Plico/compare/v0.1.2...v0.1.3
