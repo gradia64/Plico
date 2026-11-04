@@ -1570,17 +1570,27 @@ valid until {1}</translation>
 </context><context>
     <name>UpdateChecker</name>
     <message>
-        <location filename="../updates.py" line="139" />
+        <location filename="../updates.py" line="143" />
         <source>Risposta di GitHub non valida.</source>
         <translation>GitHub's answer is not valid.</translation>
     </message>
     <message>
-        <location filename="../updates.py" line="183" />
-        <source>GitHub ha risposto {0}.</source>
-        <translation>GitHub answered {0}.</translation>
+        <location filename="../updates.py" line="175" />
+        <source>Errore HTTP {0} da GitHub.</source>
+        <translation>GitHub HTTP error {0}.</translation>
     </message>
     <message>
-        <location filename="../updates.py" line="187" />
+        <location filename="../updates.py" line="188" />
+        <source>Limite di richieste a GitHub raggiunto, riprova più tardi.</source>
+        <translation>GitHub request limit reached, try again later.</translation>
+    </message>
+    <message>
+        <location filename="../updates.py" line="191" />
+        <source>Limite di richieste a GitHub raggiunto (60 all'ora per indirizzo IP): riprova dopo le {0}.</source>
+        <translation>GitHub request limit reached (60 an hour per IP address): try again after {0}.</translation>
+    </message>
+    <message>
+        <location filename="../updates.py" line="230" />
         <source>GitHub non è raggiungibile ({0}).</source>
         <translation>GitHub cannot be reached ({0}).</translation>
     </message>

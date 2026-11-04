@@ -6,6 +6,13 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Non rilasciato]
 
+### Corretto
+
+- **Aggiornamenti**: quando GitHub rifiuta il controllo perché è stato
+  raggiunto il suo limite di richieste (60 all'ora per indirizzo IP, contate
+  su tutto ciò che esce da quell'indirizzo), Plico lo dice e indica a che ora
+  riprovare, invece di un generico «GitHub ha risposto 403».
+
 ## [0.1.6] — 2026-10-28
 
 ### Aggiunto

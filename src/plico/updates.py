@@ -29,10 +29,12 @@ import os
 import re
 import ssl
 import threading
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Mapping
 from dataclasses import dataclass
+from email.message import Message
 from enum import Enum
 from pathlib import Path
 
@@ -47,6 +49,9 @@ INTERVAL_S = 24 * 60 * 60
 TIMEOUT_S = 8.0
 # A release is a few KB of JSON; anything far larger is not GitHub's answer.
 MAX_BYTES = 1 << 20
+
+#: A rate limit that resets further away than this is not believed.
+MAX_RESET_S = 24 * 60 * 60
 
 _VERSION = re.compile(r"v?(\d+(?:\.\d+){0,3})")
 
@@ -152,6 +157,46 @@ def release_from_json(data: object) -> Release:
     return Release(text, release_page(text))
 
 
+def github_http_error(error: urllib.error.HTTPError, now: float | None = None) -> str:
+    """What to tell the user about an error answer from GitHub's API.
+
+    Without a token GitHub allows 60 requests an hour per IP address, counted
+    over everything that leaves it (other programs, other users behind the
+    same carrier NAT): past it, the answer is 403 (or 429) with
+    ``X-RateLimit-Remaining: 0`` and the reset time in ``X-RateLimit-Reset``
+    (epoch), or a ``Retry-After``. Plico asks at most once a day, so the limit
+    was spent by someone else, and the user needs the time to try again. A 403
+    without those headers is a real refusal, and is not passed off as a limit.
+    """
+    headers = error.headers or Message()
+    remaining = (headers.get("X-RateLimit-Remaining") or "").strip()
+    retry_after = (headers.get("Retry-After") or "").strip()
+    limited = error.code == 429 or (error.code == 403 and (remaining == "0" or bool(retry_after)))
+    if not limited:
+        text = QCoreApplication.translate("UpdateChecker", "Errore HTTP {0} da GitHub.")
+        return text.format(error.code)
+    now = time.time() if now is None else now
+    reset: float | None = None
+    try:
+        if remaining == "0" and headers.get("X-RateLimit-Reset"):
+            reset = float(headers["X-RateLimit-Reset"])
+        elif retry_after:
+            reset = now + float(retry_after)
+    except ValueError:
+        reset = None
+    # NaN fails both comparisons below, so it is caught by the negation.
+    if reset is None or not 0 < reset - now <= MAX_RESET_S:
+        return QCoreApplication.translate(
+            "UpdateChecker", "Limite di richieste a GitHub raggiunto, riprova più tardi."
+        )
+    text = QCoreApplication.translate(
+        "UpdateChecker",
+        "Limite di richieste a GitHub raggiunto (60 all'ora per indirizzo IP): "
+        "riprova dopo le {0}.",
+    )
+    return text.format(time.strftime("%H:%M", time.localtime(reset)))
+
+
 def _ssl_context() -> ssl.SSLContext:
     """certifi's roots where they are bundled, the system's otherwise.
 
@@ -180,8 +225,7 @@ def fetch_latest(timeout: float = TIMEOUT_S) -> Release:
         with urllib.request.urlopen(request, timeout=timeout, context=_ssl_context()) as reply:
             body = reply.read(MAX_BYTES + 1)
     except urllib.error.HTTPError as error:
-        text = QCoreApplication.translate("UpdateChecker", "GitHub ha risposto {0}.")
-        raise UpdateError(text.format(error.code)) from error
+        raise UpdateError(github_http_error(error)) from error
     except (urllib.error.URLError, OSError) as error:
         reason = getattr(error, "reason", error)
         text = QCoreApplication.translate("UpdateChecker", "GitHub non è raggiungibile ({0}).")

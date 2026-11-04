@@ -6,6 +6,7 @@ put their own. The real function is kept here, imported before the fixture
 replaces it, and tried against a fake ``urlopen``.
 """
 
+import email.message
 import io
 import json
 import threading
@@ -158,6 +159,75 @@ def test_no_network_is_an_update_error(monkeypatch, failure):
 
     monkeypatch.setattr(updates.urllib.request, "urlopen", urlopen)
     with pytest.raises(UpdateError):
+        real_fetch_latest()
+
+
+def _http_error(code: int, **headers: str) -> urllib.error.HTTPError:
+    message = email.message.Message()
+    for name, value in headers.items():
+        message[name.replace("_", "-")] = value
+    return urllib.error.HTTPError(updates.RELEASES_API, code, "error", message, None)
+
+
+NOW = 1_800_000_000.0
+LIMIT_LATER = "Limite di richieste a GitHub raggiunto, riprova più tardi."
+
+
+def _limit_at(when: float) -> str:
+    return (
+        "Limite di richieste a GitHub raggiunto (60 all'ora per indirizzo IP): "
+        f"riprova dopo le {time.strftime('%H:%M', time.localtime(when))}."
+    )
+
+
+def test_a_spent_rate_limit_says_when_to_try_again():
+    error = _http_error(403, X_RateLimit_Remaining="0", X_RateLimit_Reset=str(int(NOW) + 1800))
+    assert updates.github_http_error(error, now=NOW) == _limit_at(NOW + 1800)
+
+
+@pytest.mark.parametrize("code", [403, 429])
+def test_retry_after_is_a_limit_too(code):
+    error = _http_error(code, Retry_After="120")
+    assert updates.github_http_error(error, now=NOW) == _limit_at(NOW + 120)
+
+
+@pytest.mark.parametrize(
+    "reset",
+    [str(int(NOW) - 60), "domani", str(int(NOW) + 2 * 24 * 3600), "nan", ""],
+)
+def test_a_limit_without_a_believable_time_says_later(reset):
+    error = _http_error(403, X_RateLimit_Remaining="0", X_RateLimit_Reset=reset)
+    assert updates.github_http_error(error, now=NOW) == LIMIT_LATER
+
+
+def test_a_bare_429_is_a_limit():
+    assert updates.github_http_error(_http_error(429), now=NOW) == LIMIT_LATER
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        _http_error(403),
+        _http_error(403, X_RateLimit_Remaining="12", X_RateLimit_Reset=str(int(NOW) + 60)),
+    ],
+)
+def test_a_403_without_a_spent_limit_is_not_one(error):
+    assert updates.github_http_error(error, now=NOW) == "Errore HTTP 403 da GitHub."
+
+
+def test_other_codes_are_plain_http_errors():
+    assert updates.github_http_error(_http_error(500), now=NOW) == "Errore HTTP 500 da GitHub."
+
+
+def test_fetching_reports_the_limit(monkeypatch):
+    reset = str(int(time.time()) + 600)
+    error = _http_error(403, X_RateLimit_Remaining="0", X_RateLimit_Reset=reset)
+
+    def urlopen(request, timeout, context):
+        raise error
+
+    monkeypatch.setattr(updates.urllib.request, "urlopen", urlopen)
+    with pytest.raises(UpdateError, match="riprova dopo le"):
         real_fetch_latest()
 
 
