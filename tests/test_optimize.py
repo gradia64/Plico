@@ -27,6 +27,7 @@ from plico.model import (
     optimize_in_place,
     save_compressed,
 )
+from plico.model.optimize import CompressionOptions, _rewrite
 
 # The light level must at least halve a fragmented text PDF.
 SOGLIA_TESTO = 0.5
@@ -161,6 +162,30 @@ def test_optimize_never_grows_an_already_optimized_file(qapp, tmp_path):
     assert os.path.getsize(path) <= before
     if not risultato.shrank:
         assert os.path.getsize(path) == before
+
+
+@pytest.mark.parametrize("pages", [None, (0,)], ids=["tutte", "alcune"])
+def test_the_rewrite_keeps_the_file_identifier(qapp, tmp_path, pages):
+    """The gain is a size comparison, so the rewrite must not add noise to it.
+
+    A new random /ID at every save made the same content come out a few bytes
+    shorter now and then -- MuPDF writes it as hex or as an escaped literal,
+    depending on the bytes drawn -- and a rewrite that changed nothing was
+    taken for one that shrank, and written (seen in CI, about once in a
+    hundred runs). Both paths: the whole document, and the body rebuilt when
+    only some pages are resampled.
+    """
+    src = str(tmp_path / "scansione.pdf")
+    out = str(tmp_path / "riscritto.pdf")
+    _scan(src, pages=2, side=300)
+    options = CompressionOptions(level=LEVELS_BY_KEY["medium"], groom=False, image_pages=pages)
+
+    _rewrite(src, out, options)
+
+    with pymupdf.open(src) as before, pymupdf.open(out) as after:
+        identifier = before.xref_get_key(-1, "ID")
+        assert identifier[0] == "array"
+        assert after.xref_get_key(-1, "ID") == identifier
 
 
 def test_optimize_keeps_page_rotation(qapp, tmp_path):

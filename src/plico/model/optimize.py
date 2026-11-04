@@ -198,11 +198,19 @@ def _scratch(directory: str) -> Iterator[str]:
 
 
 def _clean(doc: pymupdf.Document, out: str, options: CompressionOptions) -> None:
-    """Save *doc* to *out*, grooming the content streams when asked to."""
+    """Save *doc* to *out*, grooming the content streams when asked to.
+
+    The trailer's /ID is kept as it is. By default PyMuPDF draws a new random
+    one at every save, and MuPDF writes it as a hex string or as a literal
+    with escapes depending on the bytes drawn: the same file comes out a few
+    bytes longer or shorter (measured: 12 saves in 1500 of an unchanged
+    one-page PDF). The gain is decided by comparing sizes, so a rewrite that
+    changed nothing could pass for one that shrank, and be written.
+    """
     # `clean` is the step that is worth the most: a PDF built by copying
     # pages around carries one content stream per operation, and merging
     # them loses nothing.
-    doc.save(out, garbage=4, deflate=True, clean=options.groom)
+    doc.save(out, garbage=4, deflate=True, clean=options.groom, no_new_id=True)
 
 
 def _resample(doc: pymupdf.Document, level: CompressionLevel) -> None:
@@ -265,6 +273,11 @@ def _rewrite_some_pages(
                 ],
                 join_duplicates=True,
             )
+            # A new document has no /ID, and _clean() does not make one up:
+            # the body carries the one of the file it was rebuilt from.
+            kind, identifier = doc.xref_get_key(-1, "ID")
+            if kind == "array":
+                body.xref_set_key(-1, "ID", identifier)
             _clean(body, out, options)
 
 
