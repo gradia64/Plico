@@ -12,6 +12,11 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
   raggiunto il suo limite di richieste (60 all'ora per indirizzo IP, contate
   su tutto ciò che esce da quell'indirizzo), Plico lo dice e indica a che ora
   riprovare, invece di un generico «GitHub ha risposto 403».
+- **Salva compresso**: un file che non aveva niente da guadagnare poteva,
+  una volta ogni tanto, essere scritto lo stesso con «Risparmiato: 10 B (0%)».
+  Il confronto delle dimensioni risentiva dell'identificatore casuale che
+  ogni salvataggio dava al PDF; ora la compressione conserva quello del
+  documento, e a parità di contenuto la dimensione non cambia.
 
 ## [0.1.6] — 2026-10-28
 

@@ -4,6 +4,26 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def _deferred_deletes_are_delivered():
+    """Really destroy what a test handed to ``deleteLater()``.
+
+    ``deleteLater()`` only posts a DeferredDelete, and ``processEvents()``
+    outside an event loop never delivers it: the windows of every earlier test
+    stayed alive, timers included. Five seconds after its creation a window
+    runs the update check against the settings of whichever test is running
+    then -- and the settings are each test's own INI, so a window left over
+    from a test that never asked for a check could make a request in one that
+    counts them. Autouse and outermost, so it runs after the test's own
+    fixtures have shut their windows down.
+    """
+    yield
+    from PySide6.QtCore import QCoreApplication, QEvent
+
+    if QCoreApplication.instance() is not None:
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+@pytest.fixture(autouse=True)
 def _burn_without_asking(monkeypatch):
     """Answer «Elimina e salva» to the confirmation before redactions are burnt.
 
