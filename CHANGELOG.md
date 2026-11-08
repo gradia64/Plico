@@ -8,6 +8,12 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
 
 ### Corretto
 
+- **AppImage su X11**: su distribuzioni recenti (Arch, Fedora 45) Plico si
+  chiudeva all'avvio con un errore di segmentazione nelle sessioni X11. Il
+  `.AppImage` portava con sé una libxkbcommon-x11 di Ubuntu 22.04, che non va
+  d'accordo con la libxkbcommon più recente del sistema; ora la usa dal
+  sistema, insieme alle estensioni di libxcb. Su Wayland il problema non
+  c'era. Il `.deb` le chiede come dipendenze.
 - **Aggiornamenti**: quando GitHub rifiuta il controllo perché è stato
   raggiunto il suo limite di richieste (60 all'ora per indirizzo IP, contate
   su tutto ciò che esce da quell'indirizzo), Plico lo dice e indica a che ora

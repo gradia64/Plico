@@ -418,7 +418,9 @@ for Linux x86_64, built from the signed tag:
 - **AppImage** (`Plico-X.Y.Z-x86_64.AppImage`): a single file with Python,
   Qt, PyMuPDF and the OCR language data inside. Make it executable
   (`chmod +x Plico-X.Y.Z-x86_64.AppImage`) and run it. Needs glibc 2.34 or
-  later: Debian 12, Ubuntu 22.04, Fedora 35 or newer.
+  later: Debian 12, Ubuntu 22.04, Fedora 35 or newer. On X11 it uses the
+  system's keyboard and graphics libraries (libxkbcommon-x11, libxcb), which
+  every desktop has.
 - **Debian and Ubuntu** (`plico_X.Y.Z_amd64.deb`): the same contents as the
   AppImage, installed in `/opt/plico` with the menu entry and icon;
   `sudo apt install ./plico_X.Y.Z_amd64.deb`. Same requirements as the

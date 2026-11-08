@@ -72,7 +72,8 @@ DEPENDS=(
     "libglib2.0-0t64 | libglib2.0-0" libdbus-1-3 libfontconfig1 libfreetype6
     libbrotli1 libgssapi-krb5-2 libegl1 libgl1 libxkbcommon0 libx11-6
     libx11-xcb1 libxcb1 libxcb-glx0 libxcb-randr0 libxcb-shm0 libxcb-sync1
-    libxcb-xfixes0 libwayland-client0 libwayland-cursor0 libwayland-egl1
+    libxcb-xfixes0 libxcb-render0 libxcb-shape0 libxcb-xkb1 libxkbcommon-x11-0
+    libwayland-client0 libwayland-cursor0 libwayland-egl1
     tzdata
 )
 DEPENDS_LINE="$(printf '%s, ' "${DEPENDS[@]}")"

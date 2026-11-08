@@ -196,6 +196,16 @@ done
 # sistema che costruisce: quelle di Debian sid o Ubuntu 24.04 chiedono una
 # glibc più recente. Le librerie di base (libxcb, libX11, libxkbcommon, GL,
 # fontconfig, Wayland…) restano quelle del sistema, come in ogni AppImage.
+#
+# Le estensioni di libxcb (render, shape, xkb) e libxkbcommon-x11 NON vanno
+# incluse, anche se mancano nei sistemi minimi: fino alla 0.1.6 c'erano quelle
+# di Ubuntu 22.04, e libxkbcommon-x11 1.4.0 accanto alla libxkbcommon molto più
+# recente del sistema (Arch, Fedora 45) fa andare in segfault il plugin xcb di
+# Qt al primo QApplication (codice 139). libxkbcommon-x11 deve avere la stessa
+# versione di libxkbcommon, quindi viene dal sistema insieme a lei e alle
+# estensioni di libxcb su cui poggia; le xcb-util qui sotto non hanno questo
+# legame e restano. Su Wayland il plugin xcb non si carica e il problema non si
+# vedeva.
 UBUNTU_POOL="https://archive.ubuntu.com/ubuntu/pool"
 XCB_DEBS=(
     "universe/x/xcb-util-cursor/libxcb-cursor0_0.1.1-4ubuntu1_amd64.deb c9b5d1ad4af57397b1bd77e0a92750e34419def134c0282a0836ae9efc07cf64 libxcb-cursor.so.0"
@@ -204,12 +214,6 @@ XCB_DEBS=(
     "main/x/xcb-util-keysyms/libxcb-keysyms1_0.4.0-1build3_amd64.deb 1d62f96a793cc1aa0df860de3f7d83edea2fa461d97e2b3d4d7f7e7a10e55f42 libxcb-keysyms.so.1"
     "main/x/xcb-util-renderutil/libxcb-render-util0_0.3.9-1build3_amd64.deb f87659a2369430ed2acb1cdae54a06fa9d60727a6545594e213173ddb4377727 libxcb-render-util.so.0"
     "main/x/xcb-util/libxcb-util1_0.4.0-1build2_amd64.deb 237d51a378b93c1669ff193084ebeb6422fe1e2ea96c2e9a0099eac40992a345 libxcb-util.so.1"
-    # estensioni di libxcb e xkbcommon-x11: ci sono su ogni desktop X11, ma
-    # non nei sistemi minimi (container, sessioni solo Wayland)
-    "main/libx/libxcb/libxcb-render0_1.14-3ubuntu3_amd64.deb 26d331ed6e1219485dbd6a35b7c9cf552e1470f41bf2158b44a1331405f05250 libxcb-render.so.0"
-    "main/libx/libxcb/libxcb-shape0_1.14-3ubuntu3_amd64.deb 71666977d7aa11877d7af663231cabf4bde60b033947b83358522c6f43873b3d libxcb-shape.so.0"
-    "main/libx/libxcb/libxcb-xkb1_1.14-3ubuntu3_amd64.deb 4cf69af3ff6a60b63f9f6ea6e7d27471114c6bcbcf3f981f7b88f361029e5eb8 libxcb-xkb.so.1"
-    "main/libx/libxkbcommon/libxkbcommon-x11-0_1.4.0-1_amd64.deb e29c40fab6e0f055218aee4c7e60cd61ea82283229d7ac7ac02e226e92a5b0d5 libxkbcommon-x11.so.0"
 )
 XCB_TMP="$WORK/xcb"
 rm -rf "$XCB_TMP"

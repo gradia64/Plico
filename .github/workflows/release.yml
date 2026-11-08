@@ -107,14 +107,16 @@ jobs:
         with:
           fetch-depth: 0   # SOURCE_DATE_EPOCH dall'ultimo commit
 
-      # librerie di sistema che l'AppImage non include (GL, xkbcommon, D-Bus,
-      # fontconfig), appstream per validare i metadati dell'AppDir, file per
-      # appimagetool, xvfb per il collaudo su X11
+      # librerie di sistema che l'AppImage non include (GL, xkbcommon e
+      # xkbcommon-x11, estensioni di libxcb, D-Bus, fontconfig), appstream per
+      # validare i metadati dell'AppDir, file per appimagetool, xvfb per il
+      # collaudo su X11
       - name: Dipendenze di sistema
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q --no-install-recommends appstream desktop-file-utils \
-            file libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1 xvfb \
+            file libegl1 libgl1 libxkbcommon0 libxkbcommon-x11-0 libxcb-render0 \
+            libxcb-shape0 libxcb-xkb1 libdbus-1-3 libfontconfig1 xvfb \
             fonts-dejavu-core
 
       # download fissati per SHA-256 (scripts/build-appimage.sh e
