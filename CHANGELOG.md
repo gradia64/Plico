@@ -6,6 +6,8 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Non rilasciato]
 
+## [0.1.7] — 2026-11-08
+
 ### Corretto
 
 - **AppImage su X11**: su distribuzioni recenti (Arch, Fedora 45) Plico si

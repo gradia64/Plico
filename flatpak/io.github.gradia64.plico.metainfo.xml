@@ -83,7 +83,7 @@
       <caption xml:lang="es">Un documento con sus páginas, ajustado al ancho de la ventana</caption>
       <caption xml:lang="fr">Un document et ses pages, ajusté à la largeur de la fenêtre</caption>
       <caption xml:lang="de">Ein Dokument mit seinen Seiten, an die Fensterbreite angepasst</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.6/flatpak/screenshots/main.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.7/flatpak/screenshots/main.png</image>
     </screenshot>
     <screenshot>
       <caption>Personal data marked for erasure: on saving it leaves the file</caption>
@@ -91,7 +91,7 @@
       <caption xml:lang="es">Datos personales marcados para borrar: al guardar salen del archivo</caption>
       <caption xml:lang="fr">Données personnelles marquées pour l'effacement : à l'enregistrement, elles quittent le fichier</caption>
       <caption xml:lang="de">Persönliche Daten zum Löschen markiert: Beim Speichern verlassen sie die Datei</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.6/flatpak/screenshots/redact.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.7/flatpak/screenshots/redact.png</image>
     </screenshot>
     <screenshot>
       <caption>Filling in a PDF form, on the page or in the side panel</caption>
@@ -99,7 +99,7 @@
       <caption xml:lang="es">Rellenar un formulario PDF, en la página o en el panel lateral</caption>
       <caption xml:lang="fr">Remplir un formulaire PDF, sur la page ou dans le panneau latéral</caption>
       <caption xml:lang="de">Ein PDF-Formular ausfüllen, auf der Seite oder in der Seitenleiste</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.6/flatpak/screenshots/form.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.7/flatpak/screenshots/form.png</image>
     </screenshot>
     <screenshot>
       <caption>Correcting a line of text where it stands</caption>
@@ -107,7 +107,7 @@
       <caption xml:lang="es">Corregir una línea de texto en su sitio</caption>
       <caption xml:lang="fr">Corriger une ligne de texte là où elle se trouve</caption>
       <caption xml:lang="de">Eine Textzeile direkt an ihrer Stelle korrigieren</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.6/flatpak/screenshots/edit.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.7/flatpak/screenshots/edit.png</image>
     </screenshot>
     <screenshot>
       <caption>Searching the document: every match highlighted, the current one in orange</caption>
@@ -115,7 +115,7 @@
       <caption xml:lang="es">Buscar en el documento: cada coincidencia resaltada, la actual en naranja</caption>
       <caption xml:lang="fr">Rechercher dans le document : chaque occurrence surlignée, l'occurrence courante en orange</caption>
       <caption xml:lang="de">Im Dokument suchen: jeder Treffer hervorgehoben, der aktuelle in Orange</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.6/flatpak/screenshots/search.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.7/flatpak/screenshots/search.png</image>
     </screenshot>
   </screenshots>
 
@@ -209,6 +209,32 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.1.7" date="2026-11-08">
+      <description>
+        <p>AppImage fixes on X11, update checks that report rate limits, and compressed saves that no longer grow.</p>
+        <p xml:lang="it">Correzioni all'AppImage su X11, controlli aggiornamenti che segnalano il limite di richieste, salvataggi compressi che non crescono più.</p>
+        <p xml:lang="es">Correcciones del AppImage en X11, comprobaciones de actualización que informan del límite de peticiones, guardados comprimidos que ya no crecen.</p>
+        <p xml:lang="fr">Corrections de l'AppImage sous X11, vérifications de mise à jour qui signalent la limite de requêtes, sauvegardes compressées qui ne grossissent plus.</p>
+        <p xml:lang="de">Korrekturen des AppImage unter X11, Aktualisierungsprüfungen, die das Anfragelimit melden, komprimierte Speicherungen, die nicht mehr wachsen.</p>
+        <ul>
+          <li>AppImage on X11 uses system keyboard/graphics libraries (libxkbcommon-x11, libxcb)</li>
+          <li xml:lang="it">L'AppImage su X11 usa le librerie di sistema per tastiera e grafica (libxkbcommon-x11, libxcb)</li>
+          <li xml:lang="es">El AppImage en X11 usa las bibliotecas del sistema para teclado y gráficos (libxkbcommon-x11, libxcb)</li>
+          <li xml:lang="fr">L'AppImage sous X11 utilise les bibliothèques système de clavier et de graphisme (libxkbcommon-x11, libxcb)</li>
+          <li xml:lang="de">Das AppImage unter X11 nutzt die Systembibliotheken für Tastatur und Grafik (libxkbcommon-x11, libxcb)</li>
+          <li>Update checks report GitHub rate limits with the retry time</li>
+          <li xml:lang="it">I controlli aggiornamenti segnalano il limite di richieste di GitHub con l'ora in cui riprovare</li>
+          <li xml:lang="es">Las comprobaciones de actualización informan del límite de peticiones de GitHub con la hora de reintento</li>
+          <li xml:lang="fr">Les vérifications de mise à jour signalent la limite de requêtes GitHub avec l'heure de nouvelle tentative</li>
+          <li xml:lang="de">Aktualisierungsprüfungen melden das Anfragelimit von GitHub mit der Wiederholungszeit</li>
+          <li>Compressed saves keep the document id, so identical content keeps the same size</li>
+          <li xml:lang="it">I salvataggi compressi conservano l'identificatore del documento, così contenuti identici hanno la stessa dimensione</li>
+          <li xml:lang="es">Los guardados comprimidos conservan el identificador del documento, así contenidos idénticos tienen el mismo tamaño</li>
+          <li xml:lang="fr">Les sauvegardes compressées conservent l'identifiant du document, donc des contenus identiques ont la même taille</li>
+          <li xml:lang="de">Komprimierte Speicherungen behalten die Dokument-ID, so dass identischer Inhalt dieselbe Größe hat</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.6" date="2026-10-28">
       <description>
         <p>Plico can tell when a newer version is out, and a few fixes.</p>
