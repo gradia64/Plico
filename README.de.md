@@ -446,7 +446,9 @@ Pakete für Linux x86_64, gebaut vom signierten Tag:
 - **AppImage** (`Plico-X.Y.Z-x86_64.AppImage`): eine einzige Datei, mit
   Python, Qt, PyMuPDF und den Sprachdaten des OCR darin. Ausführbar machen
   (`chmod +x Plico-X.Y.Z-x86_64.AppImage`) und starten. Benötigt glibc 2.34
-  oder neuer: Debian 12, Ubuntu 22.04, Fedora 35 oder neuer.
+  oder neuer: Debian 12, Ubuntu 22.04, Fedora 35 oder neuer. Unter X11 nutzt
+  es die Tastatur- und Grafikbibliotheken des Systems (libxkbcommon-x11,
+  libxcb), die auf jedem Desktop vorhanden sind.
 - **Debian und Ubuntu** (`plico_X.Y.Z_amd64.deb`): derselbe Inhalt wie das
   AppImage, installiert in `/opt/plico` mit Menüeintrag und Icon;
   `sudo apt install ./plico_X.Y.Z_amd64.deb`. Dieselben Voraussetzungen wie

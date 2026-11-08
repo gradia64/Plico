@@ -2369,15 +2369,14 @@ class MainWindow(QMainWindow):
         if manual:
             self._status.setText(self.tr("Pronto"))
             self._tell_update_result(release)
-        elif updates.is_newer(release.version):
-            if s.value(preferences.UPDATES_ANNOUNCED) != release.version:
-                s.setValue(preferences.UPDATES_ANNOUNCED, release.version)
-                s.sync()
-                self._notify(
-                    self.tr("È disponibile Plico {0}: Aiuto → Scarica Plico {0}.").format(
-                        release.version
-                    )
+        elif updates.is_newer(release.version) and s.value(preferences.UPDATES_ANNOUNCED) != release.version:
+            s.setValue(preferences.UPDATES_ANNOUNCED, release.version)
+            s.sync()
+            self._notify(
+                self.tr("È disponibile Plico {0}: Aiuto → Scarica Plico {0}.").format(
+                    release.version
                 )
+            )
 
     def _on_update_failure(self, reason: str, manual: bool) -> None:
         """Silent unless the user asked: no network is not news."""
