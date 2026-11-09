@@ -1,7 +1,7 @@
 #!/bin/bash
 # Costruisce il pacchetto Debian di Plico: dist/plico_<versione>_amd64.deb
 #
-# Autosufficiente, come l'AppImage: è lo stesso albero (build/appimage/AppDir,
+# Autosufficiente, come l'AppImage: è lo stesso albero (build/appimage/AppDir-x86_64,
 # da scripts/build-appimage.sh, già collaudato con la suite di test) messo in
 # /opt/plico. Le librerie Python di Debian e Ubuntu non bastano: pyHanko 0.37
 # vuole cryptography >= 48 (Debian 13 ha la 43, Ubuntu 26.04 la 46) e Ubuntu
@@ -20,13 +20,13 @@
 #
 # Ripreso da build-deb.sh di OllaDesk (metadati, riproducibilità).
 #
-# Uso: scripts/build-deb.sh [AppDir]   (default build/appimage/AppDir)
+# Uso: scripts/build-deb.sh [AppDir]   (default build/appimage/AppDir-x86_64)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 APP_ID="io.github.gradia64.plico"
-APPDIR="${1:-build/appimage/AppDir}"
+APPDIR="${1:-build/appimage/AppDir-x86_64}"
 
 [ -x "$APPDIR/AppRun" ] || { echo "manca $APPDIR: esegui prima scripts/build-appimage.sh" >&2; exit 1; }
 

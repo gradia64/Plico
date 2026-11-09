@@ -2,10 +2,12 @@
 
 Uso: python3 check-glibc.py <AppDir> <versione massima, es. 2.34>
 
-Le wheel di PySide6 chiedono glibc 2.34 (manylinux_2_34): nessun altro file
-dell'AppImage deve chiederne una più recente, altrimenti l'AppImage non
-partirebbe sulle distribuzioni che PySide6 supporta. Serve soprattutto per
-le librerie copiate dal sistema che costruisce l'AppImage.
+Le wheel di PySide6 chiedono glibc 2.34 su x86_64 (manylinux_2_34) e 2.39 su
+aarch64 (manylinux_2_39): nessun altro file dell'AppImage deve chiederne una
+più recente, altrimenti l'AppImage non partirebbe sulle distribuzioni che
+PySide6 supporta. Serve soprattutto per le librerie copiate dai pacchetti
+Ubuntu. Usa readelf, che legge gli ELF di ogni architettura (objdump di Debian
+solo quelli x86).
 """
 import re
 import subprocess
@@ -25,8 +27,8 @@ def main(appdir: Path, limit: tuple[int, ...]) -> int:
         with f.open("rb") as fh:
             if fh.read(4) != b"\x7fELF":
                 continue
-        out = subprocess.run(["objdump", "-T", str(f)], capture_output=True,
-                             text=True, check=False).stdout
+        out = subprocess.run(["readelf", "-W", "--version-info", str(f)],
+                             capture_output=True, text=True, check=False).stdout
         vers = [version(v) for v in re.findall(r"GLIBC_(\d+(?:\.\d+)+)", out)]
         if not vers:
             continue

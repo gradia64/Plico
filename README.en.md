@@ -421,6 +421,11 @@ for Linux x86_64, built from the signed tag:
   later: Debian 12, Ubuntu 22.04, Fedora 35 or newer. On X11 it uses the
   system's keyboard and graphics libraries (libxkbcommon-x11, libxcb), which
   every desktop has.
+- **AppImage for ARM64** (`Plico-X.Y.Z-aarch64.AppImage`): the same for
+  64-bit ARM computers (Raspberry Pi 4 and 5, Snapdragon laptops, Asahi
+  Linux). Needs glibc 2.39 or later, because the Qt libraries for ARM require
+  it: Debian 13, Ubuntu 24.04, Fedora 40 or newer. For ARM there is only the
+  AppImage.
 - **Debian and Ubuntu** (`plico_X.Y.Z_amd64.deb`): the same contents as the
   AppImage, installed in `/opt/plico` with the menu entry and icon;
   `sudo apt install ./plico_X.Y.Z_amd64.deb`. Same requirements as the

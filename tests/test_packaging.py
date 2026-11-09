@@ -47,22 +47,39 @@ def test_the_arch_package_vendors_the_appimage_s_pyhanko():
 
     The three pure-Python wheels Arch does not package are pinned in
     packaging/arch/PKGBUILD.in by file name and SHA-256; the AppImage pins them
-    in its lock. One version for both, or a signature made with one package
-    could behave differently from the other.
+    in its locks, one per architecture. One version for all, or a signature
+    made with one package could behave differently from the other.
     """
     import re
 
     pkgbuild = (ROOT / "packaging" / "arch" / "PKGBUILD.in").read_text()
-    lock = (ROOT / "packaging" / "appimage" / "requirements.txt").read_text()
-    pinned = {
-        m.group(1).lower().replace("_", "-"): (m.group(2), m.group(3))
-        for m in re.finditer(r"^([A-Za-z0-9_.-]+)==(\S+) \\\n\s+--hash=sha256:([0-9a-f]{64})", lock, re.MULTILINE)
-    }
     wheels = re.findall(r"^_\w+=([A-Za-z0-9_]+)-([0-9.]+)-py3-none-any\.whl$", pkgbuild, re.MULTILINE)
     sums = re.findall(r"'([0-9a-f]{64})'", pkgbuild)
     assert len(wheels) == 3 and len(sums) == 3
-    for (name, version), sha in zip(wheels, sums, strict=True):
-        assert pinned[name.lower().replace("_", "-")] == (version, sha), name
+    for arch in ("x86_64", "aarch64"):
+        lock = (ROOT / "packaging" / "appimage" / f"requirements-{arch}.txt").read_text()
+        pinned = {
+            m.group(1).lower().replace("_", "-"): (m.group(2), m.group(3))
+            for m in re.finditer(r"^([A-Za-z0-9_.-]+)==(\S+) \\\n\s+--hash=sha256:([0-9a-f]{64})", lock, re.MULTILINE)
+        }
+        for (name, version), sha in zip(wheels, sums, strict=True):
+            assert pinned[name.lower().replace("_", "-")] == (version, sha), (arch, name)
+
+
+def test_the_appimage_locks_pin_the_same_versions_on_both_architectures():
+    """x86_64 and aarch64 ship the same libraries; only the wheels differ.
+
+    `build-appimage.sh --lock` constrains the aarch64 lock to the x86_64
+    versions: a lock edited or regenerated for one architecture alone must
+    not drift from the other.
+    """
+    import re
+
+    def versions(arch):
+        lock = (ROOT / "packaging" / "appimage" / f"requirements-{arch}.txt").read_text()
+        return re.findall(r"^([A-Za-z0-9_.-]+==\S+) \\$", lock, re.MULTILINE)
+
+    assert versions("x86_64") and versions("x86_64") == versions("aarch64")
 
 
 def test_the_arch_package_suggests_qt_s_own_translations():

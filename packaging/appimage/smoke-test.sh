@@ -14,7 +14,12 @@
 # temporanea il pip di sistema (rete o cache), e passa per PYTHONPATH.
 # Impostazioni sempre in una cartella temporanea: niente di quelle dell'utente.
 #
-# Uso: packaging/appimage/smoke-test.sh dist/Plico-X.Y.Z-x86_64.AppImage
+# Uso: packaging/appimage/smoke-test.sh dist/Plico-X.Y.Z-<arch>.AppImage
+#
+# L'AppImage aarch64 si prova su una macchina ARM (nella CI, il job
+# test-aarch64) oppure su x86_64 sotto qemu-user con binfmt: allora
+# APPIMAGE_ZERO_MAGIC=1 e tempi più lunghi con SMOKE_RUN (secondi di vita
+# richiesti all'app, 10 di default).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -22,6 +27,16 @@ APPIMAGE_FILE="$(readlink -f "${1:?uso: smoke-test.sh <file .AppImage>}")"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 export QT_QPA_PLATFORM=offscreen
+
+# Sotto emulazione qemu la regola binfmt vuole a zero i byte 8-10
+# dell'intestazione ELF, dove le AppImage scrivono «AI\x02»: con
+# APPIMAGE_ZERO_MAGIC=1 si prova una copia con quei byte azzerati (il runtime
+# non li legge). Su una macchina ARM vera non serve.
+if [ "${APPIMAGE_ZERO_MAGIC:-}" = 1 ]; then
+    cp "$APPIMAGE_FILE" "$TMP/Plico.AppImage"
+    printf '\000\000\000' | dd of="$TMP/Plico.AppImage" bs=1 seek=8 conv=notrunc status=none
+    APPIMAGE_FILE="$TMP/Plico.AppImage"
+fi
 
 cd "$TMP"
 "$APPIMAGE_FILE" --appimage-extract >/dev/null
@@ -54,7 +69,8 @@ XDG_CONFIG_HOME="$TMP/config-tests" TMPDIR="$TMP" \
     }
 echo "suite: $(tail -1 "$TMP/pytest.log")"
 
-# avvia l'AppImage per 10 secondi: deve essere ancora aperta e senza errori
+# avvia l'AppImage per 10 secondi (SMOKE_RUN: di più sotto emulazione): deve
+# essere ancora aperta e senza errori
 run_app() {   # run_app <descrizione> [prefisso del comando…]
     local what="$1" rc
     shift
@@ -63,7 +79,7 @@ run_app() {   # run_app <descrizione> [prefisso del comando…]
     set +e
     # TMPDIR: la copia estratta dal runtime resta se il processo viene ucciso
     XDG_CONFIG_HOME="$TMP/config-app" APPIMAGE_EXTRACT_AND_RUN=1 TMPDIR="$TMP/run" \
-        "$@" timeout 10 "$APPIMAGE_FILE" > "$TMP/app.log" 2>&1
+        "$@" timeout "${SMOKE_RUN:-10}" "$APPIMAGE_FILE" > "$TMP/app.log" 2>&1
     rc=$?
     set -e
     if [ "$rc" -ne 124 ]; then

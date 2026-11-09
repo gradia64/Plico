@@ -425,6 +425,11 @@ paquetes para Linux x86_64, construidos desde el tag firmado:
   o posterior: Debian 12, Ubuntu 22.04, Fedora 35 o más recientes. Bajo X11
   usa las bibliotecas del sistema para teclado y gráficos (libxkbcommon-x11,
   libxcb), presentes en cualquier escritorio.
+- **AppImage para ARM64** (`Plico-X.Y.Z-aarch64.AppImage`): lo mismo para
+  los ordenadores ARM de 64 bits (Raspberry Pi 4 y 5, portátiles Snapdragon,
+  Asahi Linux). Requiere glibc 2.39 o posterior, porque las bibliotecas Qt
+  para ARM la piden: Debian 13, Ubuntu 24.04, Fedora 40 o más recientes. Para
+  ARM solo existe la AppImage.
 - **Debian y Ubuntu** (`plico_X.Y.Z_amd64.deb`): el mismo contenido del
   AppImage, instalado en `/opt/plico` con el menú y el icono;
   `sudo apt install ./plico_X.Y.Z_amd64.deb`. Mismos requisitos que el
