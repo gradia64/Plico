@@ -449,6 +449,11 @@ Pakete für Linux x86_64, gebaut vom signierten Tag:
   oder neuer: Debian 12, Ubuntu 22.04, Fedora 35 oder neuer. Unter X11 nutzt
   es die Tastatur- und Grafikbibliotheken des Systems (libxkbcommon-x11,
   libxcb), die auf jedem Desktop vorhanden sind.
+- **AppImage für ARM64** (`Plico-X.Y.Z-aarch64.AppImage`): dasselbe für
+  64-Bit-ARM-Rechner (Raspberry Pi 4 und 5, Snapdragon-Laptops, Asahi Linux).
+  Benötigt glibc 2.39 oder neuer, weil die Qt-Bibliotheken für ARM sie
+  verlangen: Debian 13, Ubuntu 24.04, Fedora 40 oder neuer. Für ARM gibt es
+  nur das AppImage.
 - **Debian und Ubuntu** (`plico_X.Y.Z_amd64.deb`): derselbe Inhalt wie das
   AppImage, installiert in `/opt/plico` mit Menüeintrag und Icon;
   `sudo apt install ./plico_X.Y.Z_amd64.deb`. Dieselben Voraussetzungen wie

@@ -1,6 +1,8 @@
 # Dipendenze dell'AppImage (scripts/build-appimage.sh). Versioni fissate a
-# mano, come nel Flatpak e nella CI; requirements.txt con gli hash si
-# rigenera con: scripts/build-appimage.sh --lock. Le dipendenze indirette
+# mano, come nel Flatpak e nella CI; requirements-x86_64.txt e
+# requirements-aarch64.txt con gli hash si rigenerano con:
+# scripts/build-appimage.sh --lock (le stesse versioni per le due
+# architetture: l'aarch64 è vincolato all'x86_64). Le dipendenze indirette
 # (cryptography, asn1crypto, lxml…) le sceglie pip al momento del --lock:
 # controllarne le versioni nel diff prima del commit.
 #

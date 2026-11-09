@@ -1,7 +1,7 @@
 #!/bin/bash
 # Prova un'AppImage già costruita su più distribuzioni, in container Docker.
 #
-#   packaging/appimage/test-distros.sh dist/Plico-X.Y.Z-x86_64.AppImage [immagine…]
+#   packaging/appimage/test-distros.sh dist/Plico-X.Y.Z-<arch>.AppImage [immagine…]
 #
 # In ogni container: le sole librerie di base di un desktop (X11, GL,
 # fontconfig, xkbcommon e xkbcommon-x11, estensioni di libxcb, D-Bus) più
@@ -15,16 +15,32 @@
 # del plugin xcb accanto a una libxkbcommon di sistema più recente, vedi
 # scripts/build-appimage.sh), la prova si ferma prima di avviarla.
 #
-# Non è nella CI: serve Docker e scarica sei immagini. Va lanciata a mano
-# prima di un tag che tocca le librerie incluse.
+# Per l'x86_64 non è nella CI: serve Docker e scarica sei immagini. Va
+# lanciata a mano prima di un tag che tocca le librerie incluse. L'aarch64 la
+# fa girare il job test-aarch64 di release.yml, su una macchina ARM; da una
+# macchina x86_64 serve l'emulazione di Docker (binfmt + qemu-user-static, per
+# esempio il pacchetto qemu-user-binfmt), e i tempi si allungano.
 set -euo pipefail
 
 APPIMAGE_FILE="$(readlink -f "${1:?uso: test-distros.sh <file .AppImage> [immagine…]}")"
 shift
 IMAGES=("$@")
-[ ${#IMAGES[@]} -gt 0 ] || IMAGES=(debian:12 ubuntu:22.04 ubuntu:24.04 fedora:latest
-                                   archlinux:latest opensuse/tumbleweed:latest)
-RUN_SECS=10
+case "$APPIMAGE_FILE" in
+    *-aarch64.AppImage)
+        PLATFORM=linux/arm64 ARCH=aarch64
+        # glibc >= 2.39 (wheel PySide6 aarch64); archlinux non ha immagini arm64
+        DEFAULT=(debian:13 ubuntu:24.04 fedora:latest opensuse/tumbleweed:latest) ;;
+    *)
+        PLATFORM=linux/amd64 ARCH=x86_64
+        DEFAULT=(debian:12 ubuntu:22.04 ubuntu:24.04 fedora:latest
+                 archlinux:latest opensuse/tumbleweed:latest) ;;
+esac
+[ ${#IMAGES[@]} -gt 0 ] || IMAGES=("${DEFAULT[@]}")
+# sotto emulazione qemu la regola binfmt vuole a zero i byte 8-10
+# dell'intestazione ELF, dove le AppImage scrivono «AI\x02»: nel container si
+# prova una copia con quei byte azzerati (il runtime non li legge)
+ZERO_MAGIC=0 RUN_SECS=10
+[ "$(uname -m)" = "$ARCH" ] || { ZERO_MAGIC=1; RUN_SECS=60; }
 
 INNER="$(mktemp)"
 trap 'rm -f "$INNER"' EXIT
@@ -46,14 +62,17 @@ elif command -v pacman >/dev/null; then
 elif command -v zypper >/dev/null; then
     q zypper --non-interactive install --no-recommends xorg-x11-server-Xvfb Mesa-libGL1 \
         Mesa-libEGL1 fontconfig libxkbcommon0 libxkbcommon-x11-0 \
-        libxcb-render0 libxcb-shape0 libdbus-1-3 libX11-xcb1 libglib-2_0-0 libgthread-2_0-0 \
-        procps findutils dejavu-fonts
+        libxcb-render0 libxcb-shape0 libSM6 libICE6 libdbus-1-3 libX11-xcb1 libglib-2_0-0 \
+        libgthread-2_0-0 procps findutils dejavu-fonts
 fi
 . /etc/os-release
 echo "== $PRETTY_NAME, glibc $(ldd --version | head -1 | sed 's/.* //')"
 
 cd /tmp
 cp /app/Plico.AppImage ./a.AppImage
+if [ "$ZERO_MAGIC" = 1 ]; then
+    printf '\000\000\000' | dd of=a.AppImage bs=1 seek=8 conv=notrunc 2>/dev/null
+fi
 ./a.AppImage --appimage-extract >/dev/null
 bundled="$(find squashfs-root -name 'libxkbcommon*' -o -name 'libxcb-xkb.so*' \
     -o -name 'libxcb-render.so*' -o -name 'libxcb-shape.so*')"
@@ -82,7 +101,7 @@ chmod 755 "$INNER"
 
 fail=()
 for image in "${IMAGES[@]}"; do
-    if docker run --rm --platform linux/amd64 -e RUN_SECS="$RUN_SECS" \
+    if docker run --rm --platform "$PLATFORM" -e ZERO_MAGIC="$ZERO_MAGIC" -e RUN_SECS="$RUN_SECS" \
             -v "$APPIMAGE_FILE:/app/Plico.AppImage:ro" -v "$INNER:/inner.sh:ro" \
             "$image" /inner.sh; then
         :

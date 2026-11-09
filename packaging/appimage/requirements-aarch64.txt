@@ -1,9 +1,9 @@
 # Generato da scripts/build-appimage.sh --lock: non modificare a mano.
-# Versioni da packaging/appimage/requirements.in, dipendenze risolte da pip.
+# aarch64: versioni da packaging/appimage/requirements.in, dipendenze risolte da pip.
 aiohappyeyeballs==2.7.1 \
     --hash=sha256:9243213661e29250eb41368e5daa826fc017156c3b8a11440826b2e3ed376472
 aiohttp==3.14.5 \
-    --hash=sha256:20f085697d7e911f1f73c43ed03fafbed1e7121797e2eb5428efa80398060584
+    --hash=sha256:abfda5cb094a829f7bc25216a32f7db2e85cc65bd59910f8e7b40b3d9b224764
 aiosignal==1.4.0 \
     --hash=sha256:053243f8b92b990551949e63930a839ff0cf0b0ebbe0597b0f3fb19e1a0fe82e
 asn1crypto==1.5.1 \
@@ -13,27 +13,27 @@ attrs==26.1.0 \
 certifi==2026.10.19 \
     --hash=sha256:42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b
 cffi==2.1.1 \
-    --hash=sha256:c1453022f490d2459a11819d83ad1d586e9ff65a12ac3e705ffebd46d3685dcf
+    --hash=sha256:68e62fe11f30d5ca8289242866f0a5291402d8529ca2178ab8afc5c9694ae890
 cryptography==50.0.2 \
-    --hash=sha256:9dab55f57c74c3cad24c323bacbbd04be4705ba6eb0d92e920b1fc4837ed5079
+    --hash=sha256:87e9ce85beb6b328ba370cc6e6aea483c92617b4c95b1d33a49297eb662bfb04
 frozenlist==1.8.0 \
-    --hash=sha256:494a5952b1c597ba44e0e78113a7266e656b9794eec897b19ead706bd7074383
+    --hash=sha256:96f423a119f4777a4a056b66ce11527366a8bb92f54e541ade21f2374433f6d4
 idna==3.20 \
     --hash=sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c
 lxml==6.1.3 \
-    --hash=sha256:909f4e927bb051f7740d6367285fc60cdcfdaf0258c2dba4ff5ba7eadadc250c
+    --hash=sha256:b37772102d44bb6628186accca3a121b1fa3a6b3d97518a8c29a5229ca4c0d0a
 multidict==7.1.0 \
-    --hash=sha256:fed6b7705d49dd07e5e0dd5f5c873fc44047e92d714299b13245b5fecac49d01
+    --hash=sha256:0e79ed92b1dece6bb57e9b46effd74d7a5d3d00187c85466d880ed184239a698
 oscrypto==1.3.0 \
     --hash=sha256:2b2f1d2d42ec152ca90ccb5682f3e051fb55986e1b170ebde472b133713e7085
 packaging==26.3 \
     --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
 pikepdf==10.17.0 \
-    --hash=sha256:f76e2ac6777b2d2a74a71eb73fa2438734ad453177c66f5a5a246b5e2660336b
+    --hash=sha256:69ed0bf3895ab82a7d3908c76c54afe8f3fd2a03091559877347f2273d5da268
 pillow==13.0.0 \
-    --hash=sha256:42d63be3af4f9b951b199b0a9d23365d37ab14687e6d77b74940432c8515c4ca
+    --hash=sha256:8bf295fe459343bc6093c8e5e0df60bfa189e0fcb775a22e2c2488fdeccc6c0d
 propcache==0.5.4 \
-    --hash=sha256:2814ecd8e818f487bee4b0f921bc4d1c176cc5fc71ac0f072d0fa67eda4ac14b
+    --hash=sha256:60a64cbccaa11b7760ce705a14ada17ba459e7ca9f23ba587eb013821032d7ef
 pycparser==3.11 \
     --hash=sha256:51d5a8ba2be0bbe440b99d2112604c95bbbc3c2748a64260186c541e1729cd80
 pyHanko==0.37.0 \
@@ -41,11 +41,11 @@ pyHanko==0.37.0 \
 pyhanko-certvalidator==0.32.1 \
     --hash=sha256:76100cdda13bd085beaa94d4b9080fe6f4ee67248976ec9a19c4d58642558a2b
 pymupdf==1.28.2 \
-    --hash=sha256:397d6715c1f0df7548a92d0afd8ce370fc48fa47aeefac16be2bc04a16a8227f
+    --hash=sha256:3050a233dde1211efe89ada74e2add6238436434159f46097a1423aad2842545
 PySide6_Essentials==6.11.2 \
-    --hash=sha256:aaf9f25f0f324874085fa5b26a610318db8a8e243cf85bb3e5400595191c7778
+    --hash=sha256:d3ec6e1885c46e57f16364f38ea8040ffc5dc0b18341058f608fede3ba930567
 shiboken6==6.11.2 \
-    --hash=sha256:7a7a0a72a9ed26c9bf77d42246b1c736486befb8f31aa2fb29957ea4cdd1c1c2
+    --hash=sha256:4bbbd6fa4d7cff5ec5e12bc4c10e1d845fa30c89457ecb13cc64f7bddb77f6f9
 typing_extensions==4.16.0 \
     --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
 tzlocal==5.4.4 \
@@ -53,4 +53,4 @@ tzlocal==5.4.4 \
 uritools==6.1.3 \
     --hash=sha256:136f113e76e53f85bf2d9cce0c3d40ceec775d0409e7d6de9b28f046a7d42838
 yarl==1.25.1 \
-    --hash=sha256:c6f117789d22dce188e5754e8bc65b7e6ebf8cb73963b9fa761f672a5883769d
+    --hash=sha256:4d781294bb815ecb5ea57ff6bbf8038e0a31a95fdf3e1788f66e0dc100d64b58

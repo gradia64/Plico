@@ -1,7 +1,7 @@
 #@ Modello del PKGBUILD pubblicato su AUR. scripts/prepare-aur.sh sostituisce
 #@ PKGVER e FINGERPRINT (tra chiocciole) ed elimina queste righe «#@».
 #@ Ripreso da OllaDesk. Le tre wheel di vendor/ hanno le stesse versioni e gli
-#@ stessi SHA-256 di packaging/appimage/requirements.txt: tests/test_packaging.py
+#@ stessi SHA-256 di packaging/appimage/requirements-*.txt: tests/test_packaging.py
 #@ controlla che restino allineate.
 # Maintainer: gradia <gradia@disroot.org>
 

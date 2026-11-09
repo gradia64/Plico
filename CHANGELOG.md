@@ -6,6 +6,14 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Non rilasciato]
 
+### Aggiunto
+
+- **AppImage per ARM64** (`Plico-X.Y.Z-aarch64.AppImage`), per Raspberry Pi
+  4 e 5, portatili Snapdragon e Asahi Linux. Richiede glibc 2.39 o successiva
+  (Debian 13, Ubuntu 24.04, Fedora 40 o più recenti), perché la chiedono le
+  librerie Qt per ARM. Le stesse versioni di Qt, PyMuPDF, pikepdf e pyHanko
+  dell'AppImage x86_64.
+
 ## [0.1.7] — 2026-11-08
 
 ### Corretto
