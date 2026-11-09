@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="README.en.md"><img src="https://img.shields.io/badge/Lang-English-blue?style=for-the-badge" alt="English"></a>
+  <a href="README.it.md"><img src="https://img.shields.io/badge/Lang-Italiano-blue?style=for-the-badge" alt="Italiano"></a>
   <a href="README.fr.md"><img src="https://img.shields.io/badge/Lang-Français-blue?style=for-the-badge" alt="Français"></a>
   <a href="README.de.md"><img src="https://img.shields.io/badge/Lang-Deutsch-blue?style=for-the-badge" alt="Deutsch"></a>
   <a href="README.es.md"><img src="https://img.shields.io/badge/Lang-Español-orange?style=for-the-badge" alt="Español"></a>
@@ -7,540 +7,530 @@
 
 # Plico
 
-Un vero editor PDF nativo per Linux, costruito con **Qt6** e **PySide6**, con
-**PyMuPDF** per leggere e renderizzare i PDF e **pikepdf** (qpdf) per
-comprimerli.
+A true native PDF editor for Linux, built with **Qt6** and **PySide6**, using
+**PyMuPDF** to read and render PDFs and **pikepdf** (qpdf) to compress them.
 
-> Il file PDF non si tocca mai finché non salvi.
+> The PDF file is never touched until you save.
 
 <p align="center">
-  <img src="flatpak/screenshots/main.png" alt="Plico — finestra principale" width="32%" />
-  <img src="flatpak/screenshots/edit.png" alt="Modifica del testo" width="32%" />
-  <img src="flatpak/screenshots/redact.png" alt="Redazione" width="32%" />
+  <img src="flatpak/screenshots/main.png" alt="Plico — main window" width="32%" />
+  <img src="flatpak/screenshots/edit.png" alt="Text editing" width="32%" />
+  <img src="flatpak/screenshots/redact.png" alt="Redaction" width="32%" />
 </p>
 <p align="center">
-  <img src="flatpak/screenshots/form.png" alt="Compilazione di un form" width="32%" />
-  <img src="flatpak/screenshots/search.png" alt="Ricerca nel documento" width="32%" />
+  <img src="flatpak/screenshots/form.png" alt="Filling a form" width="32%" />
+  <img src="flatpak/screenshots/search.png" alt="Search in the document" width="32%" />
 </p>
 
-## Caratteristiche
+## Features
 
-- **Ruotare, eliminare, riordinare** pagine (drag & drop nella barra miniature)
-- **Unire** un altro PDF: le sue pagine si aggiungono a quelle già aperte
-  senza copiare nulla, perché ogni pagina virtuale sa a quale documento
-  sorgente appartiene. Si può unire anche un'immagine (una ricevuta
-  fotografata in coda a un PDF)
-- **Creare un PDF da immagini** (*File → Crea da immagini…*, `Ctrl+Shift+N`):
-  foto e scansioni — PNG, JPEG, TIFF, BMP, GIF — diventano una pagina
-  ciascuna, nell'ordine scelto. Una scansione mantiene il suo formato reale
-  (un A4 a 300 dpi resta un A4), una foto da telefono viene ridotta a un A4
-  orientato come lei, e i JPEG entrano senza essere ricompressi
-- **Estrarre pagine** (dividere) in un nuovo file con una selezione tipo
-  `1-3,5,8` — l'ordine digitato è conservato, quindi vale anche come riordino.
-  Virgole e spazi separano allo stesso modo: `1 3` sono le pagine 1 e 3
-- **Trovare** (*Modifica → Trova…*, `Ctrl+F`): una barra sotto la pagina
-  evidenzia tutte le occorrenze, `Invio`/`F3` passa alla successiva,
-  `Maiusc+F3` alla precedente, `Esc` chiude. Trova anche le parole appena
-  riconosciute dall'OCR, prima di salvare
-- **Impostazioni** (*Impostazioni → Configura Plico…*, `Ctrl+Maiusc+,`): la
-  lingua dell'interfaccia — automatica, cioè quella del sistema, oppure una
-  fra italiano, inglese, francese, tedesco e spagnolo; con una lingua di
-  sistema che Plico non ha si usa l'inglese — e l'icona nell'area di notifica.
-  Con l'icona si può anche far sì che la X riduca Plico nell'area di notifica
-  invece di chiuderlo: si esce da *File → Esci* (`Ctrl+Q`) o da «Esci» nel
-  menu dell'icona. La lingua cambia al prossimo avvio
-- **Guida** (*Aiuto → Guida di Plico*, `F1`) in italiano, inglese, francese,
-  tedesco e spagnolo, nella lingua dell'interfaccia: si legge in una finestra
-  di Plico, anche senza rete
-- **Aggiornamenti** (*Aiuto → Cerca aggiornamenti…*): chiede a GitHub se è
-  uscita una versione più recente e apre la sua pagina. In *Impostazioni* si
-  può accendere un controllo automatico, al massimo una volta al giorno, che
-  annuncia la versione nuova con un avviso sopra la pagina e la voce *Aiuto →
-  Scarica Plico…*. È **spento** finché non lo si accende: senza, Plico non si
-  collega a niente. Serve dove nessuno aggiorna Plico (AppImage, `.deb`, pip);
-  con il pacchetto dell'AUR se ne occupa il gestore dei pacchetti, e il
-  Flatpak, che non ha accesso alla rete, apre la pagina delle versioni
-- **Undo/Redo** completo grazie a `QUndoStack`
-- **Rendering asincrono** in un thread separato — l'UI non si blocca mai
-- **Rendering lazy**: si renderizzano solo le pagine visibili, non l'intero
-  documento
-- **Cache** a budget di byte per le pagine, LRU per le miniature
-- **Salvataggio** su file temporaneo: il PDF di partenza non si tocca.
-  `Ctrl+S` salva sul file aperto (o sull'ultimo «Salva con nome»),
-  `Ctrl+Shift+S` chiede dove; il titolo segna con `*` le modifiche non
-  salvate, e chiudere o aprire un altro file chiede prima di perderle.
-  `Ctrl+W` (*File → Chiudi*) chiude il documento lasciando aperta la finestra
-- **Salva compresso** a tre livelli, più «solo le immagini» e le pagine da
-  ricampionare: il guadagno è quello vero, misurato sul file già scritto (e il
-  livello "leggera" è senza perdita)
-- **Cancellazione vera** (in inglese *redaction*): si disegna una zona sui dati
-  da eliminare, oppure si trascina sulle parole, e al salvataggio il testo
-  viene **rimosso**, non coperto — quel che resta non è più copiabile né
-  ricercabile. Se ne vanno anche i campi del modulo e le note sotto la zona,
-  mentre cancellare una parola non tocca le righe sopra e sotto
-- **Compilare i form AcroForm**: si scrive dentro la pagina, il dock «Modulo»
-  in vista — testo, anche multiriga, caselle e tendine — e i valori finiscono
-  nel file al salvataggio, con undo/redo
-- **Modifica minima del testo**: un clic su una riga la apre in un editor
-  sulla pagina; il testo vecchio viene tolto dal file e quello nuovo scritto
-  nello stesso punto, con lo stesso corpo, colore e — quando è installato — lo
-  stesso font. Le righe vicine restano intatte anche con l'interlinea singola
-- **OCR** (*Modifica → Riconosci testo…*, `Ctrl+Shift+O`): una scansione
-  diventa **cercabile e selezionabile** senza cambiare aspetto — il testo
-  riconosciuto viene scritto sotto l'immagine, invisibile. Si sceglie quali
-  pagine e in che lingua, e ogni giro è un solo passo di undo
-- **Firmare** (*File → Firma…*, `Ctrl+Shift+D`): una firma **PAdES** con il
-  proprio certificato, invisibile o stampata in un riquadro sulla pagina, e
-  *File → Verifica le firme…* per rileggere chi ha firmato e se il documento è
-  stato toccato dopo. Una seconda firma si aggiunge alla prima senza romperla
+- **Rotate, delete, reorder** pages (drag & drop in the thumbnail bar)
+- **Merge** another PDF: its pages are appended to the ones already open
+  without copying anything, because every virtual page knows which source
+  document it belongs to. You can also merge an image (a photographed
+  receipt tacked onto the end of a PDF)
+- **Create a PDF from images** (_File → Create from images…_, `Ctrl+Shift+N`):
+  photos and scans — PNG, JPEG, TIFF, BMP, GIF — become one page each, in
+  the chosen order. A scan keeps its real size (an A4 at 300 dpi stays an
+  A4), a phone photo is fitted to a portrait A4, and JPEGs are embedded
+  without being recompressed
+- **Extract pages** (split) into a new file with a range like `1-3,5,8` —
+  the typed order is preserved, so this doubles as reordering. Commas and
+  blanks separate alike: `1 3` is pages 1 and 3
+- **Find** (_Edit → Find…_, `Ctrl+F`): a bar under the page highlights every
+  match, `Enter`/`F3` goes to the next, `Shift+F3` to the previous, `Esc`
+  closes. It also finds words just recognised by OCR, before saving
+- **Settings** (_Settings → Configure Plico…_, `Ctrl+Shift+,`): the interface
+  language — automatic, that is the system's, or one of Italian, English,
+  French, German and Spanish; a system language Plico does not have gets
+  English — and the icon in the notification area. With the icon, the X can
+  also minimize Plico to the notification area instead of closing it: you
+  quit from _File → Quit_ (`Ctrl+Q`) or from "Quit" in the icon's menu. The
+  language changes at the next start
+- **Handbook** (_Help → Plico Handbook_, `F1`) in Italian, English, French,
+  German and Spanish, in the interface language: it opens in a Plico window,
+  offline too
+- **Updates** (_Help → Check for Updates…_): asks GitHub whether a newer
+  version is out and opens its page. In _Settings_ you can switch on an
+  automatic check, at most once a day, which reports a new version with a
+  notice above the page and the _Help → Download Plico…_ entry. It is **off**
+  until you switch it on: without it, Plico connects to nothing. It is for
+  where nothing updates Plico (AppImage, `.deb`, pip); with the AUR package
+  the package manager handles it, and the Flatpak, which has no network
+  access, opens the releases page
+- **Undo/Redo** in full, backed by `QUndoStack`
+- **Asynchronous rendering** in a separate thread — the UI never blocks
+- **Lazy rendering**: only the visible pages are rendered, not the whole
+  document
+- **Byte-budgeted page cache**, LRU for thumbnails
+- **Save to a temporary file**: the original PDF is never touched.
+  `Ctrl+S` saves to the open file (or to the last "Save as"), `Ctrl+Shift+S`
+  asks where; the title marks unsaved changes with `*`, and closing or
+  opening another file asks before losing them. `Ctrl+W` (_File → Close_)
+  closes the document while keeping the window open
+- **Compressed save** at three levels, plus "images only" and "pages to
+  resample": the gain is the real one, measured on the file actually written
+  (and the "light" level is lossless)
+- **True redaction**: draw a zone over the data to remove, or drag over the
+  words, and at save time the text is **removed**, not covered — what
+  remains can no longer be copied or searched. Form fields and notes under
+  the zone go too, while redacting a word leaves the lines above and below
+  untouched
+- **Fill AcroForm forms**: type on the page, with the "Form" dock in view —
+  text, including multi-line, checkboxes and dropdowns — and the values land
+  in the file at save time, with undo/redo
+- **Minimal text editing**: a click on a line opens an editor on the page;
+  the old text is removed from the file and the new one written in the same
+  spot, with the same size, colour and — when installed — the same font.
+  Nearby lines stay intact even with single line spacing
+- **OCR** (_Edit → Recognise text…_, `Ctrl+Shift+O`): a scan becomes
+  **searchable and selectable** without changing its appearance — the
+  recognised text is written under the image, invisible. You choose which
+  pages and in which language, and each run is a single undo step
+- **Signing** (_File → Sign…_, `Ctrl+Shift+D`): a **PAdES** signature with
+  your own certificate, invisible or printed in a box on the page, and
+  _File → Verify signatures…_ to read back who signed and whether the
+  document was touched afterwards. A second signature is appended without
+  breaking the first
 
-### Requisito di accettazione
+### Acceptance requirement
 
-Un PDF da **300 pagine** si apre in meno di 2 secondi e resta reattivo:
-all'apertura vengono renderizzate 2 pagine e ~12 miniature, non 300. La cache
-delle pagine contiene al più una manciata di voci, indipendentemente dalla
-dimensione del documento. Coperto da
-[`test_large_document_stays_responsive`](tests/test_integration.py).
+A **300-page** PDF opens in under 2 seconds and stays responsive: at open
+time only 2 pages and ~12 thumbnails are rendered, not 300. The page cache
+holds at most a handful of entries regardless of document size. Covered by
+[`test_large_document_stays_responsive`](https://github.com/gradia64/Plico/blob/main/tests/test_integration.py).
 
-## Architettura
+## Architecture
 
 ```
 plico/
 ├── pyproject.toml
 └── src/plico/
     ├── app.py                 # entry point
-    ├── main_window.py         # MainWindow + wiring worker/model/view
+    ├── main_window.py         # MainWindow + worker/model/view wiring
     ├── model/
     │   ├── document.py        # DocumentModel, PageItem
     │   ├── commands.py        # QUndoCommand: RotatePage, DeletePage, AddRedaction, SetFieldValue…
-    │   ├── redact.py          # rettangoli di redazione, matrici di rotazione
-    │   ├── forms.py           # campi AcroForm: lettura, scrittura, svuotamento
-    │   ├── textedit.py        # modifica di una riga di testo: span, verifica, riscrittura
-    │   ├── ocr.py             # riconoscimento con Tesseract, strato invisibile, lingue
-    │   ├── sign.py            # firma PAdES con pyHanko e rilettura delle firme
-    │   ├── images.py          # da immagini a PDF: A4, dpi, EXIF, JPEG intatti
+    │   ├── redact.py          # redaction rectangles, rotation matrices
+    │   ├── forms.py           # AcroForm fields: read, write, clear
+    │   ├── textedit.py        # editing one text line: span, check, rewrite
+    │   ├── ocr.py             # recognition with Tesseract, invisible layer, languages
+    │   ├── sign.py            # PAdES signing with pyHanko and signature re-reading
+    │   ├── images.py          # images to PDF: A4, dpi, EXIF, intact JPEGs
     │   ├── save.py            # save_as(), save_compressed(), extract_pages()
-    │   ├── assemble.py        # pagine da più PDF, campi dei moduli intatti
-    │   └── optimize.py        # livelli di compressione, optimize_in_place()
+    │   ├── assemble.py        # pages from several PDFs, form fields intact
+    │   └── optimize.py        # compression levels, optimize_in_place()
     ├── rendering/
     │   └── worker.py          # RenderWorker in QThread
     └── widgets/
-        ├── page_view.py       # QScrollArea: rendering, fit-width, HiDPI, redazione, campi
-        ├── thumbnail_bar.py   # QListView + modello + cache, caricamento lazy
-        ├── form_panel.py      # dock «Modulo»: un editor per ogni campo
-        ├── ocr.py             # dialogo lingue/pagine e task di riconoscimento
-        ├── sign.py            # dialoghi di firma e di verifica delle firme
-        └── compress.py        # dialogo delle opzioni, format_size, task
+        ├── page_view.py       # QScrollArea: rendering, fit-width, HiDPI, redaction, fields
+        ├── thumbnail_bar.py   # QListView + model + cache, lazy loading
+        ├── form_panel.py      # "Form" dock: one editor per field
+        ├── ocr.py             # language/page dialog and recognition task
+        ├── sign.py            # signing and verification dialogs
+        └── compress.py        # options dialog, format_size, task
 ```
 
-### Concetto chiave
+### Key concept
 
-Il modello non modifica il PDF: è solo una lista di **pagine virtuali**.
-Ogni pagina virtuale è una coppia `(source_id, source_index)` più la
-rotazione scelta dall'utente. Tutto deriva da questa lista:
+The model never modifies the PDF: it is only a list of **virtual pages**.
+Each virtual page is a pair `(source_id, source_index)` plus the rotation
+chosen by the user. Everything derives from this list:
 
-- **undo/redo**: manipola una lista Python, non il file
-- **unione**: aggiungere un PDF significa solo accodare pagine che
-  puntano a un secondo `source_id`; nessuna pagina viene copiata
-- **rendering**: il worker apre in sola lettura i documenti sorgente,
-  su richiesta, e renderizza senza coordinarsi col modello
-- **salvataggio**: materializza la lista copiando ciascuna sorgente una volta
-  sola e mettendo poi le pagine in ordine nel file d'uscita — copiare due volte
-  dalla stessa sorgente rinomina o perde i campi dei moduli
+- **undo/redo**: manipulates a Python list, not the file
+- **merging**: adding a PDF only appends pages pointing at a second
+  `source_id`; no page is copied
+- **rendering**: the worker opens the source documents read-only, on demand,
+  and renders without coordinating with the model
+- **saving**: materialises the list by copying each source once and then
+  placing the pages in order in the output file — copying twice from the
+  same source would rename or lose form fields
 
-L'identità di una pagina è sempre la coppia `(source_id, source_index)`, mai
-il solo `source_index`: dopo un'unione due pagine hanno regolarmente lo
-stesso indice in documenti diversi, e usarne solo uno le farebbe collassare
-in una sola (miniatura sbagliata, pixmap in cache riutilizzata a sproposito).
+A page's identity is always the pair `(source_id, source_index)`, never
+`source_index` alone: after a merge two pages regularly share the same index
+in different documents, and using only one would collapse them into a single
+page (wrong thumbnail, pixmap reused from the cache by mistake).
 
-Le viste **osservano il modello**: `PageView` e `ThumbnailBar` si collegano ai
-segnali `changed` / `page_changed`, così un undo si riflette automaticamente su
-entrambe senza che la finestra debba ricordarsi di aggiornarle.
+The views **observe the model**: `PageView` and `ThumbnailBar` connect to the
+`changed` / `page_changed` signals, so an undo is reflected on both
+automatically, with no need for the window to remember to refresh them.
 
-### Rotazione: due valori, non uno
+### Rotation: two values, not one
 
-`base_rotation` è la `/Rotate` originale del PDF, `rotation` è l'offset scelto
-dall'utente. Il rendering compone le due, il salvataggio scrive la somma
-(`total_rotation`). Le chiavi di cache includono la rotazione, altrimenti una
-pagina ruotata riuserebbe la miniatura precedente.
+`base_rotation` is the PDF's original `/Rotate`, `rotation` is the offset
+chosen by the user. Rendering composes the two, saving writes the sum
+(`total_rotation`). Cache keys include the rotation, otherwise a rotated
+page would reuse the previous thumbnail.
 
-### Salvataggio sopra il file aperto
+### Saving over the open file
 
-Salvare sullo stesso file che si sta leggendo è permesso: il nuovo documento
-viene scritto in un file temporaneo nella stessa directory e sostituisce
-l'originale solo al termine. Un errore di scrittura non distrugge quindi il
-file dell'utente.
+Saving over the same file you are reading is allowed: the new document is
+written to a temporary file in the same directory and replaces the original
+only at the end. A write error therefore never destroys the user's file.
 
-Dopo un'unione le sorgenti sono più d'una, quindi il controllo copre **tutte**
-le sorgenti: salvare sopra uno qualsiasi dei PDF aperti passa per il file
-temporaneo, perché PyMuPDF non può scrivere in un documento che sta leggendo.
+After a merge there is more than one source, so the check covers **all**
+sources: saving over any of the open PDFs goes through the temporary file,
+because PyMuPDF cannot write into a document it is reading.
 
-Dopo un salvataggio sopra il file aperto, Plico **riapre** il file salvato:
-è quello il documento, adesso, con eliminazioni, rotazioni e redazioni già
-dentro. Per questo le modifiche fatte fino a lì non si possono più annullare.
-Estrarre pagine sopra un file aperto, invece, non è permesso.
+After saving over the open file, Plico **reopens** the saved file: that is
+the document now, with deletions, rotations and redactions already inside.
+That is why the changes made up to that point can no longer be undone.
+Extracting pages over an open file, instead, is not allowed.
 
-### Compressione: dove si guadagna davvero
+### Compression: where the gain really comes from
 
-"Salva compresso" (`Ctrl+Shift+C`) scrive una copia più piccola del documento
-virtuale — quindi rispetta eliminazioni, riordini e rotazioni — e lascia
-intatti i PDF di partenza.
+"Save compressed" (`Ctrl+Shift+C`) writes a smaller copy of the virtual
+document — so it respects deletions, reordering and rotations — and leaves
+the original PDFs untouched.
 
-| Livello | Cosa fa | Senza perdita? |
+| Level | What it does | Lossless? |
 | --- | --- | --- |
-| **Leggera** | fonde i content stream frammentati, compatta la struttura | sì |
-| **Media** | come sopra, più immagini oltre 200 dpi riportate a 150 (qualità 80) | no |
-| **Forte** | immagini oltre 150 dpi riportate a 96 (qualità 60) | no |
+| **Light** | merges fragmented content streams, compacts the structure | yes |
+| **Medium** | as above, plus images above 200 dpi brought down to 150 (quality 80) | no |
+| **Strong** | images above 150 dpi brought down to 96 (quality 60) | no |
 
-Il guadagno più grosso non viene dalle immagini ma da `clean` di mutool: un
-PDF che ha subito copie e modifiche si porta dietro centinaia di content
-stream minuscoli, e fonderli vale, su un documento di testo, 188 KB → 12 KB
-(6%). Su una scansione invece la struttura non ha niente da dare, e conta solo
-il lavoro sulle immagini (un JPEG da 3,4 MB su 3 pagine resta al 100% con
-"leggera", scende al 52% con "media" e al 36% con "forte").
+The biggest gain does not come from images but from mutool's `clean`: a PDF
+that has been through copies and edits carries hundreds of tiny content
+streams, and merging them is worth, on a text document, 188 KB → 12 KB
+(6%). On a scan the structure has nothing to give, and only the work on
+images counts (a 3.4 MB JPEG over 3 pages stays at 100% with "light",
+drops to 52% with "medium" and to 36% with "strong").
 
-Il livello dice *quanto*, non *cosa*: sotto la tendina ci sono due scelte in
-più. **«Solo le immagini»** salta la ricompattazione del file — serve su una
-scansione, dove il guadagno sta nelle immagini, mentre su un documento di solo
-testo non guadagna niente e il programma lo dice invece di scrivere una copia
-identica. **«Pagine da ricampionare»** lascia intatte le immagini delle altre
-pagine, utile quando in mezzo a scansioni pesanti ci sono pagine di testo. C'è
-un caso in cui non si guadagna nulla: se due pagine si dividono la stessa
-immagine, comprimerne una sola obbliga l'altra ad averne una copia per conto
-suo, e il file crescerebbe — allora non viene scritto niente, e il messaggio lo
-spiega.
+The level says _how much_, not _what_: two extra choices sit under the
+dropdown. **"Images only"** skips file repacking — useful on a scan, where
+the gain is in the images, while on a text-only document it gains nothing and
+the program says so instead of writing an identical copy. **"Pages to
+resample"** leaves the images of the other pages intact, useful when heavy
+scans sit among text pages. There is one case where nothing is gained: if
+two pages share the same image, compressing only one would force the other
+to get its own copy, and the file would grow — then nothing is written and
+the message explains why.
 
-Il guadagno non è una stima: il file compresso viene scritto davvero (accanto
-alla destinazione) e solo dopo il programma dice quanto pesa, adottandolo solo
-se ha guadagnato.
+The gain is not an estimate: the compressed file is really written (next to
+the destination) and only afterwards does the program say how much it
+weighs, adopting it only if it gained.
 
-La compressione gira in un thread separato, quindi la finestra resta reattiva
-anche sui file grandi.
+Compression runs in a separate thread, so the window stays responsive even
+on large files.
 
-### Cancella zona: il testo se ne va davvero
+### Redaction: the text really goes away
 
-`Ctrl+Shift+X` (*Modifica → Cancella zona*) attiva lo strumento: si trascina un rettangolo sui dati da
-eliminare, un clic secco su una zona la annulla, `Esc` esce. Una zona già
-disegnata si **corregge senza rifarla**: gli angoli la ridimensionano, il
-centro la sposta. Le zone restano **modificabili finché non salvi** — sono
-comandi undo come gli altri (`Ctrl+Z`).
+`Ctrl+Shift+X` (_Edit → Redact zone_) activates the tool: drag a rectangle
+over the data to remove, a plain click on a zone cancels it, `Esc` exits.
+An already drawn zone is **corrected without redrawing it**: the corners
+resize it, the centre moves it. Zones stay **editable until you save** —
+they are undo commands like the others (`Ctrl+Z`).
 
-Il risultato **si vede subito**, senza salvare e riaprire. Con lo strumento
-acceso le zone sono rettangoli scuri con le maniglie, per correggerle; appena
-lo spegni (`Esc`) la pagina e la sua miniatura mostrano l'**anteprima vera**:
-le cancellazioni applicate a una copia della pagina in memoria, con lo stesso
-codice del salvataggio, quindi anche quello che sparisce insieme alle parole
-(un bordo, un pezzo di immagine). Ogni segno è confermato da un avviso sopra la
-pagina, e il titolo della finestra conta le cancellazioni ancora da applicare.
-Prima di scrivere il file — salvataggio, firma, copia compressa, estrazione di
-pagine — Plico chiede conferma con il numero di zone e le pagine, perché da lì
-il contenuto non si recupera più.
+The result **shows right away**, without saving and reopening. With the tool
+on, zones are dark rectangles with handles, so you can correct them; as soon
+as you turn it off (`Esc`) the page and its thumbnail show the **real
+preview**: the redactions applied to an in-memory copy of the page, by the
+same code as the save, so you also see what goes away with the words (a
+border, part of an image). Every mark is confirmed by a notice over the page,
+and the window title counts the redactions still to apply. Before writing the
+file — save, sign, compressed copy, page extraction — Plico asks for
+confirmation with the number of zones and the pages, because from there the
+content cannot be recovered.
 
-Al salvataggio PyMuPDF riscrive i content stream e **toglie** le parole che
-ricadono nella zona: nel file non restano né il testo né l'immagine sotto il
-rettangolo. Un rettangolo nero disegnato sopra — quello che fanno parecchi
-strumenti — lascerebbe il segreto copiabile e ricercabile. Con il contenuto se
-ne vanno anche le **note** e i **campi del modulo** che la zona tocca: un campo
-compilato con un nome resterebbe altrimenti nel file, valore compreso.
+At save time PyMuPDF rewrites the content streams and **removes** the words
+that fall inside the zone: neither the text nor the image under the
+rectangle remains in the file. A black rectangle drawn on top — what many
+tools do — would leave the secret copyable and searchable. The **notes**
+and **form fields** touched by the zone go too: a field filled with a name
+would otherwise stay in the file, value included.
 
-`Ctrl+Shift+F` (*Modifica → Cancella parola…*) cerca invece una parola in **tutte**
-le pagine e marca ogni occorrenza in un colpo solo, come un unico passo di
-undo. Cerca anche nel testo riconosciuto dall'OCR, già prima di salvare. Non
-accende nessuno strumento: le pagine mostrano subito l'anteprima delle
-occorrenze tolte.
+`Ctrl+Shift+F` (_Edit → Redact word…_) instead searches for a word on **all**
+pages and marks every occurrence in one go, as a single undo step. It also
+searches text recognised by OCR, even before saving. It turns no tool on: the
+pages show the preview of the removed occurrences at once.
 
-`Ctrl+Shift+L` (*Modifica → Cancella selezione*) è la terza strada, quella che
-si aspetta chi ha usato un editor: si trascina sulle parole da eliminare e
-vengono marcate **per intero**, una per una, con un segno stretto quanto la
-parola. Il trascinamento è un gesto solo, quindi un `Ctrl+Z` disfa tutta la
-selezione; trascinare dove non c'è testo non lascia niente; un clic su un segno
-lo toglie, come nella zona, e anche qui un segno si sposta e si ridimensiona.
-Funziona anche sulle parole lette dall'OCR.
+`Ctrl+Shift+L` (_Edit → Redact selection_) is the third route, the one
+expected by anyone who has used an editor: drag over the words to remove and
+they are marked **in full**, one by one, with a mark as tight as the word.
+The drag is a single gesture, so one `Ctrl+Z` undoes the whole selection;
+dragging where there is no text leaves nothing; a click on a mark removes
+it, as with a zone, and a mark can be moved and resized too. It also works
+on words read by OCR.
 
-Quattro cose da sapere:
+Four things to know:
 
-- le parole si prendono **intere** (un segno a metà parola non nasconderebbe
-  niente), e l'unità minima è la parola, non la lettera;
-- un segno fatto di parole — da *Cancella parola* o da *Cancella selezione* —
-  toglie il testo della **sua riga soltanto**: con l'interlinea singola le
-  lettere delle righe sopra e sotto toccano il suo riquadro, e restano dove
-  sono. Una zona **disegnata** invece cancella tutto ciò che tocca, perché è
-  quello che si è disegnato, e lo stesso vale per un segno di parole che si è
-  spostato o ridimensionato;
-- `apply_redactions()` elimina anche la grafica vettoriale che tocca il
-  rettangolo, quindi un bordo o una tabella a cavallo del segno possono
-  sparire;
-- un clic su un segno lo toglie anche se il mouse si è mosso di un pixel: è un
-  clic, non uno spostamento, e `Ctrl+Z` lo rimette esattamente dov'era.
+- words are taken **whole** (a mark in the middle of a word would hide
+  nothing), and the minimum unit is the word, not the letter;
+- a word mark — from _Redact word_ or _Redact selection_ — removes the text
+  of **its line only**: with single line spacing the letters of the lines
+  above and below touch its box, and stay where they are. A **drawn** zone,
+  instead, removes everything it touches, because that is what was drawn,
+  and the same holds for a word mark that has been moved or resized;
+- `apply_redactions()` also removes vector graphics touching the rectangle,
+  so a border or a table straddling the mark can disappear;
+- a click on a mark removes it even if the mouse moved one pixel: it is a
+  click, not a drag, and `Ctrl+Z` puts it back exactly where it was.
 
-I metadati del PDF, invece, non sono un rischio: il file di uscita è
-ricostruito dalle sole pagine, quindi `/Info`, l'XMP e gli allegati non ci
-arrivano mai.
+PDF metadata, instead, is not a risk: the output file is rebuilt from the
+pages alone, so `/Info`, XMP and attachments never make it through.
 
-### Modifica del testo: una riga alla volta
+### Text editing: one line at a time
 
-`Ctrl+Shift+T` (*Modifica → Modifica testo*) attiva lo strumento: un clic su
-una riga **già presente** nel PDF apre un piccolo editor sopra di essa,
-**Invio** conferma, **Esc** annulla. Un clic dove non c'è testo, o su una
-pagina che è solo un'immagine (una scansione), lo dice accanto al puntatore.
-Lo strumento corregge il testo che c'è: non aggiunge testo nuovo in un punto
-vuoto. La correzione si vede subito sulla pagina ed è un comando come gli
-altri (`Ctrl+Z`); nel file entra solo al salvataggio, dove il testo vecchio
-viene **rimosso** dal content stream — non coperto — e quello nuovo scritto
-nello stesso punto. Sfondo, bordi delle tabelle e testo accanto restano, e
-così le righe sopra e sotto: il testo vecchio si toglie da una fascia attorno
-alla riga, non dal suo riquadro, che con l'interlinea singola toccherebbe
-anche le vicine.
+`Ctrl+Shift+T` (_Edit → Edit text_) activates the tool: a click on a line
+**already present** in the PDF opens a small editor over it, **Enter**
+confirms, **Esc** cancels. A click where there is no text, or on a page
+that is only an image (a scan), says so next to the pointer. The tool
+corrects text that is there: it does not add new text in an empty spot. The
+correction shows immediately on the page and is a command like the others
+(`Ctrl+Z`); it enters the file only at save time, where the old text is
+**removed** from the content stream — not covered — and the new one written
+in the same spot. Background, table borders and text beside it stay, as do
+the lines above and below: the old text is removed from a band around the
+line, not from its box, which with single line spacing would also touch the
+neighbours.
 
-È una modifica *minima*, e lo dice: un testo che non ci sta nello spazio
-libero (fino al bordo della cella, alla parola successiva o al margine della
-pagina, anche su una pagina ruotata) viene
-rimpicciolito fino all'80% e oltre rifiutato, con il motivo nella barra di
-stato. Non si modificano il testo verticale e i font Type3. Il font è quello
-del documento quando si può riusare, altrimenti lo stesso installato sul
-sistema, altrimenti un sosia (serif, sans o monospazio) con lo stesso stile.
+It is a _minimal_ edit, and says so: text that does not fit in the free
+space (up to the cell border, the next word or the page margin, even on a
+rotated page) is shrunk down to 80% and rejected beyond that, with the
+reason in the status bar. Vertical text and Type3 fonts are not edited. The
+font is the document's when it can be reused, otherwise the same one
+installed on the system, otherwise a look-alike (serif, sans or monospace)
+with the same style.
 
-### Form: compilare il PDF, non solo leggerlo
+### Forms: filling the PDF, not just reading it
 
-Si compila **sulla pagina**: un clic su un campo di testo apre l'editor dove
-sta il campo, una casella si spunta dove l'hai cliccata, un pulsante radio
-sceglie la risposta che rappresenta. Il dock **Modulo** (a destra) elenca i
-campi della pagina in vista e resta la strada per quelli che sulla pagina non
-si scrivono — tendine, testo multiriga, campi in sola lettura. I valori restano
-**modificabili finché non salvi** e passano per gli stessi undo/redo del resto
-(`Ctrl+Z`).
+You fill in **on the page**: a click on a text field opens the editor where
+the field is, a checkbox is ticked where you clicked it, a radio button
+chooses the answer it represents. The **Form** dock (on the right) lists the
+fields of the page in view and stays the route for those that cannot be
+typed on the page — dropdowns, multi-line text, read-only fields. Values
+stay **editable until you save** and go through the same undo/redo as the
+rest (`Ctrl+Z`).
 
-Un campo AcroForm non è contenuto del PDF, ma un'annotazione con un valore, e
-Plico lo tratta come tale: la **descrizione** dei campi arriva dalla sorgente,
-i **valori** che scrivi vivono nel modello, e `save.py` li applica mentre
-materializza le pagine — prima delle redazioni, così una redazione sopra un
-campo se lo porta via. Il valore disegnato sulla pagina è quello del modello,
-cioè quello che *sarà* nel file.
+An AcroForm field is not PDF content but an annotation with a value, and
+Plico treats it as such: field **descriptions** come from the source, the
+**values** you write live in the model, and `save.py` applies them while
+materialising the pages — before redactions, so a redaction over a field
+carries it away. The value drawn on the page is the model's, that is, the
+one that _will be_ in the file.
 
-Un campo viene scritto **solo se lo tocchi**: uno mai aperto conserva il valore
-che aveva nella sorgente, che non è la stessa cosa di svuotarlo. Un gruppo di
-pulsanti radio è **una domanda sola** — il dock lo mostra come una tendina con
-le risposte — e si sceglie anche cliccandone uno sulla pagina. Le firme
-appartengono a *File → Firma…*.
+A field is written **only if you touch it**: one never opened keeps the
+value it had in the source, which is not the same as emptying it. A group
+of radio buttons is **one question** — the dock shows it as a dropdown of
+answers — and you can also choose by clicking one on the page. Signatures
+belong to _File → Sign…_.
 
-### OCR: rendere cercabile una scansione
+### OCR: making a scan searchable
 
-*Modifica → Riconosci testo…* (`Ctrl+Shift+O`) legge le pagine scelte con
-Tesseract e scrive sotto l'immagine uno **strato di testo invisibile**
-(modalità di render 3). La pagina si vede identica, ma il testo si può
-selezionare, copiare, cercare con `Ctrl+F` — e la *Cancella parola*
-(`Ctrl+Shift+F`) finalmente lo trova, cosa che su una scansione non marcata è
-impossibile. Lo trova subito, non solo dopo aver salvato: lo strato entra nel
-file al salvataggio, ma la ricerca guarda anche le parole appena riconosciute.
+_Edit → Recognise text…_ (`Ctrl+Shift+O`) reads the chosen pages with
+Tesseract and writes an **invisible text layer** under the image (render
+mode 3). The page looks identical, but the text can be selected, copied,
+searched with `Ctrl+F` — and _Redact word_ (`Ctrl+Shift+F`) finally finds
+it, which on an unmarked scan is impossible. It finds it right away, not
+only after saving: the layer enters the file at save time, but search also
+looks at the words just recognised.
 
-Il riconoscimento costa (circa mezzo secondo per pagina A4 a 300 dpi), per
-questo non è automatico: si scrivono le pagine come in *Estrai pagine* (`3`,
-`4-8`, `1-3,5`; all'apertura sono proposte tutte) e si sceglie la lingua, con
-quella dell'interfaccia e l'inglese insieme come proposta. Gira nel thread pool con una barra di avanzamento
-annullabile — finché gira, la finestra non accetta modifiche alle pagine che
-sta leggendo — e ogni giro è **un solo** passo di undo: un `Ctrl+Z` toglie lo
-strato di tutte le pagine in una volta. Alla fine un avviso sopra la pagina
-dice su quante pagine ha letto il testo (o che non ne ha trovato), oltre alla
-barra di stato.
+Recognition costs (about half a second per A4 page at 300 dpi), so it is
+not automatic: you write the pages as in _Extract Pages_ (`3`, `4-8`,
+`1-3,5`; all of them are proposed when it opens) and choose the language, with
+the interface's and English together as the proposal. It runs in the thread pool with a cancellable progress bar —
+while it runs the window accepts no page edits on the pages it is reading —
+and each run is **a single** undo step: one `Ctrl+Z` removes the layer from
+all pages at once. At the end a notice over the page says on how many pages it
+read text (or that it found none), besides the status bar.
 
-Il font dello strato è uno dei Base-14 e non viene incorporato, quindi rendere
-cercabile una scansione non aggiunge un byte. Le parole che il PDF già contiene
-non vengono riscritte: una pagina metà testo e metà scansione non si ritrova il
-testo doppio.
+The layer's font is one of the Base-14 and is not embedded, so making a
+scan searchable adds not a byte. Words already in the PDF are not rewritten:
+a page half text and half scan does not end up with doubled text.
 
-I dati di lingua (`*.traineddata`) si mettono in
-`~/.local/share/plico/tessdata/`, senza root; il Flatpak porta già italiano,
-inglese, spagnolo, francese e tedesco, e propone la lingua dell'interfaccia
-insieme all'inglese. La libreria Tesseract deve essere presente: nel Flatpak è compilata
-dentro (§ Flatpak), su una distribuzione è il pacchetto `tesseract` /
-`libtesseract`.
+Language data (`*.traineddata`) goes in `~/.local/share/plico/tessdata/`,
+no root needed; the Flatpak already ships Italian, English, Spanish, French
+and German, and proposes the interface language together with English. The
+Tesseract library must be present: in the Flatpak it is compiled in (see
+Flatpak), on a distribution it is the `tesseract` / `libtesseract` package.
 
-### Firma: un PDF firmato, non un timbro
+### Signing: a signed PDF, not a stamp
 
-*File → Firma…* (`Ctrl+Shift+D`) firma il documento con un certificato
-PKCS#12 (`.p12` / `.pfx`) e produce una firma **PAdES** — il profilo di firma
-PDF che i lettori europei riconoscono. Si sceglie se la firma resta invisibile
-o se compare in un riquadro in basso a destra con nome, data e motivo: il
-riquadro è contenuto della pagina, quindi non si può togliere senza rompere la
-firma.
+_File → Sign…_ (`Ctrl+Shift+D`) signs the document with a PKCS#12
+certificate (`.p12` / `.pfx`) and produces a **PAdES** signature — the PDF
+signature profile European readers recognise. You choose whether the
+signature stays invisible or appears in a box at the bottom right with name,
+date and reason: the box is page content, so it cannot be removed without
+breaking the signature.
 
-Quattro cose che questa implementazione fa e una che non fa:
+Four things this implementation does and one it does not:
 
-- **La firma è l'ultimo byte del file.** Prima si materializza il documento
-  (con tutti i campi compilati, il testo riscritto, le redazioni applicate, le
-  pagine ruotate), poi si firma. L'ordine inverso produrrebbe una firma che
-  copre una versione del documento diversa da quella che l'utente vede.
-- **Firmare adotta il file firmato.** Dopo `Firma…` la sessione punta al nuovo
-  file, perché continuare a lavorare sulla lista di pagine che l'ha generato
-  significherebbe perdere la firma al primo salvataggio successivo.
-- **Una seconda firma si aggiunge alla prima.** Se il documento firmato non ha
-  modifiche non salvate, la firma nuova si accoda al file così com'è (un
-  aggiornamento incrementale) e la prima resta valida. Con modifiche non
-  salvate il file va riscritto e la firma che c'era non coprirebbe più niente,
-  quindi viene tolta e resta solo la nuova: il programma lo dice prima e chiede
-  se continuare.
-- **Salvare sopra un file firmato chiede prima.** Un salvataggio normale
-  riscrive il PDF da zero: la firma non c'è più, e il file salvato non ne porta
-  una rotta al suo posto. Il programma lo dice e aspetta un «sì», invece di
-  farlo e basta.
-- **Non decide di chi fidarsi.** Plico non porta con sé nessun archivio di
-  autorità: una firma integra e valida di un certificato sconosciuto viene
-  mostrata come «integra, ma il certificato non è fra quelli che consideri
-  fidati». Si aggiungono i certificati di cui fidarsi uno per uno (file `.pem`)
-  e restano in `QSettings`.
+- **The signature is the last byte of the file.** First the document is
+  materialised (with all fields filled, text rewritten, redactions applied,
+  pages rotated), then it is signed. The reverse order would produce a
+  signature covering a different version of the document from the one the
+  user sees.
+- **Signing adopts the signed file.** After _Sign…_ the session points at
+  the new file, because continuing to work on the page list that generated
+  it would lose the signature at the next save.
+- **A second signature is appended to the first.** If the signed document
+  has no unsaved changes, the new signature is appended to the file as it
+  stands (an incremental update) and the first stays valid. With unsaved
+  changes the file has to be rewritten and the previous signature would no
+  longer cover anything, so it is removed and only the new one remains: the
+  program says so beforehand and asks whether to continue.
+- **Saving over a signed file asks first.** A normal save rewrites the PDF
+  from scratch: the signature is gone, and the saved file does not carry a
+  broken one in its place. The program says so and waits for a "yes",
+  instead of just doing it.
+- **It does not decide who to trust.** Plico ships no authority store: a
+  valid, intact signature from an unknown certificate is shown as "intact,
+  but the certificate is not among those you consider trusted". You add the
+  certificates you trust one by one (`.pem` files) and they stay in
+  `QSettings`.
 
-*File → Verifica le firme…* rilegge le firme dal file **su disco** e distingue
-i casi che contano: firma integra e attendibile; integra ma di un certificato
-sconosciuto (ambra, non rosso: è comunque una firma vera); integra ma su un
-documento **modificato dopo la firma** — vale solo per la versione firmata;
-firma **rotta**, cioè il contenuto che copriva è cambiato (rosso, sempre, anche
-se il file ha revisioni successive); firma non valida o certificato scaduto.
-Un modulo che non è mai stato firmato non viene scambiato per un documento
-firmato.
+_File → Verify signatures…_ re-reads the signatures from the **file on
+disk** and distinguishes the cases that matter: intact and trusted; intact
+but from an unknown certificate (amber, not red: it is still a real
+signature); intact but on a document **modified after signing** — valid only
+for the signed version; **broken** signature, i.e. the content it covered
+changed (red, always, even if the file has later revisions); invalid
+signature or expired certificate. A module that was never signed is not
+mistaken for a signed document.
 
-### Integrazione desktop (KDE)
+### Desktop integration (KDE)
 
-- **Icone dal tema** (`QIcon.fromTheme`: `document-open`, `document-save-as`,
-  `edit-undo`, `object-rotate-right`, `zoom-in`, …): nessun asset grafico nel
-  pacchetto. Se il tema non fornisce l'icona, l'azione resta senza icona invece
-  di mostrare un quadrato vuoto.
-- **Cinque lingue**: italiano, inglese, spagnolo, francese e tedesco, anche
-  nei pulsanti dei dialoghi standard di Qt e nei metadati dello store (vedi
-  «Tradurre Plico»).
-- **Stato della sessione in `QSettings`** (`~/.config/Plico/plico.conf`):
-  geometria della finestra, layout di dock e barra strumenti, e fattore di
-  zoom.
+- **Icons from the theme** (`QIcon.fromTheme`: `document-open`,
+  `document-save-as`, `edit-undo`, `object-rotate-right`, `zoom-in`, …): no
+  graphic assets in the package. If the theme does not provide the icon, the
+  action simply has no icon instead of showing an empty square.
+- **Five languages**: Italian, English, Spanish, French and German, including
+  in Qt's standard dialog buttons and in the store metadata (see
+  "Translating Plico").
+- **Session state in `QSettings`** (`~/.config/Plico/plico.conf`): window
+  geometry, dock and toolbar layout, and zoom factor.
 
-## Requisiti
+## Requirements
 
 - Python ≥ 3.11
 - PySide6 ≥ 6.7
 - PyMuPDF (pymupdf) ≥ 1.24.3
-- pikepdf ≥ 9 (compressione mirata)
-- pyHanko ≥ 0.37 (firma PAdES; porta con sé crittografia e validazione)
-- Tesseract (libreria, 4 o 5) e almeno un dato di lingua per l'OCR — il
-  Flatpak li porta entrambi
+- pikepdf ≥ 9 (targeted compression)
+- pyHanko ≥ 0.37 (PAdES signing; brings cryptography and validation)
+- Tesseract (library, 4 or 5) and at least one language data file for OCR —
+  the Flatpak ships both
 
-## Installazione
+## Installation
 
-Ogni [release](https://github.com/gradia64/Plico/releases) ha questi pacchetti
-per Linux x86_64, costruiti dal tag firmato:
+Every [release](https://github.com/gradia64/Plico/releases) has these packages
+for Linux x86_64, built from the signed tag:
 
-- **AppImage** (`Plico-X.Y.Z-x86_64.AppImage`): un file solo, con dentro
-  Python, Qt, PyMuPDF e i dati di lingua dell'OCR. Si rende eseguibile
-  (`chmod +x Plico-X.Y.Z-x86_64.AppImage`) e si avvia. Richiede glibc 2.34 o
-  successiva: Debian 12, Ubuntu 22.04, Fedora 35 o più recenti. Su X11 usa le
-  librerie del sistema per tastiera e grafica (libxkbcommon-x11, libxcb),
-  presenti su ogni desktop.
-- **AppImage per ARM64** (`Plico-X.Y.Z-aarch64.AppImage`): la stessa cosa
-  per i computer ARM a 64 bit (Raspberry Pi 4 e 5, portatili Snapdragon,
-  Asahi Linux). Richiede glibc 2.39 o successiva, perché le librerie Qt per
-  ARM la chiedono: Debian 13, Ubuntu 24.04, Fedora 40 o più recenti. Per ARM
-  c'è solo l'AppImage.
-- **Debian e Ubuntu** (`plico_X.Y.Z_amd64.deb`): lo stesso contenuto
-  dell'AppImage, installato in `/opt/plico` con il menu e l'icona;
-  `sudo apt install ./plico_X.Y.Z_amd64.deb`. Stessi requisiti dell'AppImage;
-  non si aggiorna da solo.
+- **AppImage** (`Plico-X.Y.Z-x86_64.AppImage`): a single file with Python,
+  Qt, PyMuPDF and the OCR language data inside. Make it executable
+  (`chmod +x Plico-X.Y.Z-x86_64.AppImage`) and run it. Needs glibc 2.34 or
+  later: Debian 12, Ubuntu 22.04, Fedora 35 or newer. On X11 it uses the
+  system's keyboard and graphics libraries (libxkbcommon-x11, libxcb), which
+  every desktop has.
+- **AppImage for ARM64** (`Plico-X.Y.Z-aarch64.AppImage`): the same for
+  64-bit ARM computers (Raspberry Pi 4 and 5, Snapdragon laptops, Asahi
+  Linux). Needs glibc 2.39 or later, because the Qt libraries for ARM require
+  it: Debian 13, Ubuntu 24.04, Fedora 40 or newer. For ARM there is only the
+  AppImage.
+- **Debian and Ubuntu** (`plico_X.Y.Z_amd64.deb`): the same contents as the
+  AppImage, installed in `/opt/plico` with the menu entry and icon;
+  `sudo apt install ./plico_X.Y.Z_amd64.deb`. Same requirements as the
+  AppImage; it does not update itself.
 - **Flatpak** (`Plico-X.Y.Z-x86_64.flatpak`): `flatpak install --user
-  Plico-X.Y.Z-x86_64.flatpak` scarica da Flathub il runtime KDE che gli serve.
-  Non si aggiorna da solo: la versione nuova si installa allo stesso modo.
-- **Arch Linux**: il pacchetto `plico` dell'AUR (`paru -S plico`, o un altro
-  helper) si costruisce dal tag firmato, che `makepkg` verifica con la chiave
-  di rilascio; il pacchetto già costruito è anche tra gli allegati della
-  release (`pacman -U plico-X.Y.Z-1-any.pkg.tar.zst`).
+  Plico-X.Y.Z-x86_64.flatpak` fetches the KDE runtime it needs from Flathub.
+  It does not update itself: a new version is installed the same way.
+- **Arch Linux**: the `plico` package on the AUR (`paru -S plico`, or another
+  helper) is built from the signed tag, which `makepkg` verifies with the
+  release key; the built package is also attached to the release
+  (`pacman -U plico-X.Y.Z-1-any.pkg.tar.zst`).
 
-Accanto ci sono `SHA256SUMS` e, per ogni file, un'attestazione di
-provenienza di GitHub: `gh attestation verify Plico-X.Y.Z-x86_64.AppImage -R
-gradia64/Plico` controlla che il file l'abbia prodotto la CI di questo
-repository da quel tag.
+Next to them are `SHA256SUMS` and, for each file, a GitHub provenance
+attestation: `gh attestation verify Plico-X.Y.Z-x86_64.AppImage -R
+gradia64/Plico` checks that the file was produced by this repository's CI
+from that tag.
 
-Da sorgente, per lo sviluppo:
+From source, for development:
 
-```bash
+```
 pip install -e ".[dev]"
 ```
 
-L'entry point accetta i file da aprire, come si aspetta un'app desktop:
+The entry point accepts the files to open, as a desktop app is expected to:
 
-```bash
-plico relazione.pdf              # apre
-plico a.pdf b.pdf                # apre a.pdf e vi unisce b.pdf
-plico ricevuta.jpg a.pdf         # crea un documento dalla foto e vi unisce a.pdf
+```
+plico relazione.pdf              # opens
+plico a.pdf b.pdf                # opens a.pdf and merges b.pdf into it
+plico ricevuta.jpg a.pdf         # builds a document from the photo and merges a.pdf
 ```
 
-Accetta anche gli URL `file:///…` che passano alcuni launcher. Il file
-`.desktop` chiede comunque percorsi (`Exec=plico %F`).
+It also accepts `file:///…` URLs, which some launchers pass. The `.desktop`
+file still expects paths (`Exec=plico %F`).
 
 ## Flatpak
 
-Il packaging è in `flatpak/` ed è pensato per essere pubblicabile su Flathub.
+Packaging lives in `flatpak/` and is meant to be publishable on Flathub.
 
-| File | Ruolo |
+| File | Role |
 | --- | --- |
-| `io.github.gradia64.plico.json` | manifest dell'applicazione |
-| `python3-pymupdf.json` | modulo per PyMuPDF, con wheel e `sha256` fissati |
-| `python3-pikepdf.json` | modulo per pikepdf, con wheel e `sha256` fissati |
-| `python3-pyhanko.json` | modulo per pyHanko e le sue dipendenze, sempre da wheel |
-| `io.github.gradia64.plico.desktop` | launcher (registra `application/pdf`, riceve percorsi con `%F`) |
-| `io.github.gradia64.plico.metainfo.xml` | metadati AppStream |
-| `io.github.gradia64.plico.svg` | icona |
+| `io.github.gradia64.plico.json` | application manifest |
+| `python3-pymupdf.json` | module for PyMuPDF, with wheel and pinned `sha256` |
+| `python3-pikepdf.json` | module for pikepdf, with wheel and pinned `sha256` |
+| `python3-pyhanko.json` | module for pyHanko and its dependencies, always from wheels |
+| `io.github.gradia64.plico.desktop` | launcher (registers `application/pdf`, receives paths with `%F`) |
+| `io.github.gradia64.plico.metainfo.xml` | AppStream metadata |
+| `io.github.gradia64.plico.svg` | icon |
 
-Otto scelte non ovvie:
+Eight non-obvious choices:
 
-- **`base: io.qt.PySide.BaseApp`** invece di installare PySide6 con pip. La
-  BaseApp di Flathub contiene già PySide6 compilato e allineato al Qt di
-  `org.kde.Platform`, quindi il bundle non duplica Qt né rischia di
-  sovrascrivere la versione del runtime. Per questo l'installazione
-  dell'applicazione usa `--no-deps`: PySide6 arriva dal runtime, PyMuPDF dal
-  suo modulo, e pip non deve nemmeno provare a scaricare PySide6 da PyPI.
-- **PyMuPDF da wheel `manylinux`** (`cp310-abi3`, valida per ogni Python ≥ 3.10,
-  quindi anche per il 3.13 del runtime) e non da sorgente: compilare MuPDF
-  dentro il manifest vorrebbe dire `swig` e parecchi minuti di build.
-- **pikepdf da wheel `cp313`** (l'interprete della BaseApp, che non è quello
-  del venv) **installata con `--no-deps`**: pikepdf dichiara `Pillow`, `lxml` e
-  `packaging`, ma `open()` e `save()` non li importano, e `packaging` è già
-  nella BaseApp. Se servissero le API sulle immagini o il supporto PDF/A
-  andrebbero aggiunte anche le loro wheel.
-- **pyHanko da wheel, in un solo modulo** (`python3-pyhanko.json`): pyHanko
-  tira con sé `cryptography`, `asn1crypto`, `aiohttp`, `lxml` e una decina di
-  altre dipendenze, tutte pure Python o con wheel `manylinux` per il 3.13 della
-  BaseApp, quindi si installano in un colpo solo con `--no-index --no-deps`.
-  Sono i venti file elencati nel modulo, ciascuno con il suo `sha256`: la
-  firma digitale è la parte del programma in cui "più o meno quella versione"
-  non è una risposta accettabile.
-- **Le traduzioni si compilano durante la build**: `lrelease` esiste solo
-  nell'SDK di Qt, non nella runtime, e i `.qm` sono gli unici file che
-  servono a runtime. Il modulo `plico` installa i `.ts` con il pacchetto e poi
-  li compila in `/app/share/plico/translations`, così nel bundle non finisce
-  anche il compilatore.
-- **`cleanup-commands: /app/cleanup-BaseApp.sh`**, richiesto dalla BaseApp.
-- **Nessun accesso alla home** (niente `--filesystem`): ogni file passa dal
-  selettore di file del portal (`org.freedesktop.portal.FileChooser`), che
-  Qt usa da solo dentro Flatpak. Plico vede il documento come
-  `/run/user/<uid>/doc/<id>/nome.pdf` e lo legge e lo scrive lì, salvataggio
-  atomico compreso (il temporaneo nella stessa cartella e `os.replace`
-  funzionano anche nel document portal); per proporre un percorso nei
-  dialoghi usa invece quello vero, che il portal espone nell'attributo
-  esteso `user.document-portal.host-path`. Il launcher usa `%F`, così un
-  doppio clic arriva già come percorso esportato nel portal.
-- **`--talk-name=org.kde.StatusNotifierWatcher`**, l'unico permesso D-Bus:
-  senza, dentro la sandbox l'area di notifica non esiste e l'icona delle
-  Impostazioni non compare (provato su Plasma). Qt registra l'icona col suo
-  nome unico sul bus, quindi non serve possedere altri nomi. L'icona è
-  facoltativa e spenta di default.
+- **`base: io.qt.PySide.BaseApp`** instead of installing PySide6 with pip.
+  Flathub's BaseApp already contains PySide6 built and aligned with the Qt of
+  `org.kde.Platform`, so the bundle does not duplicate Qt nor risk
+  overwriting the runtime's version. That is why the application is
+  installed with `--no-deps`: PySide6 comes from the runtime, PyMuPDF from
+  its module, and pip must not even try to download PySide6 from PyPI.
+- **PyMuPDF from a `manylinux` wheel** (`cp310-abi3`, valid for every
+  Python ≥ 3.10, hence also for the runtime's 3.13) and not from source:
+  building MuPDF inside the manifest would require `swig` and several
+  minutes of build.
+- **pikepdf from a `cp313` wheel** (the BaseApp's interpreter, which is not
+  the venv's) **installed with `--no-deps`**: pikepdf declares `Pillow`,
+  `lxml` and `packaging`, but `open()` and `save()` do not import them, and
+  `packaging` is already in the BaseApp. If the image APIs or PDF/A support
+  were needed, their wheels would have to be added too.
+- **pyHanko from wheels, in a single module** (`python3-pyhanko.json`):
+  pyHanko pulls in `cryptography`, `asn1crypto`, `aiohttp`, `lxml` and a
+  dozen other dependencies, all pure Python or with `manylinux` wheels for
+  the BaseApp's 3.13, so they install in one go with `--no-index --no-deps`.
+  They are the twenty files listed in the module, each with its own `sha256`:
+  digital signing is the part of the program where "roughly that version" is
+  not an acceptable answer.
+- **Translations are compiled during the build**: `lrelease` exists only in
+  Qt's SDK, not in the runtime, and the `.qm` files are the only ones needed
+  at runtime. The `plico` module installs the `.ts` files with the package
+  and then compiles them into `/app/share/plico/translations`, so the
+  compiler does not end up in the bundle.
+- **`cleanup-commands: /app/cleanup-BaseApp.sh`**, required by the BaseApp.
+- **No home access** (no `--filesystem`): every file goes through the
+  portal's file chooser (`org.freedesktop.portal.FileChooser`), which Qt uses
+  on its own inside Flatpak. Plico sees the document as
+  `/run/user/<uid>/doc/<id>/name.pdf` and reads and writes it there, atomic
+  save included (the temporary file in the same folder and `os.replace` work
+  in the document portal too); to propose a path in the dialogs it uses the
+  real one, which the portal exposes in the extended attribute
+  `user.document-portal.host-path`. The launcher uses `%F`, so a double
+  click already arrives as a path exported in the portal.
+- **`--talk-name=org.kde.StatusNotifierWatcher`**, the only D-Bus permission:
+  without it the notification area does not exist inside the sandbox and the
+  Settings icon never shows (tested on Plasma). Qt registers the icon under
+  its unique bus name, so no other name has to be owned. The icon is
+  optional and off by default.
 
-Costruire e installare nella propria utenza:
+Build and install for your own user:
 
-```bash
-# una volta sola: builder, SDK e BaseApp
+```
+# once: builder, SDK and BaseApp
 flatpak remote-add --user --if-not-exists flathub \
     https://dl.flathub.org/repo/flathub.flatpakrepo
 flatpak install --user -y flathub org.flatpak.Builder//stable \
     org.kde.Sdk//6.11 io.qt.PySide.BaseApp//6.11
 
-# build + install. La cache sta FUORI dal progetto: build-dir/ e
-# .flatpak-builder/ dentro l'albero vengono trovati dalle ricerche globali e
-# contengono copie dei sorgenti.
+# build + install. The cache lives OUTSIDE the project: build-dir/ and
+# .flatpak-builder/ inside the tree are found by global searches and contain
+# copies of the sources.
 flatpak run org.flatpak.Builder --force-clean --user --install \
     --install-deps-from=flathub \
     --state-dir="$HOME/.cache/plico-flatpak/state" \
@@ -550,126 +540,127 @@ flatpak run org.flatpak.Builder --force-clean --user --install \
 flatpak run io.github.gradia64.plico
 ```
 
-Gli **screenshot** dello store stanno in `flatpak/screenshots/` e li produce
-`tools/screenshots.py` dall'app vera; nel metainfo puntano al tag
-dell'ultimo rilascio, e a ogni rilascio vanno spostati sul tag nuovo.
+The store **screenshots** live in `flatpak/screenshots/` and are produced by
+`tools/screenshots.py` from the real app; in the metainfo they point at the
+tag of the latest release, and every release moves them to its new tag.
 
-### Rilasciare
+### Releasing
 
-Una release è un tag `vX.Y.Z` firmato: da lì `.github/workflows/release.yml`
-verifica la firma e la versione, costruisce e collauda AppImage, `.deb`,
-bundle Flatpak e pacchetto Arch, e li allega alla release su GitHub con `SHA256SUMS` e
-un'attestazione di provenienza. Prima del tag controlla che:
+A release is a signed `vX.Y.Z` tag: from there `.github/workflows/release.yml`
+verifies the signature and the version, builds and tests the AppImage, the
+`.deb`, the Flatpak bundle and the Arch package, and attaches them to the GitHub release with `SHA256SUMS` and
+a provenance attestation. Before tagging, check that:
 
-- la versione sia la stessa in `pyproject.toml`, in `src/plico/__init__.py` e
-  nell'ultima `<release>` della metainfo, con gli screenshot fissati al tag;
-- ci siano le note in `packaging/release-notes/X.Y.Z.md` (sezioni `## …` e il
-  link «Full Changelog»): sono la descrizione della release;
-- in `CHANGELOG.md` le voci di «Non rilasciato» siano passate sotto la
-  versione nuova, con la data e il link di confronto.
+- the version is the same in `pyproject.toml`, in `src/plico/__init__.py` and
+  in the last `<release>` of the metainfo, with the screenshots pinned to the
+  tag;
+- the notes exist in `packaging/release-notes/X.Y.Z.md` (`## …` sections and
+  the "Full Changelog" link): they are the release description;
+- in `CHANGELOG.md` the "Non rilasciato" (unreleased) entries have moved
+  under the new version, with its date and comparison link.
 
-I tag si firmano con la **chiave di rilascio di Plico**, una chiave OpenPGP
-che non esce dalla macchina del maintainer: primaria
-`1843 07C7 A158 5AFA D7F0  9DF6 EBC8 B4A0 FFD5 B91F` (solo certificazione) e
-sottochiave dei tag `E0C7 71BB B276 A114 D0B8  C591 C5DD C074 5643 FA72`. La
-chiave pubblica è `packaging/plico-release-key.asc`, e
-`scripts/verify-tag.sh` accetta un tag solo se firmato da quella sottochiave.
-Da fare una volta sola per checkout:
+Tags are signed with the **Plico release key**, an OpenPGP key that never
+leaves the maintainer's machine: primary
+`1843 07C7 A158 5AFA D7F0  9DF6 EBC8 B4A0 FFD5 B91F` (certification only) and
+tag subkey `E0C7 71BB B276 A114 D0B8  C591 C5DD C074 5643 FA72`. The public
+key is `packaging/plico-release-key.asc`, and `scripts/verify-tag.sh` accepts
+a tag only when that subkey signed it. Once per checkout:
 
-```bash
+```
 git config gpg.format openpgp
 git config user.signingkey 'E0C771BBB276A114D0B8C591C5DDC0745643FA72!'
 git config tag.gpgSign true
 git config gpg.ssh.allowedSignersFile "$PWD/.github/allowed_signers"
 ```
 
-L'ultima riga serve solo a verificare i tag fino a `v0.1.3`, firmati con la
-chiave SSH di `.github/allowed_signers`.
+The last line is only for verifying the tags up to `v0.1.3`, signed with the
+SSH key in `.github/allowed_signers`.
 
-A ogni rilascio:
+At every release:
 
-```bash
-# 1. versione, <release> e URL degli screenshot (…/Plico/vX.Y.Z/…) nella
-#    metainfo, note in packaging/release-notes/X.Y.Z.md, CHANGELOG.md;
-#    commit e push
-# 2. tag firmato, verificato, pubblicato: il resto lo fa release.yml
+```
+# 1. version, <release> and screenshot URLs (…/Plico/vX.Y.Z/…) in the
+#    metainfo, notes in packaging/release-notes/X.Y.Z.md, CHANGELOG.md;
+#    commit and push
+# 2. signed, verified, published tag: release.yml does the rest
 git tag -s v0.1.6 -m "Plico 0.1.6"
 scripts/verify-tag.sh v0.1.6
 git push origin v0.1.6
-# 3. a mano, prima di un tag, le stesse build senza pubblicare (tranne il
-#    pacchetto Arch: il PKGBUILD clona il tag firmato, che non c'è ancora)
+# 3. by hand, before a tag, the same builds without publishing (except the
+#    Arch package: the PKGBUILD clones the signed tag, not there yet)
 gh workflow run release.yml --ref main
 ```
 
-Plico non è su Flathub: la sua politica sull'IA generativa esclude manifest
-scritti con l'assistenza dell'IA.
+Plico is not on Flathub: its generative AI policy rules out manifests written
+with AI assistance.
 
-## Sviluppo
+## Development
 
-```bash
-# test (senza display, grazie a QT_QPA_PLATFORM=offscreen).
-# NB: pytest non è in .venv/bin, quindi si passa da python -m
+```
+# tests (no display, thanks to QT_QPA_PLATFORM=offscreen).
+# NB: pytest is not in .venv/bin, so run it through python -m
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q
 
-# lint + tipi
+# lint + types
 ruff check src/ tests/ tools/
 mypy src/plico
 
-# avvio
-plico            # oppure: python -m plico.app
+# run
+plico            # or: python -m plico.app
 
-# screenshot per lo store (flatpak/screenshots), in inglese o in un'altra lingua
+# store screenshots (flatpak/screenshots), in English or another language
 QT_QPA_PLATFORM=offscreen python tools/screenshots.py [it|es|fr|de]
 ```
 
-La **CI** (GitHub Actions, `.github/workflows/`) fa le stesse cose a ogni push
-e pull request: `ci.yml` esegue test, `ruff` e `mypy` su Python dalla 3.11 alla 3.14 e
-valida metainfo, `.desktop` e manifest; `flatpak.yml`, su `main` e a richiesta
-dalla scheda Actions, costruisce il Flatpak vero, lo passa al linter di
-Flathub (`flatpak-builder-lint`) e lascia il pacchetto `plico.flatpak` fra gli
-artefatti della run, da installare con `flatpak install --user plico.flatpak`.
+**CI** (GitHub Actions, `.github/workflows/`) does the same on every push
+and pull request: `ci.yml` runs tests, `ruff` and `mypy` on Python 3.11 to
+3.14 and validates metainfo, `.desktop` and manifest; `flatpak.yml`, on
+`main` and on demand from the Actions tab, builds the real Flatpak, passes it
+to Flathub's linter (`flatpak-builder-lint`) and leaves the `plico.flatpak`
+package among the run's artifacts, installable with
+`flatpak install --user plico.flatpak`.
 
-### Tradurre Plico
+### Translating Plico
 
-Plico parla **italiano**, **inglese**, **spagnolo**, **francese** e
-**tedesco**: segue la lingua del sistema, e una lingua che non conosce riceve
-l'inglese. Le stringhe sono in italiano nel codice; i cataloghi delle altre
-lingue stanno in `src/plico/translations/plico_{en,es,fr,de}.ts` e si
-modificano con Qt Linguist o con un editor di testo. Una lingua nuova è un file
-`plico_xx.ts` in più: lo si crea con `pylupdate6`, si traduce, e lo si
-aggiunge a `LANGUAGES` in `tests/test_translations.py`, alle `<languages>`
-della metainfo e alle voci `[xx]` del `.desktop`.
+Plico speaks **Italian**, **English**, **Spanish**, **French** and **German**:
+it follows the system language, and a language it does not know gets English.
+Strings are in Italian in the code; the other languages' catalogs live in
+`src/plico/translations/plico_{en,es,fr,de}.ts` and are edited with Qt
+Linguist or a text editor. A new language is one more `plico_xx.ts`
+file: create it with `pylupdate6`, translate it, and add it to `LANGUAGES` in
+`tests/test_translations.py`, to the metainfo `<languages>` and to the `[xx]`
+entries of the `.desktop` file.
 
-`pylupdate6` arriva con PyQt6 (`pip install PyQt6` nel venv basta, serve solo
-lo strumento): senza, `tests/test_i18n.py` salta proprio il controllo che
-avvisa quando una stringa nuova manca dal catalogo.
+`pylupdate6` ships with PyQt6 (`pip install PyQt6` in the venv is enough,
+only the tool is needed): without it, `tests/test_i18n.py` skips exactly
+the check that warns when a new string is missing from the catalog.
 
-```bash
-# 1. riestrarre le stringhe dopo aver toccato il codice,
-#    in tutti e quattro i cataloghi
+```
+# 1. re-extract strings after touching the code,
+#    into all four catalogs
 for l in en es fr de; do
     pylupdate6 -no-obsolete src/plico -ts src/plico/translations/plico_$l.ts
 done
 
-# 2. compilare: pyside6-lrelease arriva con PySide6 (o lrelease dall'SDK)
+# 2. compile: pyside6-lrelease ships with PySide6 (or lrelease from the SDK)
 pyside6-lrelease src/plico/translations/plico_de.ts -qm /tmp/plico_de.qm
 
-# 3. provarla senza installare niente
+# 3. try it without installing anything
 LANG=de_DE.UTF-8 PLICO_TRANSLATIONS=/tmp plico
 ```
 
-`tests/test_i18n.py` verifica che i cataloghi siano quelli che le sorgenti
-producono, così nessuna stringa nuova resta fuori; `tests/test_translations.py`
-che ogni lingua sia completa, conservi i segnaposto (`{0}`) e non dia la stessa
-scorciatoia a due voci di un menu.
+`tests/test_i18n.py` checks that the catalogs are what the sources produce,
+so no new string is left out; `tests/test_translations.py` checks that every
+language is complete, keeps the placeholders (`{0}`) and does not give the
+same shortcut to two menu entries.
 
-## Licenza
+## License
 
-GPL v3 — vedi [LICENSE](LICENSE).
+GPL v3 — see [LICENSE](https://github.com/gradia64/Plico/blob/main/LICENSE).
 
 ## About
 
-Un vero editor PDF nativo per Linux: unisci, dividi, ruota, riordina, salva. Qt6 + PySide6 + PyMuPDF.
+A true native PDF editor for Linux: merge, split, rotate, reorder, save. Qt6 + PySide6 + PyMuPDF.
 
 ### Topics
 
