@@ -29,11 +29,11 @@ A true native PDF editor for Linux, built with **Qt6** and **PySide6**, using
   without copying anything, because every virtual page knows which source
   document it belongs to. You can also merge an image (a photographed
   receipt tacked onto the end of a PDF)
-- **Create a PDF from images** (_File → Create from images…_, `Ctrl+Shift+N`):
+- **Create a PDF from images** (_File → Create from Images…_, `Ctrl+Shift+N`):
   photos and scans — PNG, JPEG, TIFF, BMP, GIF — become one page each, in
   the chosen order. A scan keeps its real size (an A4 at 300 dpi stays an
-  A4), a phone photo is fitted to a portrait A4, and JPEGs are embedded
-  without being recompressed
+  A4), a phone photo is fitted to an A4 oriented like the photo, and JPEGs
+  are embedded without being recompressed
 - **Extract pages** (split) into a new file with a range like `1-3,5,8` —
   the typed order is preserved, so this doubles as reordering. Commas and
   blanks separate alike: `1 3` is pages 1 and 3
@@ -83,13 +83,13 @@ A true native PDF editor for Linux, built with **Qt6** and **PySide6**, using
   the old text is removed from the file and the new one written in the same
   spot, with the same size, colour and — when installed — the same font.
   Nearby lines stay intact even with single line spacing
-- **OCR** (_Edit → Recognise text…_, `Ctrl+Shift+O`): a scan becomes
+- **OCR** (_Edit → Recognize Text…_, `Ctrl+Shift+O`): a scan becomes
   **searchable and selectable** without changing its appearance — the
   recognised text is written under the image, invisible. You choose which
   pages and in which language, and each run is a single undo step
 - **Signing** (_File → Sign…_, `Ctrl+Shift+D`): a **PAdES** signature with
   your own certificate, invisible or printed in a box on the page, and
-  _File → Verify signatures…_ to read back who signed and whether the
+  _File → Verify Signatures…_ to read back who signed and whether the
   document was touched afterwards. A second signature is appended without
   breaking the first
 
@@ -98,7 +98,7 @@ A true native PDF editor for Linux, built with **Qt6** and **PySide6**, using
 A **300-page** PDF opens in under 2 seconds and stays responsive: at open
 time only 2 pages and ~12 thumbnails are rendered, not 300. The page cache
 holds at most a handful of entries regardless of document size. Covered by
-[`test_large_document_stays_responsive`](https://github.com/gradia64/Plico/blob/main/tests/test_integration.py).
+[`test_large_document_stays_responsive`](tests/test_integration.py).
 
 ## Architecture
 
@@ -179,7 +179,7 @@ Extracting pages over an open file, instead, is not allowed.
 
 ### Compression: where the gain really comes from
 
-"Save compressed" (`Ctrl+Shift+C`) writes a smaller copy of the virtual
+"Save Compressed" (`Ctrl+Shift+C`) writes a smaller copy of the virtual
 document — so it respects deletions, reordering and rotations — and leaves
 the original PDFs untouched.
 
@@ -215,7 +215,7 @@ on large files.
 
 ### Redaction: the text really goes away
 
-`Ctrl+Shift+X` (_Edit → Redact zone_) activates the tool: drag a rectangle
+`Ctrl+Shift+X` (_Edit → Erase Area_) activates the tool: drag a rectangle
 over the data to remove, a plain click on a zone cancels it, `Esc` exits.
 An already drawn zone is **corrected without redrawing it**: the corners
 resize it, the centre moves it. Zones stay **editable until you save** —
@@ -239,12 +239,12 @@ tools do — would leave the secret copyable and searchable. The **notes**
 and **form fields** touched by the zone go too: a field filled with a name
 would otherwise stay in the file, value included.
 
-`Ctrl+Shift+F` (_Edit → Redact word…_) instead searches for a word on **all**
+`Ctrl+Shift+F` (_Edit → Erase Word…_) instead searches for a word on **all**
 pages and marks every occurrence in one go, as a single undo step. It also
 searches text recognised by OCR, even before saving. It turns no tool on: the
 pages show the preview of the removed occurrences at once.
 
-`Ctrl+Shift+L` (_Edit → Redact selection_) is the third route, the one
+`Ctrl+Shift+L` (_Edit → Erase Selection_) is the third route, the one
 expected by anyone who has used an editor: drag over the words to remove and
 they are marked **in full**, one by one, with a mark as tight as the word.
 The drag is a single gesture, so one `Ctrl+Z` undoes the whole selection;
@@ -256,7 +256,7 @@ Four things to know:
 
 - words are taken **whole** (a mark in the middle of a word would hide
   nothing), and the minimum unit is the word, not the letter;
-- a word mark — from _Redact word_ or _Redact selection_ — removes the text
+- a word mark — from _Erase Word_ or _Erase Selection_ — removes the text
   of **its line only**: with single line spacing the letters of the lines
   above and below touch its box, and stay where they are. A **drawn** zone,
   instead, removes everything it touches, because that is what was drawn,
@@ -317,10 +317,10 @@ belong to _File → Sign…_.
 
 ### OCR: making a scan searchable
 
-_Edit → Recognise text…_ (`Ctrl+Shift+O`) reads the chosen pages with
+_Edit → Recognize Text…_ (`Ctrl+Shift+O`) reads the chosen pages with
 Tesseract and writes an **invisible text layer** under the image (render
 mode 3). The page looks identical, but the text can be selected, copied,
-searched with `Ctrl+F` — and _Redact word_ (`Ctrl+Shift+F`) finally finds
+searched with `Ctrl+F` — and _Erase Word_ (`Ctrl+Shift+F`) finally finds
 it, which on an unmarked scan is impossible. It finds it right away, not
 only after saving: the layer enters the file at save time, but search also
 looks at the words just recognised.
@@ -379,7 +379,7 @@ Four things this implementation does and one it does not:
   certificates you trust one by one (`.pem` files) and they stay in
   `QSettings`.
 
-_File → Verify signatures…_ re-reads the signatures from the **file on
+_File → Verify Signatures…_ re-reads the signatures from the **file on
 disk** and distinguishes the cases that matter: intact and trusted; intact
 but from an unknown certificate (amber, not red: it is still a real
 signature); intact but on a document **modified after signing** — valid only
@@ -445,13 +445,13 @@ from that tag.
 
 From source, for development:
 
-```
+```bash
 pip install -e ".[dev]"
 ```
 
 The entry point accepts the files to open, as a desktop app is expected to:
 
-```
+```bash
 plico relazione.pdf              # opens
 plico a.pdf b.pdf                # opens a.pdf and merges b.pdf into it
 plico ricevuta.jpg a.pdf         # builds a document from the photo and merges a.pdf
@@ -521,7 +521,7 @@ Eight non-obvious choices:
 
 Build and install for your own user:
 
-```
+```bash
 # once: builder, SDK and BaseApp
 flatpak remote-add --user --if-not-exists flathub \
     https://dl.flathub.org/repo/flathub.flatpakrepo
@@ -566,7 +566,7 @@ tag subkey `E0C7 71BB B276 A114 D0B8  C591 C5DD C074 5643 FA72`. The public
 key is `packaging/plico-release-key.asc`, and `scripts/verify-tag.sh` accepts
 a tag only when that subkey signed it. Once per checkout:
 
-```
+```bash
 git config gpg.format openpgp
 git config user.signingkey 'E0C771BBB276A114D0B8C591C5DDC0745643FA72!'
 git config tag.gpgSign true
@@ -578,7 +578,7 @@ SSH key in `.github/allowed_signers`.
 
 At every release:
 
-```
+```bash
 # 1. version, <release> and screenshot URLs (…/Plico/vX.Y.Z/…) in the
 #    metainfo, notes in packaging/release-notes/X.Y.Z.md, CHANGELOG.md;
 #    commit and push
@@ -599,7 +599,7 @@ with AI assistance.
 
 ## Development
 
-```
+```bash
 # tests (no display, thanks to QT_QPA_PLATFORM=offscreen).
 # NB: pytest is not in .venv/bin, so run it through python -m
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q
@@ -638,7 +638,7 @@ entries of the `.desktop` file.
 only the tool is needed): without it, `tests/test_i18n.py` skips exactly
 the check that warns when a new string is missing from the catalog.
 
-```
+```bash
 # 1. re-extract strings after touching the code,
 #    into all four catalogs
 for l in en es fr de; do
@@ -659,7 +659,7 @@ same shortcut to two menu entries.
 
 ## License
 
-GPL v3 — see [LICENSE](https://github.com/gradia64/Plico/blob/main/LICENSE).
+GPL v3 — see [LICENSE](LICENSE).
 
 ## About
 

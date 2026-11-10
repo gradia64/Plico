@@ -33,15 +33,16 @@ comprimirlos.
   `Ctrl+Shift+N`): fotos y escaneos — PNG, JPEG, TIFF, BMP, GIF — se
   convierten en una página cada uno, en el orden elegido. Un escaneo mantiene
   su tamaño real (un A4 a 300 dpi sigue siendo un A4), una foto de teléfono
-  se ajusta a un A4 vertical, y los JPEG se incrustan sin recomprimirse
+  se ajusta a un A4 orientado como ella, y los JPEG se incrustan sin recomprimirse
 - **Extraer páginas** (dividir) en un archivo nuevo con un rango como
   `1-3,5,8` — el orden escrito se conserva, así que también sirve para
-  reordenar
+  reordenar. Las comas y los espacios separan igual: `1 3` son las páginas 1
+  y 3
 - **Buscar** (*Editar → Buscar…*, `Ctrl+F`): una barra bajo la página resalta
   todas las coincidencias, `Intro`/`F3` pasa a la siguiente, `Mayús+F3` a la
   anterior, `Esc` cierra. También encuentra las palabras recién reconocidas
   por el OCR, antes de guardar
-- **Ajustes** (*Ajustes → Configurar Plico…*, `Ctrl+Mayús+,`): el idioma de
+- **Configuración** (*Configuración → Configurar Plico…*, `Ctrl+Mayús+,`): el idioma de
   la interfaz — automático, es decir el del sistema, o uno entre italiano,
   inglés, francés, alemán y español; con una lengua de sistema que Plico no
   tiene se usa el inglés — y el icono en el área de notificación. Con el
@@ -52,7 +53,7 @@ comprimirlos.
   francés, alemán y español, en el idioma de la interfaz: se lee en una
   ventana de Plico, también sin red
 - **Actualizaciones** (*Ayuda → Buscar actualizaciones…*): pregunta a GitHub
-  si ha salido una versión más reciente y abre su página. En *Ajustes* se
+  si ha salido una versión más reciente y abre su página. En *Configuración* se
   puede activar una comprobación automática, como máximo una vez al día, que
   avisa de la versión nueva con un aviso sobre la página y la entrada *Ayuda →
   Descargar Plico…*. Está **desactivada** hasta que se active: sin ella, Plico
@@ -101,7 +102,7 @@ Un PDF de **300 páginas** se abre en menos de 2 segundos y sigue siendo
 reactivo: al abrirse se renderizan 2 páginas y ~12 miniaturas, no 300. La
 caché de páginas contiene como mucho unas pocas entradas, independientemente
 del tamaño del documento. Cubierto por
-[`test_large_document_stays_responsive`](https://github.com/gradia64/Plico/blob/main/tests/test_integration.py).
+[`test_large_document_stays_responsive`](tests/test_integration.py).
 
 ## Arquitectura
 
@@ -118,7 +119,7 @@ plico/
     │   ├── forms.py           # campos AcroForm: lectura, escritura, vaciado
     │   ├── textedit.py        # edición de una línea de texto: span, verificación, reescritura
     │   ├── ocr.py             # reconocimiento con Tesseract, capa invisible, idiomas
-    │   ├── sign.py            # firma PAdES con pyHanko y relecura de firmas
+    │   ├── sign.py            # firma PAdES con pyHanko y relectura de firmas
     │   ├── images.py          # de imágenes a PDF: A4, dpi, EXIF, JPEG intactos
     │   ├── save.py            # save_as(), save_compressed(), extract_pages()
     │   ├── assemble.py        # páginas de varios PDFs, campos de formulario intactos
@@ -220,13 +221,24 @@ incluso con archivos grandes.
 
 ### Redacción: el texto se va de verdad
 
-`Ctrl+Shift+X` (_Editar → Redactar zona_) activa la herramienta: se arrastra
+`Ctrl+Shift+X` (_Editar → Borrar zona_) activa la herramienta: se arrastra
 un rectángulo sobre los datos a eliminar, un clic seco sobre una zona la
 cancela, `Esc` sale. Una zona ya dibujada se **corrige sin rehacerla**: las
 esquinas la redimensionan, el centro la mueve. Las zonas quedan
 **editables hasta que guardas** — son comandos de deshacer como los demás
-(`Ctrl+Z`) y la vista previa oscura en la página muestra exactamente dónde
-acabarán.
+(`Ctrl+Z`).
+
+El resultado **se ve enseguida**, sin guardar y volver a abrir. Con la
+herramienta activa las zonas son rectángulos oscuros con las asas, para
+corregirlas; en cuanto la apagas (`Esc`) la página y su miniatura muestran la
+**vista previa real**: los borrados aplicados a una copia de la página en
+memoria, con el mismo código que el guardado, así que también lo que
+desaparece junto con las palabras (un borde, un trozo de imagen). Cada marca
+se confirma con un aviso sobre la página, y el título de la ventana cuenta los
+borrados que quedan por aplicar. Antes de escribir el archivo — guardado,
+firma, copia comprimida, extracción de páginas — Plico pide confirmación con
+el número de zonas y las páginas, porque a partir de ahí el contenido no se
+recupera.
 
 Al guardar, PyMuPDF reescribe los content stream y **quita** las palabras
 que caen dentro de la zona: en el archivo no quedan ni el texto ni la imagen
@@ -236,12 +248,13 @@ contenido se van también las **notas** y los **campos del formulario** que
 la zona toca: un campo rellenado con un nombre quedaría de otro modo en el
 archivo, valor incluido.
 
-`Ctrl+Shift+F` (_Editar → Redactar palabra…_) busca en cambio una palabra en
+`Ctrl+Shift+F` (_Editar → Borrar palabra…_) busca en cambio una palabra en
 **todas** las páginas y marca cada ocurrencia de un golpe, como un solo paso
 de deshacer. Busca también en el texto reconocido por OCR, incluso antes de
-guardar.
+guardar. No enciende ninguna herramienta: las páginas muestran enseguida la
+vista previa de las apariciones eliminadas.
 
-`Ctrl+Shift+L` (_Editar → Redactar selección_) es la tercera vía, la que
+`Ctrl+Shift+L` (_Editar → Borrar selección_) es la tercera vía, la que
 espera quien ha usado un editor: se arrastra sobre las palabras a eliminar y
 se marcan **enteras**, una por una, con una marca tan ajustada como la
 palabra. El arrastre es un solo gesto, así que un `Ctrl+Z` deshace toda la
@@ -253,7 +266,7 @@ Cuatro cosas que saber:
 
 - las palabras se toman **enteras** (una marca a mitad de palabra no
   ocultaría nada), y la unidad mínima es la palabra, no la letra;
-- una marca de palabra — de _Redactar palabra_ o de _Redactar selección_ —
+- una marca de palabra — de _Borrar palabra_ o de _Borrar selección_ —
   quita el texto de **su línea solo**: con interlineado simple las letras de
   las líneas de arriba y abajo tocan su recuadro, y se quedan donde están.
   Una zona **dibujada**, en cambio, elimina todo lo que toca, porque es lo
@@ -321,7 +334,7 @@ clic en uno en la página. Las firmas pertenecen a _Archivo → Firmar…_.
 _Editar → Reconocer texto…_ (`Ctrl+Shift+O`) lee las páginas elegidas con
 Tesseract y escribe bajo la imagen una **capa de texto invisible** (modo de
 renderizado 3). La página se ve idéntica, pero el texto se puede
-seleccionar, copiar, buscar con `Ctrl+F` — y _Redactar palabra_
+seleccionar, copiar, buscar con `Ctrl+F` — y _Borrar palabra_
 (`Ctrl+Shift+F`) por fin lo encuentra, cosa imposible en un escaneo sin
 marcar. Lo encuentra enseguida, no solo después de guardar: la capa entra en
 el archivo al guardar, pero la búsqueda también mira las palabras recién
@@ -330,10 +343,12 @@ reconocidas.
 El reconocimiento cuesta (alrededor de medio segundo por página A4 a 300
 dpi), por eso no es automático: se escriben las páginas como en *Extraer
 páginas* (`3`, `4-8`, `1-3,5`; al abrirse se proponen todas) y se elige el
-idioma, con el de la interfaz y el inglés juntos como propuesta. Corre en el pool de hilos con una barra de progreso
+idioma, con el de la interfaz y el inglés juntos como propuesta. Corre en el grupo de hilos con una barra de progreso
 cancelable — mientras corre la ventana no acepta ediciones en las páginas
 que está leyendo — y cada ejecución es **un solo** paso de deshacer: un
-`Ctrl+Z` quita la capa de todas las páginas de una vez.
+`Ctrl+Z` quita la capa de todas las páginas de una vez. Al final un aviso sobre
+la página dice en cuántas páginas ha leído el texto (o que no ha encontrado
+ninguno), además de la barra de estado.
 
 La fuente de la capa es una de las Base-14 y no se incrusta, así que hacer
 buscable un escaneo no añade un byte. Las palabras que el PDF ya contenía
@@ -449,14 +464,14 @@ repositorio desde ese tag.
 
 Desde el código fuente, para desarrollo:
 
-```
+```bash
 pip install -e ".[dev]"
 ```
 
 El punto de entrada acepta los archivos a abrir, como se espera de una app
 de escritorio:
 
-```
+```bash
 plico relazione.pdf              # abre
 plico a.pdf b.pdf                # abre a.pdf y le une b.pdf
 plico ricevuta.jpg a.pdf         # crea un documento a partir de la foto y le une a.pdf
@@ -520,13 +535,13 @@ Ocho decisiones no obvias:
   clic ya llega como ruta exportada en el portal.
 - **`--talk-name=org.kde.StatusNotifierWatcher`**, el único permiso D-Bus: sin
   él, dentro de la sandbox el área de notificación no existe y el icono de
-  los Ajustes no aparece (probado en Plasma). Qt registra el icono con su
+  Configuración no aparece (probado en Plasma). Qt registra el icono con su
   nombre único en el bus, así que no hace falta poseer otros nombres. El icono
   es opcional y está apagado por defecto.
 
 Compilar e instalar en tu propia cuenta:
 
-```
+```bash
 # una sola vez: builder, SDK y BaseApp
 flatpak remote-add --user --if-not-exists flathub \
     https://dl.flathub.org/repo/flathub.flatpakrepo
@@ -547,54 +562,63 @@ flatpak run io.github.gradia64.plico
 
 Las **capturas** de la tienda están en `flatpak/screenshots/` y las produce
 `tools/screenshots.py` desde la app real; en el metainfo apuntan al tag de la
-última versión, y cada versión los mueve a su nuevo tag.
+última versión, y cada versión las mueve a su nuevo tag.
 
-### Lanzamiento
+### Publicar una versión
 
-Flathub no construye desde el checkout sino desde un tag git, fijado también
-a su commit. El manifiesto de `flatpak/` sigue siendo el de desarrollo
-(`type: dir`), y el que se envía lo genera `tools/flathub_manifest.py`
-**desde el tag**. Antes de escribir comprueba que:
+Una release es un tag `vX.Y.Z` firmado: desde ahí
+`.github/workflows/release.yml` verifica la firma y la versión, construye y
+prueba la AppImage, el `.deb`, el bundle Flatpak y el paquete Arch, y los
+adjunta a la release en GitHub con `SHA256SUMS` y una atestación de procedencia.
+Antes del tag comprueba que:
 
-- el tag sea `v` + la versión de `pyproject.toml` + el último `<release>`
-  de la metainfo;
-- las capturas de la metainfo apunten al tag y no a `main`;
-- el tag esté anotado, firmado por una clave de `.github/allowed_signers` y
-  presente en `origin` con el mismo objeto.
+- la versión sea la misma en `pyproject.toml`, en `src/plico/__init__.py` y en
+  el último `<release>` de la metainfo, con las capturas fijadas al tag;
+- estén las notas en `packaging/release-notes/X.Y.Z.md` (secciones `## …` y el
+  enlace «Full Changelog»): son la descripción de la release;
+- en `CHANGELOG.md` las entradas de «Non rilasciato» hayan pasado bajo la
+  versión nueva, con la fecha y el enlace de comparación.
 
-Los tags se firman con la clave **SSH** (nada de PGP que guardar). Una vez
-por checkout:
+Los tags se firman con la **clave de release de Plico**, una clave OpenPGP que
+no sale de la máquina del maintainer: primaria
+`1843 07C7 A158 5AFA D7F0  9DF6 EBC8 B4A0 FFD5 B91F` (solo certificación) y
+subclave de los tags `E0C7 71BB B276 A114 D0B8  C591 C5DD C074 5643 FA72`. La
+clave pública es `packaging/plico-release-key.asc`, y `scripts/verify-tag.sh`
+acepta un tag solo si lo firmó esa subclave. Se hace una sola vez por checkout:
 
-```
-git config gpg.format ssh
-git config user.signingkey ~/.ssh/id_ed25519.pub
+```bash
+git config gpg.format openpgp
+git config user.signingkey 'E0C771BBB276A114D0B8C591C5DDC0745643FA72!'
 git config tag.gpgSign true
 git config gpg.ssh.allowedSignersFile "$PWD/.github/allowed_signers"
 ```
 
-Para que GitHub muestre el tag como «Verified», la misma clave debe
-registrarse también como _signing key_ de la cuenta (Settings → SSH and GPG
-keys → New SSH key → Signing key).
+La última línea solo sirve para verificar los tags hasta `v0.1.3`, firmados con
+la clave SSH de `.github/allowed_signers`.
 
-En cada lanzamiento:
+En cada release:
 
+```bash
+# 1. versión, <release> y URL de las capturas (…/Plico/vX.Y.Z/…) en la
+#    metainfo, notas en packaging/release-notes/X.Y.Z.md, CHANGELOG.md;
+#    commit y push
+# 2. tag firmado, verificado, publicado: el resto lo hace release.yml
+git tag -s v0.1.6 -m "Plico 0.1.6"
+scripts/verify-tag.sh v0.1.6
+git push origin v0.1.6
+# 3. a mano, antes de un tag, las mismas builds sin publicar (salvo el paquete
+#    Arch: el PKGBUILD clona el tag firmado, que aún no existe)
+gh workflow run release.yml --ref main
+# 4. después de la release, el PKGBUILD en el AUR desde tu máquina (la clave
+#    SSH del AUR no está en la CI): verifica tag y artefacto «arch», luego push
+scripts/aur-release.sh v0.1.6
 ```
-# 1. versión en pyproject.toml, nuevo <release> y URL de las capturas
-#    (…/Plico/vX.Y.Z/flatpak/screenshots/…) en la metainfo; commit y push
-# 2. tag firmado, verificado, publicado
-git tag -s v0.1.0 -m "Plico 0.1.0"
-git tag -v v0.1.0
-git push origin v0.1.0
-# 3. el manifiesto para Flathub, con los módulos que incluye
-python tools/flathub_manifest.py v0.1.0 ~/flathub/io.github.gradia64.plico
-```
 
-`--allow-unsigned --offline` hace una prueba en seco sobre un tag local no
-firmado.
-
+Plico no está en Flathub: su política sobre la IA generativa excluye
+manifiestos escritos con asistencia de IA.
 ## Desarrollo
 
-```
+```bash
 # tests (sin display, gracias a QT_QPA_PLATFORM=offscreen).
 # NB: pytest no está en .venv/bin, así que se pasa por python -m
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q
@@ -633,7 +657,7 @@ y a las entradas `[xx]` del `.desktop`.
 necesita la herramienta): sin ella, `tests/test_i18n.py` se salta justo la
 comprobación que avisa cuando falta una cadena nueva en el catálogo.
 
-```
+```bash
 # 1. reextraer las cadenas tras tocar el código,
 #    en los cuatro catálogos
 for l in en es fr de; do
@@ -655,7 +679,7 @@ menú.
 
 ## Licencia
 
-GPL v3 — ver [LICENSE](https://github.com/gradia64/Plico/blob/main/LICENSE).
+GPL v3 — ver [LICENSE](LICENSE).
 
 ## About
 
