@@ -16,6 +16,7 @@ between revisions — not something to re-implement here.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import io
 import logging
 import os
@@ -51,6 +52,7 @@ from pyhanko_certvalidator.registry import SimpleCertificateStore
 from PySide6.QtCore import QCoreApplication
 
 from .document import open_for_reading
+from .forms import ANNOT_WIDGET
 
 # pyHanko reports a refused certificate chain and a policy violation by logging
 # the whole traceback at ERROR level. Both are ordinary answers here -- an
@@ -243,16 +245,21 @@ def stamp_box(width: float, height: float) -> tuple[float, float, float, float]:
     return (left, margin, left + stamp_width, margin + stamp_height)
 
 
-def sign_in_place(path: str, request: SignatureRequest) -> None:
+def sign_in_place(
+    path: str, request: SignatureRequest, document_password: str | None = None
+) -> None:
     """Sign the file at *path*, replacing it with the signed version.
 
     *path* is expected to be a temporary written by the save path, so an error
     halfway leaves nothing behind and the caller's own ``os.replace`` keeps its
     guarantee. The permissions are copied across for the same reason the save
     path copies them: the temporary replaces a file that had a mode.
+
+    *document_password* unlocks an encrypted *path*: the signature is appended
+    as an incremental update, encrypted like the rest of the file.
     """
     data = Path(path).read_bytes()
-    signed = _sign_bytes(data, request)
+    signed = _sign_bytes(data, request, document_password)
     descriptor, temporary = tempfile.mkstemp(
         dir=os.path.dirname(path) or ".", suffix=".pdf.tmp"
     )
@@ -289,7 +296,7 @@ def _signer(
     )
 
 
-def _free_field_name(data: bytes, wanted: str) -> str:
+def _free_field_name(data: bytes, wanted: str, password: str | None = None) -> str:
     """A signature field name that nothing in *data* is already using.
 
     Signing an already signed document is allowed -- the window asks first and
@@ -300,6 +307,9 @@ def _free_field_name(data: bytes, wanted: str) -> str:
     """
     try:
         with pymupdf.open(stream=data, filetype="pdf") as document:
+            # Before any page is touched: see document.open_for_reading.
+            if password:
+                document.authenticate(password)
             taken = {
                 widget.field_name
                 for page in document
@@ -316,11 +326,13 @@ def _free_field_name(data: bytes, wanted: str) -> str:
     return f"{wanted} {number}"
 
 
-def _sign_bytes(data: bytes, request: SignatureRequest) -> bytes:
+def _sign_bytes(
+    data: bytes, request: SignatureRequest, document_password: str | None = None
+) -> bytes:
     key, certificate, chain = _credentials(request.certificate, request.password)
     identity = _identity_of(certificate)
     signer = _signer(key, certificate, chain)
-    field_name = _free_field_name(data, request.field_name)
+    field_name = _free_field_name(data, request.field_name, document_password)
     metadata = signers.PdfSignatureMetadata(
         field_name=field_name,
         reason=request.reason or None,
@@ -351,6 +363,8 @@ def _sign_bytes(data: bytes, request: SignatureRequest) -> bytes:
     )
     try:
         writer = IncrementalPdfFileWriter(io.BytesIO(data))
+        if document_password:
+            writer.encrypt(document_password)
         output = pdf_signer.sign_pdf(
             writer, bytes_reserved=RESERVED, appearance_text_params=params
         )
@@ -381,15 +395,32 @@ def signature_widgets(doc: pymupdf.Document) -> list[tuple[int, int]]:
     """Every signature widget of *doc*, as (page index, xref).
 
     Xrefs and not Widget objects: a widget keeps only a weak reference to its
-    page, and the pages here go out of scope one after the other.
+    page, and the pages here go out of scope one after the other. Read from
+    ``annot_xrefs()`` and the field type, not from ``page.widgets()``: that
+    walk is quadratic in the widgets of a page, and a 140 KB file with ten
+    thousand fields froze the window for a minute and a half when it was
+    opened (reported by a pentest); this is linear.
     """
     found = []
     for index in range(len(doc)):
         page = doc[index]
-        for widget in page.widgets() or ():
-            if widget.field_type == pymupdf.PDF_WIDGET_TYPE_SIGNATURE:  # type: ignore[attr-defined]
-                found.append((index, widget.xref))
+        for xref, kind, *_ in page.annot_xrefs():
+            if kind == ANNOT_WIDGET and _field_type(doc, xref) == "/Sig":
+                found.append((index, xref))
     return found
+
+
+def _field_type(doc: pymupdf.Document, xref: int) -> str | None:
+    """The /FT of the field *xref* belongs to, inherited from its parents."""
+    seen = set()
+    while xref and xref not in seen:
+        seen.add(xref)
+        kind, value = doc.xref_get_key(xref, "FT")
+        if kind == "name":
+            return str(value)
+        kind, value = doc.xref_get_key(xref, "Parent")
+        xref = int(value.split()[0]) if kind == "xref" else 0
+    return None
 
 
 def is_signed(path: str, password: str = "") -> bool:
@@ -399,20 +430,16 @@ def is_signed(path: str, password: str = "") -> bool:
     put "firmato" in the title and to warn before a save that would drop the
     signature. The full check is :func:`read_signatures`.
     """
-    # Bit 1 of /SigFlags is "SignaturesExist". The number itself is -1 with no
-    # form at all and 0 for a form that has never been signed, so ">= 0" made
-    # any form carrying /SigFlags 0 read as signed. The -1 must be ruled out
-    # before the mask: in Python ``-1 & 1`` is 1.
-    #
-    # The bit alone is not enough either: by the specification it says that a
-    # signature FIELD exists, and an empty one -- a form prepared for signing
-    # -- sets it (PyMuPDF writes /SigFlags 3 for it). The title said
-    # "firmato" for a document nobody had signed. The flag is the cheap
-    # filter; a field with a value is the answer.
+    # Not /SigFlags: its "SignaturesExist" bit is a hint the file writes about
+    # itself, and a signed document with the bit cleared (or no /SigFlags at
+    # all) read as unsigned -- the warning before a save that drops the
+    # signature never came (reported by a pentest). A signature field lives
+    # in the AcroForm, so a document without one is answered at once; the
+    # others are answered by their fields. An EMPTY signature field -- a form
+    # prepared for signing -- is not a signature: holds_signature wants a /V.
     try:
         with open_for_reading(path, password) as document:
-            flags = int(document.get_sigflags())
-            if flags <= 0 or not flags & 1:
+            if not document.is_form_pdf:
                 return False
             return any(
                 holds_signature(document, xref)
@@ -513,6 +540,57 @@ def _validation_context(roots: Sequence[str]) -> ValidationContext:
     for root in roots:
         trusted.extend(_certificates_in(root))
     return ValidationContext(trust_roots=trusted, allow_fetching=False)
+
+
+def keep_root(path: str, directory: str) -> str:
+    """Copy the trusted root *path* into *directory*, and return the copy.
+
+    What the user approved is the certificate they picked, not the path it
+    happened to be read from: a path kept in the settings was read again at
+    every verification, so whoever could replace that file -- a later
+    download with the same name, another user in a shared folder -- chose
+    who counted as a trusted signer (reported by a pentest). The copy lives
+    in a directory only the user can enter, named after its SHA-256, and
+    :func:`kept_root_intact` refuses it if the content no longer matches.
+    """
+    try:
+        data = Path(path).read_bytes()
+    except OSError as error:
+        raise SigningError(
+            QCoreApplication.translate("Signing", "Non riesco a leggere «{0}»: {1}").format(
+                _name_of(path), error.strerror or error
+            )
+        ) from error
+    try:
+        x509.load_pem_x509_certificates(data)
+    except ValueError as error:
+        raise SigningError(
+            QCoreApplication.translate("Signing", "«{0}» non contiene certificati PEM.").format(_name_of(path))
+        ) from error
+    os.makedirs(directory, mode=0o700, exist_ok=True)
+    os.chmod(directory, 0o700)
+    kept = os.path.join(directory, hashlib.sha256(data).hexdigest() + ".pem")
+    descriptor, temporary = tempfile.mkstemp(dir=directory, suffix=".tmp")
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(data)
+        os.replace(temporary, kept)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(temporary)
+        raise
+    return kept
+
+
+def kept_root_intact(path: str, directory: str) -> bool:
+    """Whether *path* is a copy made by :func:`keep_root` and still holds it."""
+    if os.path.dirname(os.path.abspath(path)) != os.path.abspath(directory):
+        return False
+    try:
+        data = Path(path).read_bytes()
+    except OSError:
+        return False
+    return os.path.basename(path) == hashlib.sha256(data).hexdigest() + ".pem"
 
 
 def _certificates_in(path: str) -> list[asn1x509.Certificate]:

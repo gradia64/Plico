@@ -8,6 +8,7 @@ from pathlib import Path
 
 from PySide6.QtCore import (
     Q_ARG,
+    QEvent,
     QEventLoop,
     QMetaObject,
     QSettings,
@@ -78,6 +79,7 @@ from .model import (
     save_signed,
     sign_copy,
 )
+from .model.sign import SigningError, keep_root, kept_root_intact
 from .rendering import RenderWorker
 from .widgets.compress import CompressionDialog, CompressionTask, format_size
 from .widgets.find_bar import FindBar
@@ -85,6 +87,7 @@ from .widgets.form_panel import FormPanel
 from .widgets.help_window import HelpWindow
 from .widgets.ocr import OcrDialog, OcrTask
 from .widgets.page_view import PageView
+from .widgets.plain_text import plain_labels
 from .widgets.settings_dialog import Choices, SettingsDialog
 from .widgets.sign import SignatureDialog, SignDialog
 from .widgets.thumbnail_bar import ThumbnailBar, ThumbnailCache
@@ -216,6 +219,9 @@ class MainWindow(QMainWindow):
         # --- central widget (PageView handles its own rendering) ---
         self._page_view = PageView(self._worker, self._doc_model)
         self._status = QLabel(self.tr("Pronto"))
+        # Plain text: the status bar repeats field names, file names and
+        # search terms, all of them from the document (see childEvent).
+        self._status.setTextFormat(Qt.TextFormat.PlainText)
         # The same message as the status bar, over the page, for the outcomes
         # the user must not miss (an OCR run, a mark that waits for a save).
         self._toast = Toast(self._page_view)
@@ -874,6 +880,7 @@ class MainWindow(QMainWindow):
                 items = self._doc_model.read_source(
                     len(self._doc_model.sources), path, password
                 )
+                self._doc_model.ensure_room(len(items))
             except PasswordRequired as needed:
                 password = self._ask_password(needed.path, retry=needed.wrong)
                 if password is None:
@@ -1353,7 +1360,12 @@ class MainWindow(QMainWindow):
         try:
             if on_disk:
                 assert self._save_target is not None
-                sign_copy(self._save_target, path, request)
+                sign_copy(
+                    self._save_target,
+                    path,
+                    request,
+                    self._doc_model.passwords.get(self._save_target),
+                )
             else:
                 save_signed(self._doc_model, path, request)
         # MuPDF, pyHanko and the filesystem all have their own exception types
@@ -1428,19 +1440,47 @@ class MainWindow(QMainWindow):
             roots,
             password=self._doc_model.passwords.get(path, ""),
             parent=self,
+            root_store=self._root_store(),
         )
         dialog.exec()
         if dialog.roots != roots:
             self._settings().setValue("firma/radici", dialog.roots)
 
+    def _root_store(self) -> str:
+        """Where the trusted roots are kept: next to the settings, in «radici»."""
+        return os.path.join(os.path.dirname(self._settings().fileName()), "radici")
+
     def _signed_roots(self) -> list[str]:
-        """The PEM certificates the user decided to trust, as far as they exist."""
-        stored = self._settings().value("firma/radici", [])
+        """The PEM certificates the user decided to trust, as kept by keep_root.
+
+        Up to 0.1.7 the settings held the path the user picked, read again at
+        every verification. Such an entry is copied into the store once, as
+        it is now -- it was trusted as it is now until today -- and from then
+        on only the copy counts. A copy whose content changed is dropped.
+        """
+        settings = self._settings()
+        stored = settings.value("firma/radici", [])
         if isinstance(stored, str):
             stored = [stored]
         if not isinstance(stored, list):
             return []
-        return [path for path in stored if isinstance(path, str) and os.path.exists(path)]
+        store = self._root_store()
+        roots: list[str] = []
+        for path in stored:
+            if not isinstance(path, str):
+                continue
+            if not kept_root_intact(path, store):
+                if os.path.dirname(os.path.abspath(path)) == os.path.abspath(store):
+                    continue
+                try:
+                    path = keep_root(path, store)
+                except (OSError, SigningError):
+                    continue
+            if path not in roots:
+                roots.append(path)
+        if roots != stored:
+            settings.setValue("firma/radici", roots)
+        return roots
 
     # ------------------------------------------------------------------ #
     #  Compression
@@ -2208,6 +2248,24 @@ class MainWindow(QMainWindow):
         self._page_view.refresh_geometry()
         self._thumb_bar.refresh()
 
+    def childEvent(self, event) -> None:
+        """Make every message box and input dialog of the window plain text.
+
+        Their text carries file names and library errors, and a QLabel decides
+        by itself whether a string is rich text: a file named
+        ``Fattura<a href="https:&#47;&#47;…">Salva.pdf`` became a clickable
+        link in the unsaved-changes question (reported by a pentest). The
+        static ``QMessageBox.warning()`` & co. build their box out of reach,
+        but as a child of this window: ChildPolished arrives before the box
+        is shown. A box that asks for rich text explicitly (the About box)
+        keeps it.
+        """
+        super().childEvent(event)
+        if event.type() == QEvent.Type.ChildPolished:
+            child = event.child()
+            if isinstance(child, (QMessageBox, QInputDialog)):
+                plain_labels(child)
+
     def closeEvent(self, event) -> None:
         """Persist the UI state and shut the worker thread down cleanly.
 
@@ -2288,9 +2346,12 @@ class MainWindow(QMainWindow):
         self._help_window.activateWindow()
 
     def _about(self) -> None:
-        QMessageBox.about(
-            self,
-            self.tr("Informazioni su Plico"),
+        box = QMessageBox(self)
+        box.setWindowTitle(self.tr("Informazioni su Plico"))
+        box.setIconPixmap(self.windowIcon().pixmap(64, 64))
+        # Rich text on purpose, and said so: see childEvent.
+        box.setTextFormat(Qt.TextFormat.RichText)
+        box.setText(
             self.tr(
                 "<h3>Plico {0}</h3>"
                 "<p>Un vero editor PDF nativo per Linux.</p>"
@@ -2298,6 +2359,7 @@ class MainWindow(QMainWindow):
                 '<a href="https://github.com/gradia64/Plico">github.com/gradia64/Plico</a></p>'
             ).format(__version__),
         )
+        box.exec()
 
     # ------------------------------------------------------------------ #
     #  A newer version

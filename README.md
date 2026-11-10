@@ -589,6 +589,9 @@ git push origin v0.1.6
 # 3. by hand, before a tag, the same builds without publishing (except the
 #    Arch package: the PKGBUILD clones the signed tag, not there yet)
 gh workflow run release.yml --ref main
+# 4. after the release, the PKGBUILD to the AUR from your machine (the AUR SSH
+#    key is not in CI): it checks the tag and the "arch" artifact, then pushes
+scripts/aur-release.sh v0.1.6
 ```
 
 Plico is not on Flathub: its generative AI policy rules out manifests written

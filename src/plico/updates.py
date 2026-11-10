@@ -53,7 +53,10 @@ MAX_BYTES = 1 << 20
 #: A rate limit that resets further away than this is not believed.
 MAX_RESET_S = 24 * 60 * 60
 
-_VERSION = re.compile(r"v?(\d+(?:\.\d+){0,3})")
+# ASCII digits only, nine at most per part: \d also takes full-width and
+# Arabic-Indic numerals (int() reads "９" as 9), and a part of thousands of
+# digits made int() raise ValueError instead of UpdateError.
+_VERSION = re.compile(r"v?([0-9]{1,9}(?:\.[0-9]{1,9}){0,3})")
 
 
 class Channel(Enum):
@@ -234,7 +237,8 @@ def fetch_latest(timeout: float = TIMEOUT_S) -> Release:
         raise _invalid()
     try:
         data = json.loads(body)
-    except ValueError as error:
+    except (ValueError, RecursionError) as error:
+        # RecursionError: a few hundred KB of nested arrays, well under MAX_BYTES.
         raise _invalid() from error
     return release_from_json(data)
 

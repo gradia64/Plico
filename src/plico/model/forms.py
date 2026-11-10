@@ -80,6 +80,19 @@ class Field:
         return self.value not in ("", UNCHECKED)
 
 
+#: The annotation type of a form widget, in ``Page.annot_xrefs()``.
+ANNOT_WIDGET: int = pymupdf.PDF_ANNOT_WIDGET  # type: ignore[attr-defined]
+
+#: Beyond this many widgets on one page its form fields are not read.
+MAX_FIELDS_PER_PAGE = 1000
+
+
+def crowded(page: pymupdf.Page) -> bool:
+    """Whether *page* carries more widgets than :data:`MAX_FIELDS_PER_PAGE`."""
+    widgets = [entry for entry in page.annot_xrefs() if entry[1] == ANNOT_WIDGET]
+    return len(widgets) > MAX_FIELDS_PER_PAGE
+
+
 def read_fields(page: pymupdf.Page) -> list[Field]:
     """Describe the form fields of *page*, ignoring the unusable ones.
 
@@ -92,6 +105,13 @@ def read_fields(page: pymupdf.Page) -> list[Field]:
     """
     fields: list[Field] = []
     doc = page.parent
+    # PyMuPDF's walk of the widgets is quadratic in their number on a page:
+    # a 140 KB file with ten thousand fields froze the window for a minute
+    # and a half when it was opened (reported by a pentest). Counting them is
+    # linear, and a page far past any form a person fills in by hand is shown
+    # without its form panel instead.
+    if crowded(page):
+        return fields
     for widget in page.widgets() or ():
         field = _describe_safely(widget, doc)
         if field is not None:
@@ -202,6 +222,9 @@ def write_fields(page: pymupdf.Page, values: dict[str, str]) -> int:
     """
     doc = page.parent
     written = 0
+    if crowded(page):
+        # Its fields were never read (see read_fields), so none was edited.
+        return written
     for widget in page.widgets() or ():
         name = widget.field_name or ""
         if name not in values:

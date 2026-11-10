@@ -514,7 +514,7 @@ def test_verifying_from_the_window_reads_the_file_on_disk(
     seen: dict[str, object] = {}
 
     class FakeDialog:
-        def __init__(self, path, roots=None, password="", parent=None):
+        def __init__(self, path, roots=None, password="", parent=None, root_store=None):
             seen["path"] = path
             seen["roots"] = list(roots or [])
             self.roots = list(roots or [])
@@ -527,7 +527,11 @@ def test_verifying_from_the_window_reads_the_file_on_disk(
     window._verify_signatures()
 
     assert seen["path"] == source
-    assert seen["roots"] == [certificate[1]]
+    # the copy kept when the root was first remembered as a path
+    [root] = seen["roots"]
+    assert os.path.dirname(root) == window._root_store()
+    with open(root, "rb") as kept, open(certificate[1], "rb") as original:
+        assert kept.read() == original.read()
 
 
 def test_saving_a_signed_document_asks_before_dropping_the_signature(

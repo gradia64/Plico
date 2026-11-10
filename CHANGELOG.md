@@ -14,6 +14,42 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
   librerie Qt per ARM. Le stesse versioni di Qt, PyMuPDF, pikepdf e pyHanko
   dell'AppImage x86_64.
 
+### Sicurezza
+
+Correzioni da un penetration test della 0.1.7.
+
+- **PDF protetti da password**: salvare (anche compresso o firmato) sopra un
+  file protetto lo riscriveva in chiaro, senza dirlo. Ora il file resta
+  cifrato (AES-256) con la password usata per aprirlo e gli stessi permessi.
+  «Salva con nome» su un file nuovo scrive, come prima, un file non protetto.
+- **Cancellazione del testo verticale o inclinato**: «Cancella parola…» e la
+  selezione delle parole toglievano solo poche lettere di una parola scritta
+  in verticale o in diagonale (intestazioni di tabella, timbri, assi dei
+  grafici); il resto restava nel file, estraibile. Ora sparisce tutta.
+- **Documenti firmati**: un file firmato senza il flag `/SigFlags` veniva
+  preso per non firmato, e il salvataggio toglieva la firma senza chiedere.
+  Ora la firma si riconosce dai campi.
+- **File temporanei**: durante il salvataggio e la compressione il documento
+  passava per un file leggibile dagli altri utenti, se la cartella lo era.
+  Ora i temporanei stanno in una cartella che solo l'utente può aprire.
+- **Documenti costruiti per bloccare Plico**: un PDF di pochi KB con
+  centinaia di migliaia di pagine, o con migliaia di campi su una pagina,
+  bloccava la finestra per minuti o la chiudeva. Ora Plico apre al massimo
+  20 000 pagine (anche unendo documenti) e non legge i campi di una pagina
+  che ne ha più di 1000.
+- **Testo dei documenti mostrato come testo**: nomi di file e di campi,
+  messaggi d'errore e il nome nel certificato di una firma venivano
+  interpretati come HTML, quindi un PDF poteva scrivere nella finestra delle
+  firme un finto «Firma valida» in verde, o mettere un link cliccabile in una
+  domanda di conferma. Ora si vedono così come sono.
+- **Certificati fidati**: Plico ricordava il percorso del file `.pem` e lo
+  rileggeva a ogni verifica, quindi chi poteva sostituire quel file decideva
+  chi era un firmatario fidato. Ora ne tiene una copia in una cartella sua
+  (quelli già scelti vengono copiati alla prima verifica).
+- **Controllo degli aggiornamenti**: alcune risposte malformate facevano
+  comparire un errore interno di Python invece di «Risposta di GitHub non
+  valida».
+
 ## [0.1.7] — 2026-11-08
 
 ### Corretto

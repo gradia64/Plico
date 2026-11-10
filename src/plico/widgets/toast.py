@@ -27,6 +27,8 @@ class Toast(QLabel):
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
         self.setObjectName("plico-toast")
+        # It repeats the status bar, which quotes the document: plain text.
+        self.setTextFormat(Qt.TextFormat.PlainText)
         self.setWordWrap(True)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         # The tooltip colours of the current theme: the look the desktop

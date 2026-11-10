@@ -1,6 +1,5 @@
 """Save (materialize virtual page list back to a real PDF)."""
 
-import contextlib
 import os
 import re
 import shutil
@@ -9,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TypeVar
 
+import pikepdf
 import pymupdf
 from PySide6.QtCore import QCoreApplication
 
@@ -117,11 +117,10 @@ def _drop_old_signatures(out: pymupdf.Document) -> bool:
         if not holds_signature(out, xref):
             continue
         # Bound to a local: a widget keeps a weak reference to its page.
+        # load_widget and not a walk of page.widgets(): see signature_widgets.
         page = out[index]
-        for widget in list(page.widgets() or ()):
-            if widget.xref == xref:
-                page.delete_widget(widget)
-                found = True
+        page.delete_widget(page.load_widget(xref))
+        found = True
     return found
 
 
@@ -229,21 +228,125 @@ def _write_pdf(
             src.close()
 
 
+@dataclass(frozen=True)
+class _Protection:
+    """How the file being replaced was encrypted, to encrypt its successor."""
+
+    password: str
+    permissions: int
+
+
+# The permission bits of /P (ISO 32000, table 22), as Document.permissions
+# reports them, and the pikepdf flag that carries each one.
+_PERMISSION_FLAGS = {
+    1 << 2: "print_lowres",
+    1 << 3: "modify_other",
+    1 << 4: "extract",
+    1 << 5: "modify_annotation",
+    1 << 8: "modify_form",
+    1 << 9: "accessibility",
+    1 << 10: "modify_assembly",
+    1 << 11: "print_highres",
+}
+
+
+def _protection(model: DocumentModel, target: str) -> _Protection | None:
+    """The encryption to give *target*, when it is an encrypted open source.
+
+    The output is rebuilt from pages, and a rebuilt document carries no
+    ``/Encrypt``: saving over a password-protected file wrote it back in the
+    clear, with no word to the user (reported by a pentest). The password the
+    user typed to open it is the one the session knows; the owner password is
+    never known, so it becomes the owner password too -- the only way to keep
+    the content protected, and the permissions are carried over as they were
+    read. A *new* file written with "save as" stays a new, plain file: what is
+    protected is the file the user is replacing.
+    """
+    for source in model.sources_at(target):
+        password = model.passwords.get(source)
+        if not password:
+            # An owner-password-only file opens without asking: there is no
+            # password to give the new file.
+            continue
+        with open_for_reading(source, password) as doc:
+            return _Protection(password, doc.permissions)
+    return None
+
+
+def _protection_password(model: DocumentModel, target: str) -> str | None:
+    """The password :func:`_protection` gives *target*, if any."""
+    protection = _protection(model, target)
+    return protection.password if protection else None
+
+
+def _protect(tmp_path: str, protection: _Protection | None) -> None:
+    """Encrypt the temporary *tmp_path* in place (AES-256), if asked to.
+
+    pikepdf and not PyMuPDF's own ``save(encryption=...)``: MuPDF writes
+    ``/Encrypt`` as a direct object, and pyHanko refuses to sign such a file
+    ("Encryption settings must be an indirect reference"); qpdf writes it
+    indirect, and a protected document can then be signed too.
+    """
+    if protection is None:
+        return
+    allow = pikepdf.Permissions(
+        **{flag: bool(protection.permissions & bit) for bit, flag in _PERMISSION_FLAGS.items()}
+    )
+    encrypted = tmp_path + ".enc"
+    try:
+        with pikepdf.open(tmp_path) as pdf:
+            pdf.save(
+                encrypted,
+                encryption=pikepdf.Encryption(
+                    user=protection.password, owner=protection.password, R=6, allow=allow
+                ),
+            )
+        os.replace(encrypted, tmp_path)
+    except BaseException:
+        if os.path.exists(encrypted):
+            os.unlink(encrypted)
+        raise
+
+
+def _private_temporary(target: str) -> str:
+    """An empty file for *target*'s content, in a directory only we can enter.
+
+    Next to *target*, so the final rename stays on one filesystem and atomic.
+    Not directly in *target*'s directory: ``mkstemp`` makes the file 0600, but
+    PyMuPDF and pikepdf do not write into it -- they remove it and create a
+    new one with the umask, 0644 on most systems. In a directory other users
+    can read (a shared folder, ``/tmp``) the whole document was readable by
+    them for as long as the write ran (reported by a pentest). ``mkdtemp``
+    makes the directory 0700, and whatever is created inside it is out of
+    their reach however it is created; the compression and signing passes
+    put their own scratch files next to the path they are given, so they end
+    up in here too.
+    """
+    directory = tempfile.mkdtemp(dir=os.path.dirname(target), prefix=".plico-")
+    fd, tmp_path = tempfile.mkstemp(dir=directory, suffix=".pdf.tmp")
+    os.close(fd)
+    return tmp_path
+
+
+def _discard(tmp_path: str) -> None:
+    """Remove a temporary from :func:`_private_temporary` and its directory."""
+    directory = os.path.dirname(tmp_path)
+    shutil.rmtree(directory, ignore_errors=True)
+
+
 def _write_temporary(model: DocumentModel, target: str, pages: list[int] | None) -> str:
     """Materialise the document into a temporary next to *target*.
 
     The caller owns the file that comes back: it either adopts it (see
-    :func:`_adopt`) or deletes it. Nothing is written to *target* here.
+    :func:`_adopt`) or discards it (:func:`_discard`). Nothing is written to
+    *target* here.
     """
-    directory = os.path.dirname(target)
-    fd, tmp_path = tempfile.mkstemp(dir=directory, suffix=".pdf.tmp")
-    os.close(fd)
+    tmp_path = _private_temporary(target)
     try:
         _write_pdf(model, tmp_path, pages)
     except BaseException:
         # Never leave a half-written temp file behind.
-        with contextlib.suppress(OSError):
-            os.unlink(tmp_path)
+        _discard(tmp_path)
         raise
     return tmp_path
 
@@ -254,6 +357,7 @@ def _adopt(tmp_path: str, target: str) -> None:
     if os.path.exists(target):
         os.chmod(tmp_path, os.stat(target).st_mode & 0o7777)
     os.replace(tmp_path, target)
+    _discard(tmp_path)
 
 
 def _write_atomically(
@@ -280,17 +384,20 @@ def _write_atomically(
 
     *optimize*, when given, is handed the freshly written file -- still a
     temporary, so a failure leaves *target* untouched -- and its return value
-    is passed back to the caller.
+    is passed back to the caller. It gets the file already encrypted when
+    *target* is a protected source (see :func:`_protection`): signing is the
+    one caller, and a signature has to be the last thing written.
     """
+    protection = _protection(model, target)
     tmp_path = _write_temporary(model, target, pages)
     try:
+        _protect(tmp_path, protection)
         result = optimize(tmp_path) if optimize is not None else None
         _adopt(tmp_path, target)
         return result
     except BaseException:
         # Never leave a half-written temp file behind.
-        with contextlib.suppress(OSError):
-            os.unlink(tmp_path)
+        _discard(tmp_path)
         raise
 
 
@@ -328,8 +435,7 @@ class CompressionPreview:
 
     def drop(self) -> None:
         """Throw the compressed file away, leaving *target* as it was."""
-        with contextlib.suppress(OSError):
-            os.unlink(self.path)
+        _discard(self.path)
 
 
 def prepare_compressed(
@@ -346,12 +452,15 @@ def prepare_compressed(
     """
     assert model.sources, "No document open"
     target = os.path.abspath(out_path)
+    protection = _protection(model, target)
     tmp_path = _write_temporary(model, target, None)
     try:
         result = optimize_in_place(tmp_path, options, progress)
+        # After measuring: the gain is the compression's, and the encryption
+        # adds the same few hundred bytes to the file with or without it.
+        _protect(tmp_path, protection)
     except BaseException:
-        with contextlib.suppress(OSError):
-            os.unlink(tmp_path)
+        _discard(tmp_path)
         raise
     return CompressionPreview(tmp_path, target, result)
 
@@ -403,11 +512,15 @@ def save_signed(
         model,
         os.path.abspath(out_path),
         None,
-        optimize=lambda path: sign_in_place(path, request),
+        optimize=lambda path: sign_in_place(
+            path, request, _protection_password(model, os.path.abspath(out_path))
+        ),
     )
 
 
-def sign_copy(source: str, out_path: str, request: SignatureRequest) -> None:
+def sign_copy(
+    source: str, out_path: str, request: SignatureRequest, document_password: str | None = None
+) -> None:
     """Sign the file *source* exactly as it is on disk, writing *out_path*.
 
     The way to add a signature to a file that already carries one. Going
@@ -422,15 +535,13 @@ def sign_copy(source: str, out_path: str, request: SignatureRequest) -> None:
     *out_path* may be the same file.
     """
     target = os.path.abspath(out_path)
-    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(target), suffix=".pdf.tmp")
-    os.close(fd)
+    tmp_path = _private_temporary(target)
     try:
         shutil.copyfile(source, tmp_path)
-        sign_in_place(tmp_path, request)
+        sign_in_place(tmp_path, request, document_password)
         _adopt(tmp_path, target)
     except BaseException:
-        with contextlib.suppress(OSError):
-            os.unlink(tmp_path)
+        _discard(tmp_path)
         raise
 
 

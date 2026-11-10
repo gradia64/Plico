@@ -107,7 +107,12 @@ class FormPanel(QWidget):
             self._seen[name] = value
             editor = self._make_editor(group, value)
             self._editors[name] = editor
-            self._form.addRow(name or self.tr("(senza nome)"), editor)
+            # The name comes from the PDF: a label made from a string would be
+            # rich text if it looked like markup, and a field could write its
+            # own styled text into the panel (reported by a pentest).
+            label = QLabel(name or self.tr("(senza nome)"))
+            label.setTextFormat(Qt.TextFormat.PlainText)
+            self._form.addRow(label, editor)
 
     def select_field(self, name: str) -> None:
         """Put the cursor in the editor of *name*, if it is on this page."""

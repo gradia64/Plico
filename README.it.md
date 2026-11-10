@@ -599,6 +599,9 @@ git push origin v0.1.6
 # 3. a mano, prima di un tag, le stesse build senza pubblicare (tranne il
 #    pacchetto Arch: il PKGBUILD clona il tag firmato, che non c'è ancora)
 gh workflow run release.yml --ref main
+# 4. dopo la release, il PKGBUILD sull'AUR dalla tua macchina (la chiave SSH
+#    dell'AUR non sta nella CI): verifica tag e artefatto «arch», poi il push
+scripts/aur-release.sh v0.1.6
 ```
 
 Plico non è su Flathub: la sua politica sull'IA generativa esclude manifest

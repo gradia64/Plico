@@ -1510,6 +1510,7 @@ class PageView(QScrollArea):
         self._hide_notice()
         label = canvas.label
         notice = QLabel(message, label)
+        notice.setTextFormat(Qt.TextFormat.PlainText)
         notice.setWordWrap(True)
         notice.setStyleSheet(NOTICE_STYLE)
         notice.setMaximumWidth(max(160, min(360, label.width() - 16)))

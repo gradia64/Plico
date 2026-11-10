@@ -14,19 +14,20 @@
 #
 # Allegati: Plico-X.Y.Z-{x86_64,aarch64}.AppImage, plico_X.Y.Z_amd64.deb (lo
 # stesso albero dell'AppImage x86_64 in /opt/plico), Plico-X.Y.Z-x86_64.flatpak,
-# plico-X.Y.Z-1-any.pkg.tar.zst (Arch), SHA256SUMS. Il PKGBUILD va sull'AUR
-# (scripts/publish-aur.sh) se c'è il secret AUR_SSH_PRIVATE_KEY.
+# plico-X.Y.Z-1-any.pkg.tar.zst (Arch), SHA256SUMS. Il PKGBUILD costruito e
+# provato qui (artefatto «arch») lo pubblica sull'AUR il maintainer, dalla sua
+# macchina, con scripts/aur-release.sh: la chiave SSH dell'AUR vale per tutti i
+# pacchetti dell'account e non sta nella CI.
 #
 # A mano (workflow_dispatch) costruisce e collauda gli stessi pacchetti dal
 # ramo scelto, senza pubblicare niente: per provare il packaging prima di un tag.
 # Su un ramo il pacchetto Arch resta fuori: il PKGBUILD clona il tag firmato
 # v<versione>, che prima del rilascio non esiste. Lanciato su un tag lo
 # costruisce, e nemmeno lì pubblica: publish parte solo dal push del tag.
-# Con aur_tag (un tag già pubblicato, es. v0.1.4) fa invece solo l'AUR:
-# verifica la firma di quel tag, costruisce e collauda il pacchetto Arch con il
-# PKGBUILD.in del ramo e, dopo l'approvazione nell'environment release, pubblica
-# il PKGBUILD su AUR. Serve per la prima pubblicazione di un tag uscito prima
-# del job arch e per correggere il PKGBUILD senza un nuovo rilascio.
+# Con aur_tag (un tag già pubblicato, es. v0.1.4) fa invece solo il pacchetto
+# Arch: verifica la firma di quel tag, costruisce e collauda il pacchetto con il
+# PKGBUILD.in del ramo. Serve per correggere il PKGBUILD senza un nuovo
+# rilascio: scripts/aur-release.sh vX.Y.Z <id della run> lo pubblica poi.
 name: Release
 
 on:
@@ -35,7 +36,7 @@ on:
   workflow_dispatch:
     inputs:
       aur_tag:
-        description: "Solo AUR: tag già pubblicato da mettere su AUR (es. v0.1.4); vuoto = prova dei pacchetti"
+        description: "Solo pacchetto Arch: tag già pubblicato da ricostruire per l'AUR (es. v0.1.4); vuoto = prova dei pacchetti"
         required: false
         default: ""
 
@@ -244,8 +245,8 @@ jobs:
     runs-on: ubuntu-24.04
     # come in OllaDesk: l'ultimo punto di controllo prima di pubblicare. Con
     # «Required reviewers» nelle impostazioni dell'environment, il job aspetta
-    # l'approvazione del maintainer. La CI non firma niente (sopra); l'unico
-    # secret è AUR_SSH_PRIVATE_KEY, per pubblicare il PKGBUILD sull'AUR.
+    # l'approvazione del maintainer. La CI non firma niente (sopra) e non ha
+    # secret: nemmeno quello dell'AUR (scripts/aur-release.sh).
     environment: release
     permissions:
       contents: write        # creare la release e caricare i file
@@ -279,8 +280,6 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           mv flatpak-bundle/plico.flatpak "dist/Plico-${version}-x86_64.flatpak"
           cp arch/dist/*.pkg.tar.zst dist/
-          mkdir -p build/aur
-          cp arch/build/aur/PKGBUILD arch/build/aur/.SRCINFO build/aur/
           cd dist
           sha256sum Plico-* plico_*.deb plico-*.pkg.tar.zst > SHA256SUMS
           cat SHA256SUMS | tee -a "$GITHUB_STEP_SUMMARY"
@@ -306,41 +305,3 @@ jobs:
             gh release create "$tag" dist/* --verify-tag --title "Plico ${tag#v}" \
               --notes-file "$RUNNER_TEMP/note.md"
           fi
-
-      - name: Pubblica su AUR
-        env:
-          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-        run: |
-          if [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
-            echo "::notice::secret AUR_SSH_PRIVATE_KEY assente: pubblicazione su AUR saltata"
-            exit 0
-          fi
-          scripts/publish-aur.sh
-
-  aur:
-    name: Solo AUR (a mano)
-    needs: [verify, arch]
-    if: github.event_name == 'workflow_dispatch' && inputs.aur_tag != ''
-    runs-on: ubuntu-24.04
-    # come publish: aspetta l'approvazione del maintainer, e solo qui c'è il
-    # secret dell'AUR
-    environment: release
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: arch
-          path: arch/
-
-      - name: Pubblica su AUR
-        env:
-          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-        run: |
-          if [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
-            echo "::error::secret AUR_SSH_PRIVATE_KEY assente nell'environment release"
-            exit 1
-          fi
-          mkdir -p build/aur
-          cp arch/build/aur/PKGBUILD arch/build/aur/.SRCINFO build/aur/
-          scripts/publish-aur.sh

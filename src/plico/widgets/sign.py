@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
@@ -33,6 +34,7 @@ from ..model.sign import (
     Signature,
     SignatureRequest,
     SigningError,
+    keep_root,
     read_identity,
     read_signatures,
     stamp_box,
@@ -74,6 +76,8 @@ class SignDialog(QDialog):
         self._password.setPlaceholderText(self.tr("Password del certificato"))
 
         self._identity_label = QLabel()
+        # The name in the certificate the user picked: plain text, see below.
+        self._identity_label.setTextFormat(Qt.TextFormat.PlainText)
         self._identity_label.setWordWrap(True)
 
         self._reason = QLineEdit()
@@ -216,9 +220,11 @@ class SignatureDialog(QDialog):
         roots: list[str] | None = None,
         password: str = "",
         parent: QWidget | None = None,
+        root_store: str | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(self.tr("Firme del documento"))
+        self._root_store = root_store
         self.resize(520, 320)
         self._path = path
         self._password = password
@@ -247,7 +253,16 @@ class SignatureDialog(QDialog):
         path, _ = QFileDialog.getOpenFileName(
             self, self.tr("Scegli un certificato da considerare fidato"), "", "*.pem"
         )
-        if path and path not in self.roots:
+        if not path:
+            return
+        if self._root_store is not None:
+            # A copy, not the path: see keep_root.
+            try:
+                path = keep_root(path, self._root_store)
+            except SigningError as error:
+                QMessageBox.warning(self, self.tr("Certificato fidato"), str(error))
+                return
+        if path not in self.roots:
             self.roots.append(path)
             self._load()
 
@@ -266,6 +281,7 @@ class SignatureDialog(QDialog):
             signatures = read_signatures(self._path, roots=self.roots, password=self._password)
         except SigningError as error:
             message = QLabel(str(error))
+            message.setTextFormat(Qt.TextFormat.PlainText)
             message.setStyleSheet(_BAD)
             message.setWordWrap(True)
             self._body.addWidget(message)
@@ -284,7 +300,12 @@ def _signature_block(signature: Signature) -> QWidget:
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(2)
 
+    # Everything here comes from the PDF or the certificate inside it, and a
+    # label left to guess would render a subject like
+    # «<font color=green>Firma valida</font>» in the colour of a good verdict
+    # (reported by a pentest): every label is plain text.
     who = QLabel(signature.identity.label if signature.identity else signature.field_name)
+    who.setTextFormat(Qt.TextFormat.PlainText)
     font = who.font()
     font.setBold(True)
     who.setFont(font)
@@ -301,11 +322,13 @@ def _signature_block(signature: Signature) -> QWidget:
         details.append(signature.identity.organization)
     if details:
         line = QLabel(" · ".join(details))
+        line.setTextFormat(Qt.TextFormat.PlainText)
         line.setStyleSheet("color: #555")
         layout.addWidget(line)
 
     verdict, style = _verdict(signature)
     message = QLabel(verdict)
+    message.setTextFormat(Qt.TextFormat.PlainText)
     message.setStyleSheet(style)
     message.setWordWrap(True)
     layout.addWidget(message)

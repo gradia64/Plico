@@ -13,10 +13,11 @@ chance to ask the user. See :func:`open_for_reading`.
 """
 
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 import pymupdf
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QCoreApplication, QObject, Signal
 
 from .forms import Field, read_fields
 from .ocr import DEFAULT_DPI, OcrWord, recognise
@@ -199,10 +200,31 @@ def _ocr_hits(
             )
         if matched:
             hits.extend(
-                RedactionRect.from_corners(*word.rect, snug=True).clamped_to(width, height)
+                RedactionRect.from_corners(*word.rect, snug=_flat(word.rect)).clamped_to(
+                    width, height
+                )
                 for word in words[start : start + len(tokens)]
             )
     return hits
+
+
+#: The most pages a document may have to be opened (or merged in).
+MAX_PAGES = 20_000
+
+#: How far apart, in points, the two top corners of a search hit may be for
+#: its line to count as horizontal.
+_LEVEL = 0.5
+
+
+def _horizontal(direction: tuple[float, float] | None) -> bool:
+    """Whether a text line running along *direction* is horizontal."""
+    return direction is not None and abs(direction[1]) < 1e-3
+
+
+def _flat(rect: Sequence[float]) -> bool:
+    """Whether a word box with no known direction can be a horizontal word."""
+    x0, y0, x1, y1 = rect
+    return x1 - x0 > y1 - y0
 
 
 class DocumentModel(QObject):
@@ -240,6 +262,17 @@ class DocumentModel(QObject):
         """Read *path* read-only and describe it as virtual pages."""
         items: list[PageItem] = []
         with open_for_reading(path, password) as doc:
+            # Every page gets a widget of its own in the view, so the count is
+            # the memory: a 2.6 MB file declaring 300 000 pages froze the
+            # window for over a minute and ended in std::bad_alloc, taking the
+            # unsaved work of the session with it (reported by a pentest).
+            # Refused before any page is read.
+            if doc.page_count > MAX_PAGES:
+                raise ValueError(
+                    QCoreApplication.translate(
+                        "DocumentModel", "Il documento ha {0} pagine: Plico ne apre al massimo {1}."
+                    ).format(doc.page_count, MAX_PAGES)
+                )
             # A document with no form at all does not earn a per-page widget
             # scan, and this is a document-level property.
             has_form = bool(doc.is_form_pdf)
@@ -312,10 +345,26 @@ class DocumentModel(QObject):
         items = self.read_source(len(self.sources), path, password)
         if not items:
             return 0
+        self.ensure_room(len(items))
         self.sources.append(path)
         self.pages.extend(items)
         self.changed.emit()
         return len(items)
+
+    def ensure_room(self, extra: int) -> None:
+        """Raise ValueError if *extra* more pages would pass :data:`MAX_PAGES`.
+
+        The view pays for the pages it shows, not for the files they came
+        from: the bound of _items_for holds for a merged document too.
+        """
+        total = len(self.pages) + extra
+        if total > MAX_PAGES:
+            raise ValueError(
+                QCoreApplication.translate(
+                    "DocumentModel",
+                    "Con l'unione il documento avrebbe {0} pagine: Plico ne apre al massimo {1}.",
+                ).format(total, MAX_PAGES)
+            )
 
     def source_for(self, item: PageItem) -> str:
         """Path of the document that *item* points into."""
@@ -370,12 +419,17 @@ class DocumentModel(QObject):
                 page = doc[item.source_index]
                 width, height = item.unrotated_size
                 # Snug: a hit is the box of words on one line, and its text
-                # must go without taking letters off the lines around it.
+                # must go without taking letters off the lines around it --
+                # but only when that line is horizontal. The band of a snug
+                # box crosses a vertical or slanted word in a few letters, and
+                # the rest stayed in the file (reported by a pentest): the
+                # quad tells the direction, and a tilted hit is a zone.
                 rects = [
-                    RedactionRect.from_corners(r.x0, r.y0, r.x1, r.y1, snug=True).clamped_to(
-                        width, height
-                    )
-                    for r in page.search_for(text)
+                    RedactionRect.from_corners(
+                        quad.rect.x0, quad.rect.y0, quad.rect.x1, quad.rect.y1,
+                        snug=abs(quad.ul.y - quad.ur.y) <= _LEVEL,
+                    ).clamped_to(width, height)
+                    for quad in page.search_for(text, quads=True)
                 ]
                 # The OCR layer is not in the source yet -- it is written at
                 # save time -- so its words are searched where they live.
@@ -402,11 +456,28 @@ class DocumentModel(QObject):
             # Bound to a local on purpose: reading from a temporary page would
             # let the page be collected with the words still pointing at it.
             page = doc[item.source_index]
-            boxes = [tuple(word[:4]) for word in page.get_text("words")]
-        boxes.extend(word.rect for word in item.ocr_words)
+            # One text page for both reads, so the block and line numbers of
+            # the words are those of the lines in the dict. A word on a line
+            # that is not horizontal is a zone, for the reason given in
+            # find_text; a line not found is one too -- deleting a little too
+            # much is the safe side of a redaction.
+            textpage = page.get_textpage()
+            directions = {
+                (block["number"], number): line["dir"]
+                for block in textpage.extractDICT()["blocks"]
+                if block.get("type") == 0
+                for number, line in enumerate(block["lines"])
+            }
+            boxes = [
+                (tuple(word[:4]), _horizontal(directions.get((word[5], word[6]))))
+                for word in textpage.extractWORDS()
+            ]
+        # The OCR gives no direction: a word box taller than it is wide is not
+        # a word laid flat, and is a zone.
+        boxes.extend((word.rect, _flat(word.rect)) for word in item.ocr_words)
         return [
-            RedactionRect.from_corners(x0, y0, x1, y1, snug=True).clamped_to(width, height)
-            for x0, y0, x1, y1 in boxes
+            RedactionRect.from_corners(x0, y0, x1, y1, snug=snug).clamped_to(width, height)
+            for (x0, y0, x1, y1), snug in boxes
         ]
 
     def unmarked(self, index: int, rects: list[RedactionRect]) -> list[RedactionRect]:

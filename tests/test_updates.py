@@ -111,6 +111,10 @@ def test_the_page_is_built_here_not_taken_from_the_answer():
         {"tag_name": "v0.2.0", "prerelease": True},
         {"tag_name": "v0.2.0", "draft": True},
         {"tag_name": 2},
+        # int() refuses more than 4300 digits with ValueError, not UpdateError
+        {"tag_name": "v" + "9" * 5000},
+        # \d matches full-width digits, and int() reads them as 9
+        {"tag_name": "v\uff19.\uff19.\uff19"},
     ],
 )
 def test_an_unusable_answer_is_an_error(data):
@@ -231,7 +235,15 @@ def test_fetching_reports_the_limit(monkeypatch):
         real_fetch_latest()
 
 
-@pytest.mark.parametrize("body", [b"<html>captive portal</html>", b" " * (updates.MAX_BYTES + 1)])
+@pytest.mark.parametrize(
+    "body",
+    [
+        b"<html>captive portal</html>",
+        b" " * (updates.MAX_BYTES + 1),
+        # nested deep enough for json to raise RecursionError, under MAX_BYTES
+        b"[" * 200_000,
+    ],
+)
 def test_an_answer_that_is_not_githubs_is_an_update_error(monkeypatch, body):
     monkeypatch.setattr(updates.urllib.request, "urlopen", lambda *a, **k: _Reply(body))
     with pytest.raises(UpdateError):
