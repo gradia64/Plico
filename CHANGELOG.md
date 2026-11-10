@@ -6,6 +6,8 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Non rilasciato]
 
+## [0.1.8] — 2026-11-10
+
 ### Aggiunto
 
 - **AppImage per ARM64** (`Plico-X.Y.Z-aarch64.AppImage`), per Raspberry Pi
@@ -206,7 +208,9 @@ La prima versione.
 - Annulla/ripristina per ogni modifica, rendering asincrono, integrazione
   desktop KDE, interfaccia in cinque lingue, pacchetto Flatpak.
 
-[Non rilasciato]: https://github.com/gradia64/Plico/compare/v0.1.6...HEAD
+[Non rilasciato]: https://github.com/gradia64/Plico/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/gradia64/Plico/compare/v0.1.7...v0.1.8
+[0.1.7]: https://github.com/gradia64/Plico/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/gradia64/Plico/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/gradia64/Plico/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/gradia64/Plico/compare/v0.1.3...v0.1.4

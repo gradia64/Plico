@@ -83,7 +83,7 @@
       <caption xml:lang="es">Un documento con sus páginas, ajustado al ancho de la ventana</caption>
       <caption xml:lang="fr">Un document et ses pages, ajusté à la largeur de la fenêtre</caption>
       <caption xml:lang="de">Ein Dokument mit seinen Seiten, an die Fensterbreite angepasst</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.7/flatpak/screenshots/main.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.8/flatpak/screenshots/main.png</image>
     </screenshot>
     <screenshot>
       <caption>Personal data marked for erasure: on saving it leaves the file</caption>
@@ -91,7 +91,7 @@
       <caption xml:lang="es">Datos personales marcados para borrar: al guardar salen del archivo</caption>
       <caption xml:lang="fr">Données personnelles marquées pour l'effacement : à l'enregistrement, elles quittent le fichier</caption>
       <caption xml:lang="de">Persönliche Daten zum Löschen markiert: Beim Speichern verlassen sie die Datei</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.7/flatpak/screenshots/redact.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.8/flatpak/screenshots/redact.png</image>
     </screenshot>
     <screenshot>
       <caption>Filling in a PDF form, on the page or in the side panel</caption>
@@ -99,7 +99,7 @@
       <caption xml:lang="es">Rellenar un formulario PDF, en la página o en el panel lateral</caption>
       <caption xml:lang="fr">Remplir un formulaire PDF, sur la page ou dans le panneau latéral</caption>
       <caption xml:lang="de">Ein PDF-Formular ausfüllen, auf der Seite oder in der Seitenleiste</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.7/flatpak/screenshots/form.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.8/flatpak/screenshots/form.png</image>
     </screenshot>
     <screenshot>
       <caption>Correcting a line of text where it stands</caption>
@@ -107,7 +107,7 @@
       <caption xml:lang="es">Corregir una línea de texto en su sitio</caption>
       <caption xml:lang="fr">Corriger une ligne de texte là où elle se trouve</caption>
       <caption xml:lang="de">Eine Textzeile direkt an ihrer Stelle korrigieren</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.7/flatpak/screenshots/edit.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.8/flatpak/screenshots/edit.png</image>
     </screenshot>
     <screenshot>
       <caption>Searching the document: every match highlighted, the current one in orange</caption>
@@ -115,7 +115,7 @@
       <caption xml:lang="es">Buscar en el documento: cada coincidencia resaltada, la actual en naranja</caption>
       <caption xml:lang="fr">Rechercher dans le document : chaque occurrence surlignée, l'occurrence courante en orange</caption>
       <caption xml:lang="de">Im Dokument suchen: jeder Treffer hervorgehoben, der aktuelle in Orange</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.7/flatpak/screenshots/search.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.8/flatpak/screenshots/search.png</image>
     </screenshot>
   </screenshots>
 
@@ -209,6 +209,42 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.1.8" date="2026-11-10">
+      <description>
+        <p>Security fixes from a penetration test, and an AppImage for ARM64.</p>
+        <p xml:lang="it">Correzioni di sicurezza da un penetration test, e un'AppImage per ARM64.</p>
+        <p xml:lang="es">Correcciones de seguridad de una prueba de penetración, y un AppImage para ARM64.</p>
+        <p xml:lang="fr">Corrections de sécurité issues d'un test d'intrusion, et une AppImage pour ARM64.</p>
+        <p xml:lang="de">Sicherheitskorrekturen aus einem Penetrationstest und ein AppImage für ARM64.</p>
+        <ul>
+          <li>Password-protected PDFs stay encrypted when saved</li>
+          <li xml:lang="it">I PDF protetti da password restano cifrati quando si salvano</li>
+          <li xml:lang="es">Los PDF protegidos con contraseña siguen cifrados al guardarlos</li>
+          <li xml:lang="fr">Les PDF protégés par mot de passe restent chiffrés à l'enregistrement</li>
+          <li xml:lang="de">Passwortgeschützte PDFs bleiben beim Speichern verschlüsselt</li>
+          <li>Redaction removes vertical and rotated words completely</li>
+          <li xml:lang="it">La cancellazione toglie per intero le parole verticali e inclinate</li>
+          <li xml:lang="es">El borrado elimina por completo las palabras verticales e inclinadas</li>
+          <li xml:lang="fr">L'effacement supprime entièrement les mots verticaux et inclinés</li>
+          <li xml:lang="de">Das Schwärzen entfernt senkrechte und schräge Wörter vollständig</li>
+          <li>Text from documents is always shown as plain text, never as markup</li>
+          <li xml:lang="it">Il testo dei documenti si vede sempre come testo, mai come markup</li>
+          <li xml:lang="es">El texto de los documentos se muestra siempre como texto, nunca como marcado</li>
+          <li xml:lang="fr">Le texte des documents s'affiche toujours comme du texte, jamais comme du balisage</li>
+          <li xml:lang="de">Text aus Dokumenten wird immer als Text angezeigt, nie als Markup</li>
+          <li>Limits against documents built to freeze the application</li>
+          <li xml:lang="it">Limiti contro i documenti costruiti per bloccare l'applicazione</li>
+          <li xml:lang="es">Límites contra documentos creados para bloquear la aplicación</li>
+          <li xml:lang="fr">Des limites contre les documents conçus pour bloquer l'application</li>
+          <li xml:lang="de">Grenzen gegen Dokumente, die die Anwendung blockieren sollen</li>
+          <li>New AppImage for ARM64 (glibc 2.39 or later)</li>
+          <li xml:lang="it">Nuova AppImage per ARM64 (glibc 2.39 o successiva)</li>
+          <li xml:lang="es">Nuevo AppImage para ARM64 (glibc 2.39 o posterior)</li>
+          <li xml:lang="fr">Nouvelle AppImage pour ARM64 (glibc 2.39 ou ultérieure)</li>
+          <li xml:lang="de">Neues AppImage für ARM64 (glibc 2.39 oder neuer)</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.7" date="2026-11-08">
       <description>
         <p>AppImage fixes on X11, update checks that report rate limits, and compressed saves that no longer grow.</p>
