@@ -16,7 +16,7 @@ Komprimieren nutzt.
 <p align="center">
   <img src="flatpak/screenshots/main.png" alt="Plico — Hauptfenster" width="32%" />
   <img src="flatpak/screenshots/edit.png" alt="Textbearbeitung" width="32%" />
-  <img src="flatpak/screenshots/redact.png" alt="Redaktion" width="32%" />
+  <img src="flatpak/screenshots/redact.png" alt="Schwärzen" width="32%" />
 </p>
 <p align="center">
   <img src="flatpak/screenshots/form.png" alt="Formular ausfüllen" width="32%" />
@@ -35,16 +35,17 @@ Komprimieren nutzt.
   `Ctrl+Shift+N`): Fotos und Scans — PNG, JPEG, TIFF, BMP, GIF — werden
   jeweils eine Seite, in der gewählten Reihenfolge. Ein Scan behält seine
   echte Größe (ein A4 mit 300 dpi bleibt ein A4), ein Handyfoto wird auf ein
-  Hochformat-A4 verkleinert, und JPEGs werden ohne Neukomprimierung
+  A4 in der Ausrichtung des Fotos verkleinert, und JPEGs werden ohne Neukomprimierung
   eingebettet
 - **Seiten extrahieren** (teilen) in eine neue Datei mit einem Bereich wie
   `1-3,5,8` — die getippte Reihenfolge wird beibehalten, es dient also auch
-  zum Neuordnen
+  zum Neuordnen. Kommas und Leerzeichen trennen genauso: `1 3` sind die
+  Seiten 1 und 3
 - **Suchen** (*Bearbeiten → Suchen…*, `Strg+F`): ein Balken unter der Seite
   hebt alle Treffer hervor, `Eingabe`/`F3` springt zum nächsten, `Umschalt+F3`
   zum vorherigen, `Esc` schließt ihn. Er findet auch Wörter, die die OCR
   gerade erkannt hat, noch vor dem Speichern
-- **Einstellungen** (*Einstellungen → Plico konfigurieren…*, `Ctrl+Umschalt+,`):
+- **Einstellungen** (*Einstellungen → Plico einrichten…*, `Ctrl+Umschalt+,`):
   die Sprache der Oberfläche — automatisch, also die des Systems, oder eine von
   Italienisch, Englisch, Französisch, Deutsch und Spanisch; bei einer
   Systemsprache, die Plico nicht hat, wird Englisch verwendet — und das Icon im
@@ -79,7 +80,7 @@ Komprimieren nutzt.
 - **Komprimiert speichern** in drei Stufen, plus «nur Bilder» und «zu
   resamplende Seiten»: der Gewinn ist der echte, gemessen an der tatsächlich
   geschriebenen Datei (und die «leichte» Stufe ist verlustfrei)
-- **Echte Redaktion**: man zeichnet eine Zone über die zu löschenden Daten, oder
+- **Echtes Schwärzen** (auf Englisch *redaction*): man zeichnet eine Zone über die zu löschenden Daten, oder
   zieht über die Wörter, und beim Speichern wird der Text **entfernt**, nicht
   nur überdeckt — was übrig bleibt, lässt sich nicht mehr kopieren oder
   suchen. Auch Formularfelder und Notizen unter der Zone verschwinden, während
@@ -91,7 +92,7 @@ Komprimieren nutzt.
 - **Minimale Textbearbeitung**: ein Klick auf eine Zeile öffnet einen Editor
   auf der Seite; der alte Text wird aus der Datei entfernt und der neue an
   derselben Stelle geschrieben, mit derselben Größe, Farbe und — wenn
-  installiert — derselben Schrift. Benachbarte Zeilen bleiben intact, auch bei
+  installiert — derselben Schrift. Benachbarte Zeilen bleiben intakt, auch bei
   einfachem Zeilenabstand
 - **OCR** (_Bearbeiten → Text erkennen…_, `Ctrl+Shift+O`): ein Scan wird
   **durchsuchbar und auswählbar**, ohne sein Aussehen zu ändern — der
@@ -110,7 +111,7 @@ Ein PDF mit **300 Seiten** öffnet in unter 2 Sekunden und bleibt reaktionsfähi
 beim Öffnen werden 2 Seiten und ~12 Miniaturen gerendert, nicht 300. Der
 Seitencache enthält höchstens eine Handvoll Einträge, unabhängig von der
 Dokumentgröße. Abgedeckt von
-[`test_large_document_stays_responsive`](https://github.com/gradia64/Plico/blob/main/tests/test_integration.py).
+[`test_large_document_stays_responsive`](tests/test_integration.py).
 
 ## Architektur
 
@@ -123,19 +124,19 @@ plico/
     ├── model/
     │   ├── document.py        # DocumentModel, PageItem
     │   ├── commands.py        # QUndoCommand: RotatePage, DeletePage, AddRedaction, SetFieldValue…
-    │   ├── redact.py          # Redaktionsrechtecke, Rotationsmatrizen
+    │   ├── redact.py          # Schwärzungsrechtecke, Rotationsmatrizen
     │   ├── forms.py           # AcroForm-Felder: lesen, schreiben, leeren
     │   ├── textedit.py        # Bearbeitung einer Textzeile: Span, Prüfung, Neuschreiben
     │   ├── ocr.py             # Erkennung mit Tesseract, unsichtbare Schicht, Sprachen
     │   ├── sign.py            # PAdES-Signatur mit pyHanko und Signatur-Neulesen
     │   ├── images.py          # von Bildern zu PDF: A4, dpi, EXIF, intakte JPEGs
     │   ├── save.py            # save_as(), save_compressed(), extract_pages()
-    │   ├── assemble.py        # Seiten aus mehreren PDFs, Formularfelder intact
+    │   ├── assemble.py        # Seiten aus mehreren PDFs, Formularfelder intakt
     │   └── optimize.py        # Komprimierungsstufen, optimize_in_place()
     ├── rendering/
     │   └── worker.py          # RenderWorker in QThread
     └── widgets/
-        ├── page_view.py       # QScrollArea: Rendering, Breite anpassen, HiDPI, Redaktion, Felder
+        ├── page_view.py       # QScrollArea: Rendering, Breite anpassen, HiDPI, Schwärzen, Felder
         ├── thumbnail_bar.py   # QListView + Modell + Cache, Lazy Loading
         ├── form_panel.py      # «Formular»-Dock: ein Editor pro Feld
         ├── ocr.py             # Dialog Sprachen/Seiten und Erkennungsaufgabe
@@ -192,7 +193,7 @@ Dokument schreiben kann, das es gerade liest.
 
 Nach dem Speichern über die geöffnete Datei **öffnet Plico** die
 gespeicherte Datei neu: das ist jetzt das Dokument, mit Löschungen,
-Rotationen und Redaktionen bereits drin. Deshalb können die bis dahin
+Rotationen und Schwärzungen bereits drin. Deshalb können die bis dahin
 gemachten Änderungen nicht mehr rückgängig gemacht werden. Seiten über eine
 geöffnete Datei zu extrahieren ist dagegen nicht erlaubt.
 
@@ -221,7 +222,7 @@ weitere Wahlen. **«Nur Bilder»** überspringt die Repackung der Datei —
 nützlich bei einem Scan, wo der Gewinn in den Bildern liegt, während bei
 einem reinen Textdokument nichts gewonnen wird und das Programm das sagt,
 statt eine identische Kopie zu schreiben. **«Zu resamplende Seiten»** lässt
-die Bilder der anderen Seiten intact, nützlich wenn schwere Scans zwischen
+die Bilder der anderen Seiten intakt, nützlich wenn schwere Scans zwischen
 Textseiten liegen. Es gibt einen Fall, in dem nichts gewonnen wird: wenn
 sich zwei Seiten dasselbe Bild teilen, würde das Komprimieren nur einer die
 andere zwingen, eine eigene Kopie zu bekommen, und die Datei würde wachsen
@@ -234,15 +235,26 @@ wiegt, und übernimmt sie nur, wenn sie gewonnen hat.
 Die Kompression läuft in einem separaten Thread, so dass das Fenster auch bei
 großen Dateien reaktionsfähig bleibt.
 
-### Redaktion: der Text verschwindet wirklich
+### Schwärzen: der Text verschwindet wirklich
 
-`Ctrl+Shift+X` (_Bearbeiten → Zone redigieren_) aktiviert das Werkzeug: man
+`Ctrl+Shift+X` (_Bearbeiten → Bereich löschen_) aktiviert das Werkzeug: man
 zieht ein Rechteck über die zu löschenden Daten, ein einfacher Klick auf eine
 Zone hebt sie auf, `Esc` verlässt. Eine bereits gezeichnete Zone wird
 **korrigiert, ohne sie neu zu zeichnen**: die Ecken skalieren sie, die Mitte
 verschiebt sie. Die Zonen bleiben **bis zum Speichern bearbeitbar** — sie
-sind Rückgängig-Befehle wie die anderen (`Ctrl+Z`), und die dunkle Vorschau
-auf der Seite zeigt genau, wo sie landen.
+sind Rückgängig-Befehle wie die anderen (`Ctrl+Z`).
+
+Das Ergebnis **ist sofort zu sehen**, ohne zu speichern und neu zu öffnen.
+Mit aktivem Werkzeug sind die Zonen dunkle Rechtecke mit Griffen, um sie zu
+korrigieren; sobald man es ausschaltet (`Esc`), zeigen die Seite und ihre
+Miniatur die **echte Vorschau**: die Schwärzungen auf eine Kopie der Seite im
+Speicher angewendet, mit demselben Code wie beim Speichern, also auch das,
+was zusammen mit den Wörtern verschwindet (ein Rahmen, ein Teil eines Bildes).
+Jede Markierung wird durch einen Hinweis über der Seite bestätigt, und der
+Fenstertitel zählt die noch anzuwendenden Schwärzungen. Bevor die Datei
+geschrieben wird — Speichern, Signieren, komprimierte Kopie,
+Seitenextraktion — fragt Plico mit der Anzahl der Zonen und der Seiten nach,
+denn von da an ist der Inhalt nicht wiederherstellbar.
 
 Beim Speichern schreibt PyMuPDF die Content Streams neu und **entfernt** die
 Wörter, die in die Zone fallen: in der Datei bleiben weder der Text noch das
@@ -252,12 +264,13 @@ dem Inhalt verschwinden auch die **Notizen** und die **Formularfelder**, die
 die Zone berührt: ein mit einem Namen ausgefülltes Feld würde sonst in der
 Datei bleiben, Wert eingeschlossen.
 
-`Ctrl+Shift+F` (_Bearbeiten → Wort redigieren…_) sucht dagegen ein Wort auf
+`Ctrl+Shift+F` (_Bearbeiten → Wort löschen…_) sucht dagegen ein Wort auf
 **allen** Seiten und markiert jede Fundstelle auf einmal, als einen einzigen
 Rückgängig-Schritt. Es sucht auch im von OCR erkannten Text, schon vor dem
-Speichern.
+Speichern. Es schaltet kein Werkzeug ein: die Seiten zeigen sofort die Vorschau
+der entfernten Fundstellen.
 
-`Ctrl+Shift+L` (_Bearbeiten → Auswahl redigieren_) ist der dritte Weg, der,
+`Ctrl+Shift+L` (_Bearbeiten → Auswahl löschen_) ist der dritte Weg, der,
 den man von einem Editor erwartet: man zieht über die zu löschenden Wörter und
 sie werden **ganz** markiert, eines nach dem anderen, mit einer Markierung so
 eng wie das Wort. Das Ziehen ist eine einzige Geste, so dass ein `Ctrl+Z`
@@ -271,7 +284,7 @@ Vier Dinge zu wissen:
 - Wörter werden **ganz** genommen (eine Markierung in der Mitte eines
   Wortes würde nichts verbergen), und die kleinste Einheit ist das Wort, nicht
   der Buchstabe;
-- eine Wortmarkierung — aus _Wort redigieren_ oder _Auswahl redigieren_ —
+- eine Wortmarkierung — aus _Wort löschen_ oder _Auswahl löschen_ —
   entfernt den Text **nur seiner Zeile**: bei einfachem Zeilenabstand
   berühren die Buchstaben der Zeilen darüber und darunter ihren Rahmen und
   bleiben, wo sie sind. Eine **gezeichnete** Zone dagegen löscht alles, was
@@ -327,8 +340,8 @@ Ein AcroForm-Feld ist kein PDF-Inhalt, sondern eine Annotation mit einem
 Wert, und Plico behandelt es als solche: die **Beschreibungen** der Felder
 kommen aus der Quelle, die **Werte**, die man schreibt, leben im Modell, und
 `save.py` wendet sie beim Materialisieren der Seiten an — vor den
-Redaktionen, so dass eine Redaktion über einem Feld es mitnimmt. Der auf der
-Seite gezeichnete Wert ist der des Modells, also der, der _im_ Datei sein
+Schwärzungen, so dass eine Schwärzung über einem Feld es mitnimmt. Der auf der
+Seite gezeichnete Wert ist der des Modells, also der, der _in der_ Datei sein
 wird.
 
 Ein Feld wird **nur geschrieben, wenn man es anfasst**: ein nie geöffnetes
@@ -342,7 +355,7 @@ Seite auf einen klickt. Signaturen gehören zu _Datei → Signieren…_.
 _Bearbeiten → Text erkennen…_ (`Ctrl+Shift+O`) liest die gewählten Seiten mit
 Tesseract und schreibt unter das Bild eine **unsichtbare Textschicht**
 (Rendermodus 3). Die Seite sieht identisch aus, aber der Text lässt sich
-auswählen, kopieren, mit `Ctrl+F` suchen — und _Wort redigieren_
+auswählen, kopieren, mit `Ctrl+F` suchen — und _Wort löschen_
 (`Ctrl+Shift+F`) findet ihn endlich, was auf einem unmarkierten Scan
 unmöglich ist. Er findet ihn sofort, nicht erst nach dem Speichern: die
 Schicht gelangt beim Speichern in die Datei, aber die Suche schaut auch auf
@@ -355,7 +368,9 @@ Sprache, mit der Sprache der Oberfläche und Englisch zusammen als Vorschlag. Si
 einem abbrechbaren Fortschrittsbalken — während sie läuft, nimmt das Fenster
 keine Seitenbearbeitungen an den Seiten an, die sie liest — und jeder
 Durchlauf ist **ein einziger** Rückgängig-Schritt: ein `Ctrl+Z` entfernt die
-Schicht von allen Seiten auf einmal.
+Schicht von allen Seiten auf einmal. Am Ende sagt ein Hinweis über der Seite,
+auf wie vielen Seiten er den Text gelesen hat (oder dass er keinen gefunden
+hat), zusätzlich zur Statusleiste.
 
 Die Schrift der Schicht ist eine der Base-14 und wird nicht eingebettet, also
 fügt das Durchsuchbarmachen eines Scans kein Byte hinzu. Wörter, die das PDF
@@ -382,7 +397,7 @@ Vier Dinge, die diese Implementierung tut, und eines, das sie nicht tut:
 
 - **Die Signatur ist das letzte Byte der Datei.** Zuerst wird das Dokument
   materialisiert (mit allen ausgefüllten Feldern, neu geschriebenem Text,
-  angewandten Redaktionen, gedrehten Seiten), dann signiert. Die umgekehrte
+  angewandten Schwärzungen, gedrehten Seiten), dann signiert. Die umgekehrte
   Reihenfolge würde eine Signatur erzeugen, die eine andere Version des
   Dokuments abdeckt als die, die der Benutzer sieht.
 - **Signieren übernimmt die signierte Datei.** Nach _Signieren…_ zeigt die
@@ -474,14 +489,14 @@ diesem Tag erzeugt wurde.
 
 Aus dem Quellcode, für die Entwicklung:
 
-```
+```bash
 pip install -e ".[dev]"
 ```
 
 Der Einstiegspunkt akzeptiert die zu öffnenden Dateien, wie man es von einer
 Desktop-App erwartet:
 
-```
+```bash
 plico relazione.pdf              # öffnet
 plico a.pdf b.pdf                # öffnet a.pdf und führt b.pdf zusammen
 plico ricevuta.jpg a.pdf         # erstellt ein Dokument aus dem Foto und führt a.pdf zusammen
@@ -557,7 +572,7 @@ Acht nicht offensichtliche Entscheidungen:
 
 Bauen und für den eigenen Benutzer installieren:
 
-```
+```bash
 # einmal: Builder, SDK und BaseApp
 flatpak remote-add --user --if-not-exists flathub \
     https://dl.flathub.org/repo/flathub.flatpakrepo
@@ -582,50 +597,59 @@ das Tag des letzten Releases, und jedes Release setzt sie auf sein neues Tag.
 
 ### Veröffentlichen
 
-Flathub baut nicht aus dem Checkout, sondern aus einem Git-Tag, der auch auf
-seinen Commit festgezurrt ist. Das Manifest in `flatpak/` bleibt das der
-Entwicklung (`type: dir`), und das einzureichende erzeugt
-`tools/flathub_manifest.py` **aus dem Tag**. Vor dem Schreiben prüft es, dass:
+Ein Release ist ein signiertes Tag `vX.Y.Z`: von dort prüft
+`.github/workflows/release.yml` Signatur und Version, baut und testet AppImage,
+`.deb`, Flatpak-Bundle und Arch-Paket und hängt sie mit `SHA256SUMS` und einem
+Herkunftsnachweis an das Release auf GitHub. Vor dem Tag prüft es, dass:
 
-- das Tag `v` + die Version aus `pyproject.toml` + das letzte `<release>` der
-  Metainfo ist;
-- die Screenshots der Metainfo auf das Tag und nicht auf `main` zeigen;
-- das Tag annotiert ist, von einem Schlüssel aus `.github/allowed_signers`
-  signiert und auf `origin` mit demselben Objekt vorhanden.
+- die Version in `pyproject.toml`, in `src/plico/__init__.py` und im letzten
+  `<release>` der Metainfo dieselbe ist, mit den Screenshots am Tag fixiert;
+- die Notizen in `packaging/release-notes/X.Y.Z.md` liegen (Abschnitte `## …`
+  und der Link «Full Changelog»): sie sind die Beschreibung des Releases;
+- in `CHANGELOG.md` die Einträge unter «Non rilasciato» unter die neue Version
+  gewandert sind, mit Datum und Vergleichslink.
 
-Tags werden mit dem **SSH**-Schlüssel signiert (kein PGP aufzubewahren).
-Einmal pro Checkout:
+Tags werden mit dem **Release-Schlüssel von Plico** signiert, einem
+OpenPGP-Schlüssel, der die Maschine des Maintainers nicht verlässt: primär
+`1843 07C7 A158 5AFA D7F0  9DF6 EBC8 B4A0 FFD5 B91F` (nur Zertifizierung) und
+Tag-Unterschlüssel `E0C7 71BB B276 A114 D0B8  C591 C5DD C074 5643 FA72`. Der
+öffentliche Schlüssel ist `packaging/plico-release-key.asc`, und
+`scripts/verify-tag.sh` akzeptiert ein Tag nur, wenn dieser Unterschlüssel es
+signiert hat. Einmal pro Checkout:
 
-```
-git config gpg.format ssh
-git config user.signingkey ~/.ssh/id_ed25519.pub
+```bash
+git config gpg.format openpgp
+git config user.signingkey 'E0C771BBB276A114D0B8C591C5DDC0745643FA72!'
 git config tag.gpgSign true
 git config gpg.ssh.allowedSignersFile "$PWD/.github/allowed_signers"
 ```
 
-Damit GitHub das Tag als «Verified» anzeigt, muss derselbe Schlüssel auch als
-_signing key_ des Kontos registriert werden (Settings → SSH and GPG keys →
-New SSH key → Signing key).
+Die letzte Zeile dient nur dem Prüfen der Tags bis `v0.1.3`, die mit dem
+SSH-Schlüssel aus `.github/allowed_signers` signiert sind.
 
 Bei jedem Release:
 
-```
-# 1. Version in pyproject.toml, neues <release> und Screenshot-URLs
-#    (…/Plico/vX.Y.Z/flatpak/screenshots/…) in der Metainfo; Commit und Push
-# 2. signiertes, verifiziertes, veröffentlichtes Tag
-git tag -s v0.1.0 -m "Plico 0.1.0"
-git tag -v v0.1.0
-git push origin v0.1.0
-# 3. das Manifest für Flathub, mit den Modulen, die es einschließt
-python tools/flathub_manifest.py v0.1.0 ~/flathub/io.github.gradia64.plico
+```bash
+# 1. Version, <release> und Screenshot-URLs (…/Plico/vX.Y.Z/…) in der
+#    Metainfo, Notizen in packaging/release-notes/X.Y.Z.md, CHANGELOG.md;
+#    Commit und Push
+# 2. signiertes, geprüftes, veröffentlichtes Tag: den Rest macht release.yml
+git tag -s v0.1.6 -m "Plico 0.1.6"
+scripts/verify-tag.sh v0.1.6
+git push origin v0.1.6
+# 3. von Hand, vor einem Tag, dieselben Builds ohne Veröffentlichung (außer
+#    dem Arch-Paket: das PKGBUILD klont das signierte Tag, das es noch nicht gibt)
+gh workflow run release.yml --ref main
+# 4. nach dem Release das PKGBUILD auf AUR vom eigenen Rechner (der AUR-SSH-
+#    Schlüssel steckt nicht in der CI): prüft Tag und Artefakt «arch», dann Push
+scripts/aur-release.sh v0.1.6
 ```
 
-`--allow-unsigned --offline` macht einen Probelauf auf einem lokalen
-unsignierten Tag.
-
+Plico ist nicht auf Flathub: seine Richtlinie zu generativer KI schließt
+Manifeste aus, die mit KI-Unterstützung geschrieben wurden.
 ## Entwicklung
 
-```
+```bash
 # Tests (ohne Display, dank QT_QPA_PLATFORM=offscreen).
 # NB: pytest ist nicht in .venv/bin, daher über python -m
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q
@@ -665,7 +689,7 @@ Metainfo und in die `[xx]`-Einträge der `.desktop`-Datei ein.
 Werkzeug wird gebraucht): ohne es überspringt `tests/test_i18n.py` genau die
 Prüfung, die warnt, wenn eine neue Zeichenkette im Katalog fehlt.
 
-```
+```bash
 # 1. Strings nach Codeänderungen neu extrahieren,
 #    in alle vier Kataloge
 for l in en es fr de; do
@@ -687,7 +711,7 @@ Menüeinträge gibt.
 
 ## Lizenz
 
-GPL v3 — siehe [LICENSE](https://github.com/gradia64/Plico/blob/main/LICENSE).
+GPL v3 — siehe [LICENSE](LICENSE).
 
 ## About
 

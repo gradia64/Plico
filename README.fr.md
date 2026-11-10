@@ -16,7 +16,7 @@ Un véritable éditeur PDF natif pour Linux, construit avec **Qt6** et
 <p align="center">
   <img src="flatpak/screenshots/main.png" alt="Plico — fenêtre principale" width="32%" />
   <img src="flatpak/screenshots/edit.png" alt="Édition de texte" width="32%" />
-  <img src="flatpak/screenshots/redact.png" alt="Rédaction" width="32%" />
+  <img src="flatpak/screenshots/redact.png" alt="Caviardage" width="32%" />
 </p>
 <p align="center">
   <img src="flatpak/screenshots/form.png" alt="Remplissage de formulaire" width="32%" />
@@ -31,19 +31,20 @@ Un véritable éditeur PDF natif pour Linux, construit avec **Qt6** et
   sans rien copier, parce que chaque page virtuelle sait à quel document
   source elle appartient. On peut aussi fusionner une image (un reçu
   photographié à la suite d'un PDF)
-- **Créer un PDF à partir d'images** (_Fichier → Créer depuis des images…_,
+- **Créer un PDF à partir d'images** (_Fichier → Créer à partir d'images…_,
   `Ctrl+Shift+N`) : photos et scans — PNG, JPEG, TIFF, BMP, GIF — deviennent
-  une page chacun, dans l'ordre choisi. Un scan garde sa vraie taille (un A4
-  à 300 dpi reste un A4), une photo de téléphone est ramenée à un A4 portrait,
+  une page chacune, dans l'ordre choisi. Un scan garde sa vraie taille (un A4
+  à 300 dpi reste un A4), une photo de téléphone est ramenée à un A4 orienté comme elle,
   et les JPEG sont intégrés sans être recompressés
 - **Extraire des pages** (diviser) dans un nouveau fichier avec une plage
   comme `1-3,5,8` — l'ordre tapé est conservé, donc ça sert aussi à
-  réordonner
+  réordonner. Les virgules et les espaces séparent de la même façon : `1 3`
+  sont les pages 1 et 3
 - **Rechercher** (*Édition → Rechercher…*, `Ctrl+F`) : une barre sous la page
   met en évidence toutes les occurrences, `Entrée`/`F3` passe à la suivante,
   `Maj+F3` à la précédente, `Échap` ferme. Il trouve aussi les mots
   fraîchement reconnus par l'OCR, avant la sauvegarde
-- **Paramètres** (*Paramètres → Configurer Plico…*, `Ctrl+Maj+,`) : la langue
+- **Paramètres** (*Configuration → Configurer Plico…*, `Ctrl+Maj+,`) : la langue
   de l'interface — automatique, c'est-à-dire celle du système, ou l'une parmi
   italien, anglais, français, allemand et espagnol ; avec une langue du
   système que Plico n'a pas, on utilise l'anglais — et l'icône dans la zone de
@@ -55,7 +56,7 @@ Un véritable éditeur PDF natif pour Linux, construit avec **Qt6** et
   français, allemand et espagnol, dans la langue de l'interface : il s'ouvre
   dans une fenêtre de Plico, hors ligne aussi
 - **Mises à jour** (*Aide → Rechercher les mises à jour…*) : demande à GitHub
-  si une version plus récente est sortie et ouvre sa page. Dans *Paramètres*,
+  si une version plus récente est sortie et ouvre sa page. Dans *Configuration*,
   on peut activer une vérification automatique, au plus une fois par jour, qui
   signale la nouvelle version par un avis au-dessus de la page et l'entrée
   *Aide → Télécharger Plico…*. Elle est **désactivée** tant qu'on ne l'active
@@ -82,7 +83,7 @@ Un véritable éditeur PDF natif pour Linux, construit avec **Qt6** et
   est **retiré**, pas couvert — ce qui reste n'est plus copiable ni
   recherchable. Les champs de formulaire et les notes sous la zone partent
   aussi, tandis qu'effacer un mot ne touche pas les lignes au-dessus et
-  en-dessous
+  en dessous
 - **Remplir les formulaires AcroForm** : on écrit dans la page, avec le
   panneau « Formulaire » en vue — texte, y compris multiligne, cases et listes
   déroulantes — et les valeurs arrivent dans le fichier à la sauvegarde, avec
@@ -108,7 +109,7 @@ Un PDF de **300 pages** s'ouvre en moins de 2 secondes et reste réactif : à
 l'ouverture seules 2 pages et ~12 miniatures sont rendues, pas 300. Le cache
 des pages contient au plus une poignée d'entrées, quelle que soit la taille
 du document. Couvert par
-[`test_large_document_stays_responsive`](https://github.com/gradia64/Plico/blob/main/tests/test_integration.py).
+[`test_large_document_stays_responsive`](tests/test_integration.py).
 
 ## Architecture
 
@@ -164,7 +165,7 @@ s'effondrer en une seule (mauvaise miniature, pixmap réutilisé du cache par
 erreur).
 
 Les vues **observent le modèle** : `PageView` et `ThumbnailBar` se connectent
-aux signaux `changed` / `page_changed`, de sorte qu'un annuler se reflète
+aux signaux `changed` / `page_changed`, de sorte qu'une annulation se reflète
 automatiquement sur les deux sans que la fenêtre ait à se souvenir de les
 rafraîchir.
 
@@ -229,15 +230,26 @@ il pèse, en l'adoptant seulement s'il a gagné.
 La compression tourne dans un thread séparé, donc la fenêtre reste réactive
 même sur les gros fichiers.
 
-### Redaction : le texte s'en va vraiment
+### Caviardage : le texte s'en va vraiment
 
-`Ctrl+Shift+X` (_Édition → Redacter une zone_) active l'outil : on glisse un
+`Ctrl+Shift+X` (_Édition → Effacer une zone_) active l'outil : on glisse un
 rectangle sur les données à supprimer, un clic sec sur une zone l'annule,
 `Esc` sort. Une zone déjà dessinée se **corrige sans la refaire** : les
 coins la redimensionnent, le centre la déplace. Les zones restent
 **modifiables jusqu'à la sauvegarde** — ce sont des commandes d'annulation
-comme les autres (`Ctrl+Z`) et l'aperçu sombre sur la page montre exactement
-où elles finiront.
+comme les autres (`Ctrl+Z`).
+
+Le résultat **se voit tout de suite**, sans sauvegarder et rouvrir. Avec
+l'outil actif les zones sont des rectangles sombres avec les poignées, pour
+les corriger ; dès que tu l'éteins (`Esc`) la page et sa miniature montrent
+l'**aperçu réel** : les caviardages appliqués à une copie de la page en
+mémoire, avec le même code que la sauvegarde, donc aussi ce qui disparaît
+avec les mots (un bord, un morceau d'image). Chaque marque est confirmée par
+un avis au-dessus de la page, et le titre de la fenêtre compte les
+caviardages encore à appliquer. Avant d'écrire le fichier — sauvegarde,
+signature, copie compressée, extraction de pages — Plico demande confirmation
+avec le nombre de zones et les pages, parce qu'ensuite le contenu ne se
+récupère plus.
 
 À la sauvegarde PyMuPDF réécrit les content stream et **retire** les mots
 qui tombent dans la zone : dans le fichier ne restent ni le texte ni l'image
@@ -247,12 +259,13 @@ contenu partent aussi les **notes** et les **champs de formulaire** que la
 zone touche : un champ rempli avec un nom resterait autrement dans le
 fichier, valeur comprise.
 
-`Ctrl+Shift+F` (_Édition → Redacter un mot…_) cherche au contraire un mot
+`Ctrl+Shift+F` (_Édition → Effacer un mot…_) cherche au contraire un mot
 sur **toutes** les pages et marque chaque occurrence d'un coup, comme une
 seule étape d'annulation. Il cherche aussi dans le texte reconnu par l'OCR,
-même avant de sauvegarder.
+même avant de sauvegarder. Il ne rallume aucun outil : les pages montrent
+tout de suite l'aperçu des occurrences supprimées.
 
-`Ctrl+Shift+L` (_Édition → Redacter la sélection_) est la troisième voie,
+`Ctrl+Shift+L` (_Édition → Effacer la sélection_) est la troisième voie,
 celle qu'attend qui a utilisé un éditeur : on glisse sur les mots à
 supprimer et ils sont marqués **en entier**, un par un, avec une marque aussi
 serrée que le mot. Le glissement est un seul geste, donc un `Ctrl+Z` défait
@@ -264,9 +277,9 @@ Quatre choses à savoir :
 
 - les mots sont pris **entiers** (une marque au milieu d'un mot ne cacherait
   rien), et l'unité minimale est le mot, pas la lettre ;
-- une marque de mot — de _Redacter un mot_ ou de _Redacter la sélection_ —
+- une marque de mot — de _Effacer un mot_ ou de _Effacer la sélection_ —
   retire le texte de **sa ligne seulement** : avec un interligne simple les
-  lettres des lignes au-dessus et en-dessous touchent son cadre, et restent
+  lettres des lignes au-dessus et en dessous touchent son cadre, et restent
   où elles sont. Une zone **dessinée**, en revanche, supprime tout ce
   qu'elle touche, parce que c'est ce qui a été dessiné, et il en va de même
   pour une marque de mot qui a été déplacée ou redimensionnée ;
@@ -283,7 +296,7 @@ les pièces jointes n'y arrivent jamais.
 
 ### Édition du texte : une ligne à la fois
 
-`Ctrl+Shift+T` (_Édition → Éditer le texte_) active l'outil : un clic sur
+`Ctrl+Shift+T` (_Édition → Modifier le texte_) active l'outil : un clic sur
 une ligne **déjà présente** dans le PDF ouvre un petit éditeur par-dessus,
 **Entrée** confirme, **Échap** annule. Un clic là où il n'y a pas de texte,
 ou sur une page qui n'est qu'une image (un scan), le dit à côté du pointeur.
@@ -292,7 +305,7 @@ un vide. La correction se voit tout de suite sur la page et c'est une
 commande comme les autres (`Ctrl+Z`) ; elle n'entre dans le fichier qu'à la
 sauvegarde, où l'ancien texte est **retiré** du content stream — pas couvert
 — et le nouveau écrit au même endroit. Le fond, les bordures de tableaux et
-le texte à côté restent, ainsi que les lignes au-dessus et en-dessous :
+le texte à côté restent, ainsi que les lignes au-dessus et en dessous :
 l'ancien texte est retiré d'une bande autour de la ligne, pas de son cadre,
 qui avec un interligne simple toucherait aussi les voisines.
 
@@ -334,7 +347,7 @@ _Fichier → Signer…_.
 _Édition → Reconnaître le texte…_ (`Ctrl+Shift+O`) lit les pages choisies
 avec Tesseract et écrit sous l'image une **couche de texte invisible** (mode
 de rendu 3). La page a l'air identique, mais le texte peut être
-sélectionné, copié, recherché avec `Ctrl+F` — et _Redacter un mot_
+sélectionné, copié, recherché avec `Ctrl+F` — et _Effacer un mot_
 (`Ctrl+Shift+F`) le trouve enfin, chose impossible sur un scan non marqué. Il
 le trouve tout de suite, pas seulement après avoir sauvegardé : la couche
 entre dans le fichier à la sauvegarde, mais la recherche regarde aussi les
@@ -347,7 +360,8 @@ la langue, avec celle de l'interface et l'anglais ensemble comme proposition. El
 avec une barre de progression annulable — pendant qu'elle tourne la fenêtre
 n'accepte aucune modification des pages qu'elle lit — et chaque passage est
 **une seule** étape d'annulation : un `Ctrl+Z` retire la couche de toutes
-les pages d'un coup.
+les pages d'un coup. À la fin un avis au-dessus de la page dit sur combien de
+pages il a lu le texte (ou qu'il n'en a pas trouvé), en plus de la barre d'état.
 
 La police de la couche est une des Base-14 et n'est pas intégrée, donc
 rendre un scan recherchable n'ajoute pas un octet. Les mots déjà présents
@@ -379,7 +393,7 @@ Quatre choses que cette implémentation fait et une qu'elle ne fait pas :
   celle que l'utilisateur voit.
 - **Signer adopte le fichier signé.** Après _Signer…_ la session pointe sur
   le nouveau fichier, parce que continuer à travailler sur la liste de pages
-  qui l'a généré ferait perdre la signature au prochain sauvegarde.
+  qui l'a généré ferait perdre la signature à la prochaine sauvegarde.
 - **Une deuxième signature s'ajoute à la première.** Si le document signé
   n'a pas de modifications non sauvegardées, la nouvelle signature s'ajoute au
   fichier tel quel (une mise à jour incrémentale) et la première reste
@@ -390,7 +404,7 @@ Quatre choses que cette implémentation fait et une qu'elle ne fait pas :
 - **Sauvegarder sur un fichier signé demande d'abord.** Une sauvegarde
   normale réécrit le PDF de zéro : la signature n'y est plus, et le fichier
   sauvegardé n'en porte pas de cassée à sa place. Le programme le dit et
-  attend un « oui », au lieu de le faire et basta.
+  attend un « oui », au lieu de le faire sans plus.
 - **Il ne décide pas de qui se fier.** Plico n'embarque aucun magasin
   d'autorités : une signature intègre et valide d'un certificat inconnu est
   affichée comme « intègre, mais le certificat n'est pas parmi ceux que tu
@@ -466,14 +480,14 @@ depuis ce tag.
 
 Depuis les sources, pour le développement :
 
-```
+```bash
 pip install -e ".[dev]"
 ```
 
 Le point d'entrée accepte les fichiers à ouvrir, comme on l'attend d'une app
 de bureau :
 
-```
+```bash
 plico relazione.pdf              # ouvre
 plico a.pdf b.pdf                # ouvre a.pdf et y fusionne b.pdf
 plico ricevuta.jpg a.pdf         # crée un document à partir de la photo et y fusionne a.pdf
@@ -526,7 +540,7 @@ Huit choix non évidents :
   que dans le SDK de Qt, pas dans le runtime, et les `.qm` sont les seuls
   fichiers nécessaires à l'exécution. Le module `plico` installe les `.ts`
   avec le paquet puis les compile dans `/app/share/plico/translations`, de
-  sorte que le compilateur n'atterrit pas dans le bundle.
+  sorte que le compilateur ne finit pas dans le bundle.
 - **`cleanup-commands: /app/cleanup-BaseApp.sh`**, requis par la BaseApp.
 - **Aucun accès à la home** (pas de `--filesystem`) : chaque fichier passe
   par le sélecteur de fichiers du portail
@@ -540,13 +554,13 @@ Huit choix non évidents :
   `%F`, donc un double-clic arrive déjà comme chemin exporté dans le portail.
 - **`--talk-name=org.kde.StatusNotifierWatcher`**, la seule permission D-Bus :
   sans elle, dans la sandbox la zone de notification n'existe pas et l'icône
-  des Paramètres n'apparaît jamais (testé sur Plasma). Qt enregistre l'icône
+  de Configuration n'apparaît jamais (testé sur Plasma). Qt enregistre l'icône
   sous son nom unique sur le bus, donc il n'y a pas d'autre nom à posséder.
   L'icône est facultative et désactivée par défaut.
 
 Construire et installer pour ton propre utilisateur :
 
-```
+```bash
 # une fois : builder, SDK et BaseApp
 flatpak remote-add --user --if-not-exists flathub \
     https://dl.flathub.org/repo/flathub.flatpakrepo
@@ -572,51 +586,62 @@ sur son nouveau tag.
 
 ### Publier
 
-Flathub ne construit pas depuis le checkout mais depuis un tag git, fixé
-aussi à son commit. Le manifeste dans `flatpak/` reste celui de
-développement (`type: dir`), et celui à envoyer est généré par
-`tools/flathub_manifest.py` **depuis le tag**. Avant d'écrire il vérifie
-que :
+Une release est un tag `vX.Y.Z` signé : à partir de là,
+`.github/workflows/release.yml` vérifie la signature et la version, construit
+et teste l'AppImage, le `.deb`, le bundle Flatpak et le paquet Arch, et les
+joint à la release sur GitHub avec `SHA256SUMS` et une attestation de
+provenance. Avant le tag il vérifie que :
 
-- le tag est `v` + la version de `pyproject.toml` + le dernier `<release>`
-  de la metainfo ;
-- les captures de la metainfo pointent sur le tag et non sur `main` ;
-- le tag est annoté, signé par une clé de `.github/allowed_signers` et
-  présent sur `origin` avec le même objet.
+- la version soit la même dans `pyproject.toml`, dans `src/plico/__init__.py`
+  et dans le dernier `<release>` de la metainfo, avec les captures fixées au
+  tag ;
+- les notes soient dans `packaging/release-notes/X.Y.Z.md` (sections `## …` et
+  le lien « Full Changelog ») : ce sont la description de la release ;
+- dans `CHANGELOG.md` les entrées « Non rilasciato » soient passées sous la
+  nouvelle version, avec la date et le lien de comparaison.
 
-Les tags se signent avec la clé **SSH** (pas de PGP à garder). Une fois par
-checkout :
+Les tags se signent avec la **clé de release de Plico**, une clé OpenPGP qui ne
+quitte pas la machine du mainteneur : primaire
+`1843 07C7 A158 5AFA D7F0  9DF6 EBC8 B4A0 FFD5 B91F` (certification
+seulement) et sous-clé des tags
+`E0C7 71BB B276 A114 D0B8  C591 C5DD C074 5643 FA72`. La clé publique est
+`packaging/plico-release-key.asc`, et `scripts/verify-tag.sh` n'accepte un tag
+que s'il est signé par cette sous-clé. À faire une seule fois par checkout :
 
-```
-git config gpg.format ssh
-git config user.signingkey ~/.ssh/id_ed25519.pub
+```bash
+git config gpg.format openpgp
+git config user.signingkey 'E0C771BBB276A114D0B8C591C5DDC0745643FA72!'
 git config tag.gpgSign true
 git config gpg.ssh.allowedSignersFile "$PWD/.github/allowed_signers"
 ```
 
-Pour que GitHub affiche le tag comme « Verified », la même clé doit aussi
-être enregistrée comme _signing key_ du compte (Settings → SSH and GPG keys
-→ New SSH key → Signing key).
+La dernière ligne ne sert qu'à vérifier les tags jusqu'à `v0.1.3`, signés avec
+la clé SSH de `.github/allowed_signers`.
 
-À chaque publication :
+À chaque release :
 
+```bash
+# 1. version, <release> et URL des captures (…/Plico/vX.Y.Z/…) dans la
+#    metainfo, notes dans packaging/release-notes/X.Y.Z.md, CHANGELOG.md ;
+#    commit et push
+# 2. tag signé, vérifié, publié : le reste, c'est release.yml qui le fait
+git tag -s v0.1.6 -m "Plico 0.1.6"
+scripts/verify-tag.sh v0.1.6
+git push origin v0.1.6
+# 3. à la main, avant un tag, les mêmes builds sans publier (sauf le paquet
+#    Arch : le PKGBUILD clone le tag signé, qui n'existe pas encore)
+gh workflow run release.yml --ref main
+# 4. après la release, le PKGBUILD sur l'AUR depuis ta machine (la clé SSH
+#    de l'AUR n'est pas dans la CI) : vérifie le tag et l'artefact « arch »,
+#    puis pousse
+scripts/aur-release.sh v0.1.6
 ```
-# 1. version dans pyproject.toml, nouveau <release> et URL des captures
-#    (…/Plico/vX.Y.Z/flatpak/screenshots/…) dans la metainfo ; commit et push
-# 2. tag signé, vérifié, publié
-git tag -s v0.1.0 -m "Plico 0.1.0"
-git tag -v v0.1.0
-git push origin v0.1.0
-# 3. le manifeste pour Flathub, avec les modules qu'il inclut
-python tools/flathub_manifest.py v0.1.0 ~/flathub/io.github.gradia64.plico
-```
 
-`--allow-unsigned --offline` fait un essai à blanc sur un tag local non
-signé.
-
+Plico n'est pas sur Flathub : sa politique sur l'IA générative exclut les
+manifestes écrits avec l'assistance de l'IA.
 ## Développement
 
-```
+```bash
 # tests (sans display, grâce à QT_QPA_PLATFORM=offscreen).
 # NB : pytest n'est pas dans .venv/bin, donc on passe par python -m
 QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q
@@ -656,7 +681,7 @@ du metainfo et aux entrées `[xx]` du `.desktop`.
 l'outil est nécessaire) : sans lui, `tests/test_i18n.py` saute justement le
 contrôle qui avertit quand une chaîne nouvelle manque au catalogue.
 
-```
+```bash
 # 1. réextraire les chaînes après avoir touché au code,
 #    dans les quatre catalogues
 for l in en es fr de; do
@@ -678,7 +703,7 @@ entrées d'un menu.
 
 ## Licence
 
-GPL v3 — voir [LICENSE](https://github.com/gradia64/Plico/blob/main/LICENSE).
+GPL v3 — voir [LICENSE](LICENSE).
 
 ## About
 
