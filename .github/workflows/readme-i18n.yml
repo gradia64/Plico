@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   check:
-    name: README multilingue (switcher + struttura)
+    name: README multilingue (switcher + struttura + contenuto)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -64,3 +64,9 @@ jobs:
           for f in files:
               print(f"  {f}: {stats[f]}")
           PY
+      # I conteggi di heading e fence non vedono una sezione riscritta con una
+      # procedura vecchia: qui si confronta il contenuto per sezione. Il
+      # sorgente è README.it.md; la configurazione (varianti, eccezioni) sta in
+      # cima allo script, che si può lanciare anche a mano.
+      - name: Contenuto delle varianti (identificatori, voci, blocchi)
+        run: python3 .github/readme-i18n-content.py
