@@ -1176,6 +1176,11 @@ class MainWindow(QMainWindow):
                 "Testo, immagini e grafica sotto le zone non si potranno più recuperare "
                 "da quel file. Il documento aperto resta modificabile."
             )
+            + "\n\n"
+            + self.tr(
+                "Titolo, autore e segnalibri del documento non verranno copiati: "
+                "potrebbero contenere il testo eliminato."
+            )
         )
         return self._ask_to_burn(text)
 

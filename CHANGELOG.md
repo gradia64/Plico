@@ -30,6 +30,12 @@ Correzioni da due revisioni della 0.1.8.
 
 ### Corretto
 
+- **Ogni salvataggio toglieva segnalibri, titolo, autore e numerazione delle
+  pagine** (per esempio «i, ii, iii» in una prefazione): bastava ruotare una
+  pagina e salvare. Ora restano, anche unendo ed estraendo pagine: i
+  segnalibri seguono le loro pagine e spariscono solo con quelle eliminate.
+  Quando si cancella una zona, titolo, autore e segnalibri non vengono
+  copiati, perché potrebbero contenere il testo tolto; la conferma lo dice.
 - Dopo aver salvato, compresso o firmato sopra un PDF protetto, la riapertura
   automatica chiedeva di nuovo la password; annullando, il documento si
   chiudeva. Ora usa quella già data.

@@ -301,8 +301,10 @@ Vier Dinge zu wissen:
   Pixel bewegt hat: es ist ein Klick, kein Ziehen, und `Ctrl+Z` setzt sie
   genau dorthin zurück, wo sie war.
 
-PDF-Metadaten sind dagegen kein Risiko: die Ausgabedatei wird nur aus den
-Seiten neu aufgebaut, so dass `/Info`, XMP und Anhänge nie durchkommen.
+PDF-Metadaten tragen den entfernten Text nicht weiter: Wird ein Bereich
+geschwärzt, werden Titel, Autor, Lesezeichen und XMP nicht in die
+Ausgabedatei übernommen, Anhänge nie. Ein Speichern ohne Schwärzung behält
+sie.
 
 ### Textbearbeitung: eine Zeile nach der anderen
 

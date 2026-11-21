@@ -152,10 +152,13 @@ def _write_pdf(
     *pages* selects a subset by 0-based index, preserving the given order;
     ``None`` means "every page, in model order".
 
-    The output is rebuilt from pages and nothing else, so no document-level
-    data follows its source: ``/Info``, the XMP packet and the embedded files
-    are all left behind. That is why a redaction needs no separate metadata
-    cleanup -- and it is also why a plain "save as" does not keep the title.
+    The output is rebuilt from pages, so document-level data has to be
+    carried over on purpose: :func:`_carry_document_data` brings the outline,
+    the page labels and the metadata of the sources along, remapped to the
+    pages written. Not when a redaction is written: a title, a bookmark or
+    the XMP packet can hold the very words being removed, and then nothing
+    but the pages follows (the window says so before writing). Embedded
+    files are never carried.
     """
     assert model.sources, "No document open"
     items = model.pages if pages is None else [model.pages[i] for i in pages]
@@ -218,6 +221,7 @@ def _write_pdf(
             # with its value (see prune_fields).
             prune_fields(out)
             _settle_sigflags(out, dropped)
+            _carry_document_data(out, sources, items)
             if any(item.text_edits for item in items):
                 # A replacement embeds its font whole: one edit in a system
                 # font took a 36 KB file to 241 KB. Subsetting brings it back
@@ -227,6 +231,106 @@ def _write_pdf(
     finally:
         for src in sources.values():
             src.close()
+
+
+# Bookmarks carried at most: the outline comes from the file, and a crafted
+# one with millions of entries would hold the save for minutes.
+_MAX_OUTLINE = 20_000
+# modDate is not among them: the file written now is a modified one.
+_METADATA_KEYS = ("title", "author", "subject", "keywords", "creator", "producer", "creationDate")
+
+
+def _carry_document_data(
+    out: pymupdf.Document,
+    sources: dict[int, pymupdf.Document],
+    items: list[PageItem],
+) -> None:
+    """Give *out* the outline, page labels and metadata of its sources.
+
+    Every save used to drop them -- rotating one page of a manual and
+    pressing Ctrl+S took its bookmarks, its title and its "i, ii, iii"
+    numbering away (reported by a review). Page labels are only numbers and
+    always follow; the outline and the metadata do not when a redaction is
+    written (see :func:`_write_pdf`).
+    """
+    # Where each source page ended up: its first copy, for a duplicated one.
+    placed: dict[tuple[int, int], int] = {}
+    for index, item in enumerate(items):
+        placed.setdefault((item.source_id, item.source_index), index)
+    _carry_page_labels(out, sources, items)
+    if any(item.redactions for item in items):
+        return
+    # The sources in the order their pages first appear: a merge reads like
+    # the files it is made of, one after the other.
+    order = list(dict.fromkeys(item.source_id for item in items))
+    outline: list[list] = []
+    for source_id in order:
+        # The entries above the current one, as (level, kept): an entry
+        # whose page is gone goes, and its children move up to its place.
+        ancestors: list[tuple[int, bool]] = []
+        for level, title, page, *_ in sources[source_id].get_toc(simple=True):
+            while ancestors and ancestors[-1][0] >= level:
+                ancestors.pop()
+            target = placed.get((source_id, page - 1))
+            kept = target is not None
+            if target is not None and len(outline) < _MAX_OUTLINE:
+                depth = sum(1 for _, alive in ancestors if alive) + 1
+                outline.append([depth, title, target + 1])
+            ancestors.append((level, kept))
+    if outline:
+        out.set_toc(outline)
+    # The metadata of the document the first page comes from: the one the
+    # user opened, unless pages from a merged file were moved before it.
+    main = sources[items[0].source_id]
+    metadata = {key: main.metadata.get(key) or "" for key in _METADATA_KEYS}
+    if any(metadata.values()):
+        metadata["modDate"] = pymupdf.get_pdf_now()
+        out.set_metadata(metadata)
+    xmp = main.get_xml_metadata()
+    if xmp:
+        out.set_xml_metadata(xmp)
+
+
+def _carry_page_labels(
+    out: pymupdf.Document, sources: dict[int, pymupdf.Document], items: list[PageItem]
+) -> None:
+    """Page labels ("i, ii, iii, 1, 2...") renumbered for the pages written.
+
+    A rule says "from this page on, this style, starting at this number"; a
+    page keeps the label it had, and a new rule starts wherever the pages
+    stop following each other in their source.
+    """
+    rules_of = {
+        source_id: sorted(doc.get_page_labels(), key=lambda rule: rule["startpage"])
+        for source_id, doc in sources.items()
+    }
+    if not any(rules_of.values()):
+        return
+    rules: list[dict] = []
+    previous: tuple[int, int, int] | None = None  # source, page, rule index
+    for index, item in enumerate(items):
+        own = rules_of[item.source_id]
+        position = max(
+            (i for i, rule in enumerate(own) if rule["startpage"] <= item.source_index),
+            default=-1,
+        )
+        key = (item.source_id, item.source_index, position)
+        if previous is not None and key == (previous[0], previous[1] + 1, previous[2]):
+            previous = key
+            continue
+        previous = key
+        if position < 0:
+            # No rule covers it: the plain number it showed, its position.
+            rules.append({"startpage": index, "prefix": "", "style": "D", "firstpagenum": item.source_index + 1})
+            continue
+        rule = own[position]
+        rules.append({
+            "startpage": index,
+            "prefix": rule.get("prefix", ""),
+            "style": rule.get("style", ""),
+            "firstpagenum": rule.get("firstpagenum", 1) + item.source_index - rule["startpage"],
+        })
+    out.set_page_labels(rules)
 
 
 @dataclass(frozen=True)

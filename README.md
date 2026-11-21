@@ -270,8 +270,9 @@ Four things to know:
 - a click on a mark removes it even if the mouse moved one pixel: it is a
   click, not a drag, and `Ctrl+Z` puts it back exactly where it was.
 
-PDF metadata, instead, is not a risk: the output file is rebuilt from the
-pages alone, so `/Info`, XMP and attachments never make it through.
+PDF metadata does not carry the removed text: when a zone is redacted,
+title, author, bookmarks and XMP are not copied to the output file, and
+attachments never are. A save without redactions keeps them.
 
 ### Text editing: one line at a time
 

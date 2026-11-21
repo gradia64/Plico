@@ -283,9 +283,9 @@ Cuatro cosas que saber:
   es un clic, no un arrastre, y `Ctrl+Z` la devuelve exactamente donde
   estaba.
 
-Los metadatos del PDF, en cambio, no son un riesgo: el archivo de salida se
-reconstruye solo a partir de las páginas, así que `/Info`, el XMP y los
-adjuntos nunca llegan.
+Los metadatos del PDF no arrastran el texto eliminado: cuando se borra una
+zona, el título, el autor, los marcadores y el XMP no se copian al archivo
+de salida, y los adjuntos nunca. Un guardado sin borrados los conserva.
 
 ### Edición de texto: una línea a la vez
 

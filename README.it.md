@@ -277,9 +277,9 @@ Quattro cose da sapere:
 - un clic su un segno lo toglie anche se il mouse si è mosso di un pixel: è un
   clic, non uno spostamento, e `Ctrl+Z` lo rimette esattamente dov'era.
 
-I metadati del PDF, invece, non sono un rischio: il file di uscita è
-ricostruito dalle sole pagine, quindi `/Info`, l'XMP e gli allegati non ci
-arrivano mai.
+I metadati del PDF non portano il testo tolto: quando si cancella una zona,
+titolo, autore, segnalibri e XMP non vengono copiati nel file di uscita, e
+gli allegati non lo sono mai. Un salvataggio senza cancellazioni li conserva.
 
 ### Modifica del testo: una riga alla volta
 

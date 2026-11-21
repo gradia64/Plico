@@ -294,9 +294,10 @@ Quatre choses à savoir :
   c'est un clic, pas un glissement, et `Ctrl+Z` la remet exactement où elle
   était.
 
-Les métadonnées du PDF, en revanche, ne sont pas un risque : le fichier de
-sortie est reconstruit à partir des pages seules, donc `/Info`, le XMP et
-les pièces jointes n'y arrivent jamais.
+Les métadonnées du PDF ne transportent pas le texte supprimé : quand une
+zone est effacée, le titre, l'auteur, les signets et le XMP ne sont pas
+copiés dans le fichier de sortie, et les pièces jointes ne le sont jamais.
+Un enregistrement sans effacement les conserve.
 
 ### Édition du texte : une ligne à la fois
 
