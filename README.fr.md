@@ -28,6 +28,10 @@ Un véritable éditeur PDF natif pour Linux, construit avec **Qt6** et
 - **Tourner, supprimer, réordonner** des pages (glisser-déposer dans la barre
   de miniatures), les **dupliquer** (`Ctrl+D`) et **insérer des pages
   vierges**
+- **Signets** (_Affichage → Signets_, un onglet à côté des miniatures) : on
+  lit la table des matières du PDF, un clic mène à la page, et on ajoute,
+  renomme, déplace, imbrique et supprime des entrées. Chaque modification
+  s'annule avec `Ctrl+Z` et l'enregistrement écrit la table telle quelle
 - **Fusionner** un autre PDF : ses pages s'ajoutent à celles déjà ouvertes
   sans rien copier, parce que chaque page virtuelle sait à quel document
   source elle appartient. On peut aussi fusionner une image (un reçu

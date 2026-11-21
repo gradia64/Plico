@@ -13,7 +13,7 @@ import os
 from PySide6.QtCore import QCoreApplication
 from PySide6.QtGui import QUndoCommand
 
-from .document import DocumentModel, PageItem
+from .document import Bookmark, DocumentModel, PageItem, read_outline
 from .ocr import OcrWord
 from .redact import RedactionRect
 from .textedit import TextEdit, TextSpan
@@ -125,6 +125,10 @@ class AppendDocument(QUndoCommand):
         self._source_id = source_id
         self._path = path
         self._items = items
+        # The merged file's bookmarks follow it into the outline, after the
+        # ones already there; undo puts the outline back as it was.
+        self._bookmarks = read_outline(path, source_id, model.passwords.get(path))
+        self._outline_before: list[Bookmark] = []
 
     def redo(self) -> None:
         sources = self._model.sources
@@ -136,12 +140,17 @@ class AppendDocument(QUndoCommand):
                 "a merge is redone against exactly the source it was read from"
             )
         self._model.pages.extend(self._items)
+        self._outline_before = list(self._model.outline)
+        self._model.outline = self._outline_before + self._bookmarks
         self._model.changed.emit()
+        self._model.outline_changed.emit()
 
     def undo(self) -> None:
         count = len(self._items)
         del self._model.pages[len(self._model.pages) - count :]
+        self._model.outline = list(self._outline_before)
         self._model.changed.emit()
+        self._model.outline_changed.emit()
 
 
 class DuplicatePage(QUndoCommand):
@@ -202,6 +211,29 @@ class InsertPage(QUndoCommand):
     def undo(self) -> None:
         del self._model.pages[self._index]
         self._model.changed.emit()
+
+
+class SetOutline(QUndoCommand):
+    """Replace the outline: every edit of the bookmarks panel is one of these.
+
+    The whole list, before and after, rather than one command per kind of
+    edit: an outline is small, and add, rename, delete and move are then the
+    same undo step with a different name.
+    """
+
+    def __init__(self, model: DocumentModel, outline: list[Bookmark], name: str) -> None:
+        super().__init__(name)
+        self._model = model
+        self._before = list(model.outline)
+        self._after = list(outline)
+
+    def redo(self) -> None:
+        self._model.outline = list(self._after)
+        self._model.outline_changed.emit()
+
+    def undo(self) -> None:
+        self._model.outline = list(self._before)
+        self._model.outline_changed.emit()
 
 
 class AddRedaction(QUndoCommand):

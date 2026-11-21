@@ -27,6 +27,10 @@ comprimirlos.
 
 - **Rotar, eliminar, reordenar** páginas (arrastrar y soltar en la barra de miniaturas),
   **duplicarlas** (`Ctrl+D`) e **insertar páginas en blanco**
+- **Marcadores** (_Ver → Marcadores_, una pestaña junto a las miniaturas): se
+  lee el índice del PDF, un clic lleva a la página, y se añaden, renombran,
+  mueven, anidan y eliminan entradas. Cada cambio se deshace con `Ctrl+Z` y
+  al guardar se escribe el índice tal como está
 - **Unir** otro PDF: sus páginas se añaden a las ya abiertas sin copiar
   nada, porque cada página virtual sabe a qué documento fuente pertenece.
   También se puede unir una imagen (un recibo fotografiado al final de un PDF)

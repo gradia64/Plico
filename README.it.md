@@ -27,6 +27,10 @@ comprimerli.
 
 - **Ruotare, eliminare, riordinare** pagine (drag & drop nella barra miniature),
   **duplicarle** (`Ctrl+D`) e **inserire pagine vuote**
+- **Segnalibri** (*Visualizza → Segnalibri*, una scheda accanto alle
+  miniature): l'indice del PDF si legge, un clic porta alla pagina, e si
+  aggiungono, rinominano, spostano, annidano ed eliminano voci. Ogni modifica
+  si annulla con `Ctrl+Z` e il salvataggio scrive l'indice così com'è
 - **Unire** un altro PDF: le sue pagine si aggiungono a quelle già aperte
   senza copiare nulla, perché ogni pagina virtuale sa a quale documento
   sorgente appartiene. Si può unire anche un'immagine (una ricevuta

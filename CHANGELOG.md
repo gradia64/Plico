@@ -19,6 +19,11 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
 - **Duplica pagina** (*Modifica → Duplica pagina*, `Ctrl+D`) e **Inserisci
   pagina vuota** (della misura della pagina scelta, dopo di lei): si
   annullano come ogni altra modifica, e la copia si modifica per conto suo.
+- **Pannello Segnalibri** (*Visualizza → Segnalibri*, una scheda accanto alle
+  miniature): mostra l'indice del PDF, porta alla pagina con un clic e
+  permette di aggiungere, rinominare, spostare, cambiare livello ed eliminare
+  le voci. Ogni modifica si annulla; il salvataggio scrive l'indice del
+  pannello. Unendo un PDF, i suoi segnalibri si aggiungono in coda.
 - **Proteggi con password** (*File → Proteggi con password…*): salva con una
   password scelta (AES-256) e, se si vuole, senza permesso di stampa, copia o
   modifica, con una password del proprietario facoltativa (se manca e c'è un

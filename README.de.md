@@ -27,6 +27,11 @@ Komprimieren nutzt.
 
 - **Seiten drehen, löschen, neu anordnen** (Drag & Drop in der
   Miniaturleiste), **duplizieren** (`Ctrl+D`) und **leere Seiten einfügen**
+- **Lesezeichen** (_Ansicht → Lesezeichen_, ein Reiter neben den Miniaturen):
+  das Inhaltsverzeichnis des PDFs lesen, per Klick zur Seite springen und
+  Einträge hinzufügen, umbenennen, verschieben, verschachteln und löschen.
+  Jede Änderung lässt sich mit `Ctrl+Z` rückgängig machen, und beim
+  Speichern wird das Verzeichnis so geschrieben, wie es ist
 - **Ein anderes PDF zusammenführen**: dessen Seiten werden zu den bereits
   geöffneten hinzugefügt, ohne etwas zu kopieren, weil jede virtuelle Seite
   weiß, zu welchem Quelldokument sie gehört. Man kann auch ein Bild

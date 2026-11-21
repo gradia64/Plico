@@ -71,6 +71,7 @@ from .model import (
     RemoveRedaction,
     RotatePage,
     SetFieldValue,
+    SetOutline,
     SignatureRequest,
     TextSpan,
     extract_pages,
@@ -95,6 +96,7 @@ from .model.save import (
 from .model.sign import SigningError, keep_root, kept_root_intact
 from .printing import print_pdf
 from .rendering import RenderWorker
+from .widgets.bookmarks import BookmarkPanel
 from .widgets.compress import CompressionDialog, CompressionTask, format_size
 from .widgets.find_bar import FindBar
 from .widgets.form_panel import FormPanel
@@ -282,6 +284,19 @@ class MainWindow(QMainWindow):
         dock.setObjectName("thumbnail_dock")
         dock.setWidget(self._thumb_bar)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock)
+
+        # --- bookmarks dock: a tab next to the thumbnails ---
+        self._bookmark_panel = BookmarkPanel(
+            self._doc_model, lambda: self._thumb_bar.current_row()
+        )
+        self._bookmark_panel.edited.connect(self._edit_outline)
+        self._bookmark_panel.go_to.connect(self._go_to_page)
+        self._bookmarks_dock = QDockWidget(self.tr("Segnalibri"), self)
+        self._bookmarks_dock.setObjectName("bookmarks_dock")
+        self._bookmarks_dock.setWidget(self._bookmark_panel)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._bookmarks_dock)
+        self._thumbnail_dock = dock
+        self._tabify_bookmarks()
 
         # --- undo dock (dev tool) ---
         undo_dock = QDockWidget(self.tr("Storico azioni"), self)
@@ -606,6 +621,25 @@ class MainWindow(QMainWindow):
             self.tr("Zoom &indietro"), "zoom-out", "Ctrl+-", self._page_view.zoom_out
         )
         view_menu.addAction(self._zoom_out_act)
+
+        view_menu.addSeparator()
+        bookmarks_act = self._bookmarks_dock.toggleViewAction()
+        bookmarks_act.setText(self.tr("&Segnalibri"))
+        view_menu.addAction(bookmarks_act)
+
+    def _tabify_bookmarks(self) -> None:
+        """Put «Segnalibri» behind «Miniature», as a tab of the same dock."""
+        self.tabifyDockWidget(self._thumbnail_dock, self._bookmarks_dock)
+        self._thumbnail_dock.raise_()
+
+    def _edit_outline(self, outline: list, name: str) -> None:
+        """An edit from the «Segnalibri» panel, as an undoable command."""
+        self._undo_stack.push(SetOutline(self._doc_model, outline, name))
+
+    def _go_to_page(self, row: int) -> None:
+        if 0 <= row < self._doc_model.page_count:
+            self._thumb_bar.set_current_row(row)
+            self._page_view.ensure_page_visible(row)
 
     def _setup_settings_menu(self) -> None:
         """Impostazioni → Configura Plico…, where KDE applications keep it."""
@@ -2951,6 +2985,10 @@ class MainWindow(QMainWindow):
         state = s.value("window/state")
         if state is not None:
             self.restoreState(state)
+            # A layout saved before the panel existed does not place it, and
+            # Qt would then split it under the thumbnails: make it a tab.
+            if s.value("window/bookmarks_dock") is None:
+                self._tabify_bookmarks()
         raw = s.value("view/zoom", 0.0)
         try:
             zoom = float(raw) if isinstance(raw, (int, float, str)) else 0.0
@@ -2963,6 +3001,7 @@ class MainWindow(QMainWindow):
         s = self._settings()
         s.setValue("window/geometry", self.saveGeometry())
         s.setValue("window/state", self.saveState())
+        s.setValue("window/bookmarks_dock", True)
         s.setValue("view/zoom", self._page_view.zoom())
 
     def shutdown_worker(self) -> None:

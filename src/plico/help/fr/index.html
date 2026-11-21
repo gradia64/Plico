@@ -16,6 +16,7 @@ Le fichier d'origine n'est jamais modifié tant que vous n'enregistrez pas.</p>
 <ul class="toc">
 <li><a href="#open">Ouvrir et fusionner</a></li>
 <li><a href="#pages">Les pages</a></li>
+<li><a href="#bookmarks">Signets</a></li>
 <li><a href="#images">Créer un PDF à partir d'images</a></li>
 <li><a href="#save">Enregistrer</a></li>
 <li><a href="#print">Imprimer</a></li>
@@ -66,6 +67,27 @@ fichier : <code>5,1-3</code> place la cinquième page en premier.</li>
 rétablit avec <code>Ctrl+Y</code> ; le panneau « Historique » montre les
 étapes. Le zoom est dans le menu <b>Affichage</b> : <code>Ctrl++</code>,
 <code>Ctrl+-</code> et <code>Ctrl+0</code> pour ajuster à la largeur.</p>
+
+<h2 id="bookmarks">Signets</h2>
+
+<p>Les signets sont la table des matières du PDF. Ils se trouvent dans un
+onglet à côté des miniatures, que l'on affiche et masque depuis
+<b>Affichage → Signets</b>. Un clic sur une entrée mène à sa page.</p>
+
+<ul>
+<li>Le premier bouton ajoute un signet pour la page choisie, au premier
+niveau et dans l'ordre des pages.</li>
+<li>Les autres, aussi dans le menu du clic droit, renomment, montent et
+descendent, changent le niveau et suppriment l'entrée choisie avec les
+entrées placées sous elle.</li>
+<li>Le signet d'une page supprimée reste, en gris, et n'est pas
+enregistré ; il revient si vous annulez la suppression.</li>
+</ul>
+
+<p>Chaque modification s'annule avec <code>Ctrl+Z</code>. L'enregistrement
+écrit les signets tels qu'ils sont dans le panneau. Exception : un fichier
+avec des zones effacées, où les signets ne sont pas copiés, car ils
+pourraient contenir le texte supprimé.</p>
 
 <h2 id="images">Créer un PDF à partir d'images</h2>
 

@@ -227,17 +227,62 @@ def _flat(rect: Sequence[float]) -> bool:
     return x1 - x0 > y1 - y0
 
 
+# Bookmarks read from a file at most: the outline comes from the file, and a
+# crafted one with millions of entries would hold the opening for minutes.
+MAX_OUTLINE = 20_000
+
+
+@dataclass(frozen=True)
+class Bookmark:
+    """An entry of the outline, pointing at a page by its identity.
+
+    ``(source_id, source_index)`` and not a position: a bookmark follows its
+    page when pages are moved, and points nowhere -- for as long as the page
+    stays deleted -- when it is deleted. Saving drops those (see
+    ``save._carry_document_data``).
+    """
+
+    level: int
+    title: str
+    source_id: int
+    source_index: int
+
+
+def read_outline(path: str, source_id: int, password: str | None = None) -> list[Bookmark]:
+    """The outline of *path*, as bookmarks of the source *source_id*.
+
+    An outline that cannot be read is an empty one: bookmarks are not a reason
+    to refuse a document. Entries that point nowhere are left out.
+    """
+    try:
+        with open_for_reading(path, password) as doc:
+            toc = doc.get_toc(simple=True)[:MAX_OUTLINE]
+            count = len(doc)
+    except Exception:  # noqa: BLE001 -- see above
+        return []
+    return [
+        Bookmark(int(level), str(title), source_id, page - 1)
+        for level, title, page, *_ in toc
+        if 1 <= page <= count
+    ]
+
+
 class DocumentModel(QObject):
     """Holds the virtual page list; the real PDF is never mutated until save."""
 
     changed = Signal()
     page_changed = Signal(int)
+    # The outline changed; the pages did not (see SetOutline).
+    outline_changed = Signal()
 
     def __init__(self) -> None:
         super().__init__()
         self.pages: list[PageItem] = []
         self.sources: list[str] = []
         self.path: str | None = None
+        # The bookmarks, in outline order: read from the sources, then edited
+        # by the user. What a save writes as the document's outline.
+        self.outline: list[Bookmark] = []
         # path -> password, only for the files that needed one. Session
         # scoped, and deliberately NOT cleared when another document is
         # opened: re-opening the same protected file must not ask again.
@@ -337,7 +382,9 @@ class DocumentModel(QObject):
         self.pages = list(items)
         self.sources = [path]
         self.path = path
+        self.outline = read_outline(path, 0, self.passwords.get(path))
         self.changed.emit()
+        self.outline_changed.emit()
 
     def append_document(self, path: str, password: str | None = None) -> int:
         """Merge: append every page of *path* after the current ones.
@@ -352,7 +399,9 @@ class DocumentModel(QObject):
         self.ensure_room(len(items))
         self.sources.append(path)
         self.pages.extend(items)
+        self.outline.extend(read_outline(path, len(self.sources) - 1, self.passwords.get(path)))
         self.changed.emit()
+        self.outline_changed.emit()
         return len(items)
 
     def ensure_room(self, extra: int) -> None:
@@ -555,5 +604,7 @@ class DocumentModel(QObject):
         self.sources.clear()
         self.passwords.clear()
         self.owner_passwords.clear()
+        self.outline.clear()
         self.path = None
         self.changed.emit()
+        self.outline_changed.emit()

@@ -11,8 +11,9 @@ from .commands import (
     RemoveRedaction,
     RotatePage,
     SetFieldValue,
+    SetOutline,
 )
-from .document import DocumentModel, PageItem, PasswordRequired, open_for_reading
+from .document import Bookmark, DocumentModel, PageItem, PasswordRequired, open_for_reading
 from .forms import Field, read_fields, write_fields
 from .images import IMAGE_SUFFIXES, images_to_pdf, is_image
 from .ocr import (
@@ -67,6 +68,7 @@ __all__ = [
     "AddRedaction",
     "AdjustRedaction",
     "AppendDocument",
+    "Bookmark",
     "CompressionLevel",
     "CompressionOptions",
     "CompressionPreview",
@@ -88,6 +90,7 @@ __all__ = [
     "RemoveRedaction",
     "RotatePage",
     "SetFieldValue",
+    "SetOutline",
     "Signature",
     "SignatureRequest",
     "SigningError",

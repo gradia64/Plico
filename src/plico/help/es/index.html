@@ -16,6 +16,7 @@ hasta que guardas.</p>
 <ul class="toc">
 <li><a href="#open">Abrir y unir</a></li>
 <li><a href="#pages">Las páginas</a></li>
+<li><a href="#bookmarks">Marcadores</a></li>
 <li><a href="#images">Crear un PDF desde imágenes</a></li>
 <li><a href="#save">Guardar</a></li>
 <li><a href="#print">Imprimir</a></li>
@@ -66,6 +67,27 @@ nuevo: <code>5,1-3</code> pone la quinta página primero.</li>
 rehace con <code>Ctrl+Y</code>; el panel «Historial» muestra los pasos dados.
 El zoom está en el menú <b>Ver</b>: <code>Ctrl++</code>, <code>Ctrl+-</code> y
 <code>Ctrl+0</code> para ajustar al ancho.</p>
+
+<h2 id="bookmarks">Marcadores</h2>
+
+<p>Los marcadores son el índice del PDF. Están en una pestaña junto a las
+miniaturas, que se muestra y se oculta desde <b>Ver → Marcadores</b>. Un clic
+en una entrada lleva a su página.</p>
+
+<ul>
+<li>El primer botón añade un marcador para la página elegida, en el primer
+nivel y en el orden de las páginas.</li>
+<li>Los demás, también en el menú del botón derecho, renombran, suben y
+bajan, cambian el nivel y eliminan la entrada elegida junto con las entradas
+que tiene debajo.</li>
+<li>El marcador de una página eliminada se queda, en gris, y no se guarda;
+vuelve si deshaces la eliminación.</li>
+</ul>
+
+<p>Cada cambio se deshace con <code>Ctrl+Z</code>. Al guardar se escriben los
+marcadores tal como están en el panel. La excepción es un archivo con zonas
+borradas: ahí los marcadores no se copian, porque podrían contener el texto
+eliminado.</p>
 
 <h2 id="images">Crear un PDF desde imágenes</h2>
 

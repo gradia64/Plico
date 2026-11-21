@@ -16,7 +16,7 @@ import pymupdf
 from PySide6.QtCore import QCoreApplication
 
 from .assemble import acroform_key, assemble, prune_fields
-from .document import DocumentModel, PageItem, open_for_reading
+from .document import Bookmark, DocumentModel, PageItem, open_for_reading
 from .forms import write_fields
 from .ocr import write_layer
 from .optimize import (
@@ -223,7 +223,7 @@ def _write_pdf(
             # with its value (see prune_fields).
             prune_fields(out)
             _settle_sigflags(out, dropped)
-            _carry_document_data(out, sources, items)
+            _carry_document_data(out, sources, items, model.outline)
             if any(item.text_edits for item in items):
                 # A replacement embeds its font whole: one edit in a system
                 # font took a 36 KB file to 241 KB. Subsetting brings it back
@@ -246,6 +246,7 @@ def _carry_document_data(
     out: pymupdf.Document,
     sources: dict[int, pymupdf.Document],
     items: list[PageItem],
+    bookmarks: list[Bookmark],
 ) -> None:
     """Give *out* the outline, page labels and metadata of its sources.
 
@@ -262,23 +263,22 @@ def _carry_document_data(
     _carry_page_labels(out, sources, items)
     if any(item.redactions for item in items):
         return
-    # The sources in the order their pages first appear: a merge reads like
-    # the files it is made of, one after the other.
-    order = list(dict.fromkeys(item.source_id for item in items))
+    # The outline is the model's: read from the sources when they were
+    # opened or merged, then edited in the bookmarks panel.
     outline: list[list] = []
-    for source_id in order:
-        # The entries above the current one, as (level, kept): an entry
-        # whose page is gone goes, and its children move up to its place.
-        ancestors: list[tuple[int, bool]] = []
-        for level, title, page, *_ in sources[source_id].get_toc(simple=True):
-            while ancestors and ancestors[-1][0] >= level:
-                ancestors.pop()
-            target = placed.get((source_id, page - 1))
-            kept = target is not None
-            if target is not None and len(outline) < _MAX_OUTLINE:
-                depth = sum(1 for _, alive in ancestors if alive) + 1
-                outline.append([depth, title, target + 1])
-            ancestors.append((level, kept))
+    # The entries above the current one, as (level, kept): an entry whose
+    # page is gone goes, and its children move up to its place.
+    ancestors: list[tuple[int, bool]] = []
+    for bookmark in bookmarks:
+        level = bookmark.level
+        while ancestors and ancestors[-1][0] >= level:
+            ancestors.pop()
+        target = placed.get((bookmark.source_id, bookmark.source_index))
+        kept = target is not None
+        if target is not None and len(outline) < _MAX_OUTLINE:
+            depth = sum(1 for _, alive in ancestors if alive) + 1
+            outline.append([depth, bookmark.title, target + 1])
+        ancestors.append((level, kept))
     if outline:
         out.set_toc(outline)
     # The metadata of the document the first page comes from: the one the
