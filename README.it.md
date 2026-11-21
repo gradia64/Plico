@@ -96,7 +96,8 @@ comprimerli.
 - **PDF protetti da password**: Plico chiede la password all'apertura, e
   salvare sopra il file (anche compresso o firmato) lo lascia cifrato
   (AES-256) con la stessa password e gli stessi permessi. Un file nuovo creato
-  con «Salva con nome» non è protetto
+  con «Salva con nome» non è protetto, a meno di usare *File → Proteggi con
+  password…*, che sceglie password e permessi (o toglie la password)
 - **Stampare** (*File → Stampa…*, `Ctrl+P`): il documento così come verrebbe
   salvato, zone cancellate comprese, tutto o solo alcune pagine
 

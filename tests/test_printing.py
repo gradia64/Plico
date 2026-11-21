@@ -123,3 +123,48 @@ def test_the_window_prints_the_pages_chosen(window, qapp, tmp_path, monkeypatch)
     with pymupdf.open(out) as printed:
         assert len(printed) == 2
     assert "2" in window._status.text()
+
+
+def _no_print(path: str) -> None:
+    import pikepdf
+
+    with pymupdf.open() as doc:
+        doc.new_page().insert_text((72, 72), "vietato")
+        doc.save(path + ".plain")
+    with pikepdf.open(path + ".plain") as pdf:
+        pdf.save(path, encryption=pikepdf.Encryption(
+            user="", owner="titolare", R=6,
+            allow=pikepdf.Permissions(print_lowres=False, print_highres=False),
+        ))
+    os.unlink(path + ".plain")
+
+
+def test_a_file_that_forbids_printing_is_named(qapp, tmp_path) -> None:
+    from plico.model.save import print_forbidden
+
+    forbidden = str(tmp_path / "vietato.pdf")
+    allowed = str(tmp_path / "libero.pdf")
+    _no_print(forbidden)
+    _document(allowed)
+    model = DocumentModel()
+    model.open(allowed)
+    assert print_forbidden(model) == []
+    model.append_document(forbidden)
+    assert print_forbidden(model) == [forbidden]
+
+
+def test_the_window_asks_before_printing_a_forbidden_file(
+    window, qapp, tmp_path, monkeypatch
+) -> None:
+    from PySide6.QtWidgets import QMessageBox
+
+    path = str(tmp_path / "vietato.pdf")
+    _no_print(path)
+    assert window.open_path(path)
+    asked = []
+    monkeypatch.setattr(
+        QMessageBox, "question",
+        lambda *a, **k: asked.append(a[2]) or QMessageBox.StandardButton.Cancel,
+    )
+    window._print_document()
+    assert len(asked) == 1 and "vietato.pdf" in asked[0]

@@ -107,7 +107,9 @@ Komprimieren nutzt.
 - **Passwortgeschützte PDFs**: Plico fragt beim Öffnen nach dem Passwort,
   und das Speichern über die Datei (auch komprimiert oder signiert) lässt sie
   verschlüsselt (AES-256), mit demselben Passwort und denselben Rechten. Eine
-  neue Datei aus „Speichern unter“ ist nicht geschützt
+  neue Datei aus „Speichern unter“ ist nicht geschützt, außer mit _Datei →
+  Mit Passwort schützen…_, das Passwort und Rechte festlegt (oder das
+  Passwort entfernt)
 - **Drucken** (_Datei → Drucken…_, `Ctrl+P`): das Dokument so, wie es
   gespeichert würde, geschwärzte Bereiche inbegriffen, ganz oder nur einige
   Seiten

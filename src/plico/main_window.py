@@ -80,10 +80,13 @@ from .model import (
     sign_copy,
 )
 from .model.save import (
+    AUTOMATIC,
+    Protection,
     discard_copy,
     file_is_encrypted,
     owner_only_sources,
     owner_password_matches,
+    print_forbidden,
     printable_copy,
 )
 from .model.sign import SigningError, keep_root, kept_root_intact
@@ -96,6 +99,7 @@ from .widgets.help_window import HelpWindow
 from .widgets.ocr import OcrDialog, OcrTask
 from .widgets.page_view import PageView
 from .widgets.plain_text import plain_labels
+from .widgets.protect import ProtectDialog
 from .widgets.settings_dialog import Choices, SettingsDialog
 from .widgets.sign import SignatureDialog, SignDialog
 from .widgets.thumbnail_bar import ThumbnailBar, ThumbnailCache
@@ -414,6 +418,11 @@ class MainWindow(QMainWindow):
                 "archive-insert",
                 "Ctrl+Shift+C",
                 self._compress_file,
+            )
+        )
+        file_menu.addAction(
+            self._act(
+                self.tr("Prote&ggi con password…"), "document-encrypt", "", self._protect_file
             )
         )
         file_menu.addSeparator()
@@ -1053,9 +1062,21 @@ class MainWindow(QMainWindow):
             return False
         return self._save_to(path)
 
-    def _save_to(self, path: str) -> bool:
-        """Write the whole document to *path*; it becomes the "Salva" target."""
-        if not self._confirm_protection_loss(path) or not self._ask_owner_passwords(path):
+    def _save_to(
+        self, path: str, protection: Protection | None | object = AUTOMATIC
+    ) -> bool:
+        """Write the whole document to *path*; it becomes the "Salva" target.
+
+        *protection*, when the user chose one ("Proteggi con password"),
+        replaces the automatic one: the questions about the protection of the
+        file being replaced are not asked, the answer is the choice itself.
+        The written file is then re-opened, as after a signature: the window
+        must know its new password, and the next Ctrl+S must keep it.
+        """
+        chosen = protection is not AUTOMATIC
+        if not chosen and (
+            not self._confirm_protection_loss(path) or not self._ask_owner_passwords(path)
+        ):
             return False
         # A plain save writes a fresh file: the signature of the file it
         # replaces would not be in it. Say so before doing it, because losing
@@ -1083,7 +1104,7 @@ class MainWindow(QMainWindow):
         # and afterwards it would no longer match the source it replaced.
         overwritten = self._doc_model.sources_at(path)
         try:
-            save_as(self._doc_model, path)
+            save_as(self._doc_model, path, protection)  # type: ignore[arg-type]
         # Same reasoning as _open_file: a failed write (permissions, full
         # disk, malformed source) must surface as a dialog, not a traceback.
         except Exception as e:  # noqa: BLE001
@@ -1091,7 +1112,10 @@ class MainWindow(QMainWindow):
                 self, self.tr("Errore"), self.tr("Impossibile salvare:\n{0}").format(e)
             )
             return False
-        if overwritten:
+        if chosen:
+            password = protection.password if isinstance(protection, Protection) else None
+            self._adopt_saved_file(path, overwritten, password)
+        elif overwritten:
             # Re-opening resets the undo stack, the target and the title.
             self._adopt_saved_file(path, overwritten)
         else:
@@ -1277,7 +1301,9 @@ class MainWindow(QMainWindow):
             return self._save_file()
         return choice == QMessageBox.StandardButton.Discard
 
-    def _adopt_saved_file(self, path: str, overwritten: list[str]) -> None:
+    def _adopt_saved_file(
+        self, path: str, overwritten: list[str], password: str | None = None
+    ) -> None:
         """Bring the model back in line after a save that replaced a source.
 
         The virtual pages still describe the file as it was BEFORE the save:
@@ -1292,7 +1318,8 @@ class MainWindow(QMainWindow):
         # os.replace() swapped the inode: the worker would keep reading the
         # OLD document under that path from the handle it holds. The evict is
         # queued before the renders the re-open asks for, so it lands first.
-        password = self._known_password(overwritten)
+        if password is None:
+            password = self._known_password(overwritten)
         for source in overwritten:
             self._worker.evict_requested.emit(source)
 
@@ -1388,6 +1415,38 @@ class MainWindow(QMainWindow):
         )
         return choice == QMessageBox.StandardButton.Yes
 
+    def _protect_file(self) -> None:
+        """File → Proteggi con password: save with a password chosen now, or none.
+
+        Like "Salva con nome", with the protection decided by the user rather
+        than inherited from the file being replaced. A protected file can be
+        written without one, which is how a password is taken off.
+        """
+        if not self._doc_model.sources:
+            QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
+            return
+        self._page_view.finish_text_edit()
+        self._page_view.finish_field_edit()
+        protected = bool(self._save_target) and file_is_encrypted(self._save_target or "")
+        dialog = ProtectDialog(protected, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        protection = dialog.protection()
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            self.tr("Proteggi con password"),
+            self._proposal_origin(),
+            self.tr("File PDF (*.pdf)"),
+        )
+        if not path:
+            return
+        if not self._save_to(path, protection) or self._save_target != path:
+            return
+        if protection is None:
+            self._status.setText(self.tr("Salvato senza password: {0}").format(path))
+        else:
+            self._status.setText(self.tr("Salvato con password: {0}").format(path))
+
     # ------------------------------------------------------------------ #
     #  Printing
     # ------------------------------------------------------------------ #
@@ -1402,6 +1461,23 @@ class MainWindow(QMainWindow):
         if not self._doc_model.sources:
             QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
             return
+        # A word being edited is part of the document to print.
+        self._page_view.finish_text_edit()
+        self._page_view.finish_field_edit()
+        forbidden = print_forbidden(self._doc_model)
+        if forbidden:
+            choice = QMessageBox.question(
+                self,
+                self.tr("Stampa"),
+                self.tr(
+                    "«{0}» chiede di non essere stampato: chi l'ha creato ha tolto il "
+                    "permesso di stampa.\n\nStampare lo stesso?"
+                ).format(", ".join(os.path.basename(path) for path in forbidden)),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if choice != QMessageBox.StandardButton.Yes:
+                return
         try:
             from PySide6.QtPrintSupport import QAbstractPrintDialog, QPrintDialog, QPrinter
         except ImportError:
@@ -1415,9 +1491,6 @@ class MainWindow(QMainWindow):
                 ),
             )
             return
-        # A word being edited is part of the document to print.
-        self._page_view.finish_text_edit()
-        self._page_view.finish_field_edit()
         count = self._doc_model.page_count
         printer = QPrinter(QPrinter.PrinterMode.HighResolution)
         printer.setDocName(os.path.basename(self._proposal_origin()) or "Plico")

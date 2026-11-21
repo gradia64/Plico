@@ -14,7 +14,14 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
   intervallo o la pagina corrente; le pagine orizzontali su carta verticale
   vengono girate. Nel Flatpak serve l'accesso a CUPS (`--socket=cups`); il
   `.deb` dipende da libcups. Su Debian e Ubuntu, chi usa il PySide6 del
-  sistema deve installare `python3-pyside6.qtprintsupport`.
+  sistema deve installare `python3-pyside6.qtprintsupport`. Se un PDF vieta
+  la stampa, Plico lo dice e stampa solo dopo una conferma.
+- **Proteggi con password** (*File → Proteggi con password…*): salva con una
+  password scelta (AES-256) e, se si vuole, senza permesso di stampa, copia o
+  modifica, con una password del proprietario facoltativa (se manca e c'è un
+  limite, ne viene creata una casuale). Su un file già protetto si può
+  scegliere «Nessuna password» per toglierla. Il file salvato viene riaperto,
+  così i salvataggi successivi restano protetti.
 
 ### Sicurezza
 

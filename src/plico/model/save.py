@@ -1,5 +1,7 @@
 """Save (materialize virtual page list back to a real PDF)."""
 
+from __future__ import annotations
+
 import os
 import re
 import secrets
@@ -334,16 +336,54 @@ def _carry_page_labels(
 
 
 @dataclass(frozen=True)
-class _Protection:
-    """How the file being replaced was encrypted, to encrypt its successor.
+class Protection:
+    """How a file is to be encrypted: the replaced one's, or one the user chose.
 
     *password* is the user password, the one that opens the file; *owner* is
-    the owner password the new file gets.
+    the owner password the new file gets; *permissions* the /P bits.
     """
 
     password: str
     owner: str
     permissions: int
+
+    @classmethod
+    def chosen(
+        cls,
+        password: str,
+        owner: str = "",
+        allow_print: bool = True,
+        allow_copy: bool = True,
+        allow_modify: bool = True,
+    ) -> Protection:
+        """The protection the user picks in "Proteggi con password".
+
+        With everything allowed the owner password is the user's: there is
+        nothing for it to guard. With a restriction it must differ, or whoever
+        opens the file would open it as owner and the restriction would mean
+        nothing -- so a missing one is made up, and nobody can lift the
+        restriction afterwards.
+        """
+        bits = 1 << 9  # accessibility: screen readers keep working
+        if allow_print:
+            bits |= (1 << 2) | (1 << 11)
+        if allow_copy:
+            bits |= 1 << 4
+        if allow_modify:
+            bits |= (1 << 3) | (1 << 5) | (1 << 8) | (1 << 10)
+        restricted = not (allow_print and allow_copy and allow_modify)
+        if not restricted:
+            owner = owner or password
+        elif not owner or owner == password:
+            owner = secrets.token_urlsafe(32)
+        return cls(password, owner, bits)
+
+
+class _Automatic:
+    """The default of *protection*: the one of the file being replaced."""
+
+
+AUTOMATIC = _Automatic()
 
 
 # The permission bits of /P (ISO 32000, table 22), as Document.permissions
@@ -360,7 +400,7 @@ _PERMISSION_FLAGS = {
 }
 
 
-def _protection(model: DocumentModel, target: str) -> _Protection | None:
+def _protection(model: DocumentModel, target: str) -> Protection | None:
     """The encryption to give *target*, when it is an encrypted open source.
 
     The output is rebuilt from pages, and a rebuilt document carries no
@@ -384,10 +424,10 @@ def _protection(model: DocumentModel, target: str) -> _Protection | None:
         password = model.passwords.get(source)
         with open_for_reading(source, password) as doc:
             if password:
-                return _Protection(password, password, doc.permissions)
+                return Protection(password, password, doc.permissions)
             if is_encrypted(doc):
                 owner = model.owner_passwords.get(source) or secrets.token_urlsafe(32)
-                return _Protection("", owner, doc.permissions)
+                return Protection("", owner, doc.permissions)
     return None
 
 
@@ -404,6 +444,27 @@ def owner_only_sources(model: DocumentModel, target: str) -> list[str]:
             continue
         if file_is_encrypted(source):
             found.append(source)
+    return found
+
+
+def print_forbidden(model: DocumentModel) -> list[str]:
+    """The sources in the document whose permissions forbid printing.
+
+    Plico does not enforce a file's permissions -- they are a request to the
+    reader, and the user who opened the file decides -- but printing one that
+    asks not to be printed is said first (the user's choice, 2026-11-21).
+    """
+    used = {item.source_id for item in model.pages}
+    found = []
+    for source_id in sorted(used):
+        path = model.sources[source_id]
+        try:
+            with open_for_reading(path, model.passwords.get(path)) as doc:
+                forbids = is_encrypted(doc) and not doc.permissions & (1 << 2)
+        except Exception:  # noqa: BLE001 -- unreadable now: the print will say why
+            forbids = False
+        if forbids:
+            found.append(path)
     return found
 
 
@@ -440,7 +501,7 @@ def _protection_password(model: DocumentModel, target: str) -> str | None:
     return protection.password if protection else None
 
 
-def _protect(tmp_path: str, protection: _Protection | None) -> None:
+def _protect(tmp_path: str, protection: Protection | None) -> None:
     """Encrypt the temporary *tmp_path* in place (AES-256), if asked to.
 
     pikepdf and not PyMuPDF's own ``save(encryption=...)``: MuPDF writes
@@ -542,6 +603,7 @@ def _write_atomically(
     target: str,
     pages: list[int] | None,
     optimize: Callable[[str], _T] | None = None,
+    protection: Protection | None | _Automatic = AUTOMATIC,
 ) -> _T | None:
     """Write *target*, never destroying the file currently being read.
 
@@ -564,8 +626,13 @@ def _write_atomically(
     is passed back to the caller. It gets the file already encrypted when
     *target* is a protected source (see :func:`_protection`): signing is the
     one caller, and a signature has to be the last thing written.
+
+    *protection* is, by default, that of the file being replaced; a
+    :class:`Protection` encrypts the file that way, and None writes it in the
+    clear even over a protected source ("Proteggi con password", both ways).
     """
-    protection = _protection(model, target)
+    if isinstance(protection, _Automatic):
+        protection = _protection(model, target)
     tmp_path = _write_temporary(model, target, pages)
     try:
         _protect(tmp_path, protection)
@@ -578,17 +645,21 @@ def _write_atomically(
         raise
 
 
-def save_as(model: DocumentModel, out_path: str) -> None:
+def save_as(
+    model: DocumentModel,
+    out_path: str,
+    protection: Protection | None | _Automatic = AUTOMATIC,
+) -> None:
     """Render the virtual page list to *out_path*.
 
     The source PDF is opened read-only; pages are copied by ``source_index``
     and their rotation is set to ``base_rotation + rotation``.
 
     Saving onto the file that is currently open is allowed; see
-    :func:`_write_atomically`.
+    :func:`_write_atomically`, as is *protection*.
     """
     assert model.sources, "No document open"
-    _write_atomically(model, os.path.abspath(out_path), None)
+    _write_atomically(model, os.path.abspath(out_path), None, protection=protection)
 
 
 @dataclass
