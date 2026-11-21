@@ -148,14 +148,14 @@ jobs:
       - name: SHA-256
         run: sha256sum dist/*.AppImage dist/*.deb | tee -a "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: appimage
           path: dist/*.AppImage
           if-no-files-found: error
           retention-days: 14
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: deb
           path: dist/*.deb
@@ -169,7 +169,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5   # la suite di test e gli script di collaudo
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: appimage
           path: dist/
@@ -226,7 +226,7 @@ jobs:
           PLICO_VERSION="${TAG#v}" scripts/prepare-aur.sh
           scripts/build-arch.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: arch
           include-hidden-files: true   # .SRCINFO
@@ -255,22 +255,22 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: appimage
           path: dist/
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: deb
           path: dist/
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: plico-flatpak
           path: flatpak-bundle/
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: arch
           path: arch/
@@ -284,7 +284,7 @@ jobs:
           sha256sum Plico-* plico_*.deb plico-*.pkg.tar.zst > SHA256SUMS
           cat SHA256SUMS | tee -a "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             dist/Plico-*
