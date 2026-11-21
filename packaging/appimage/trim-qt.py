@@ -17,7 +17,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-MODULES = {"QtCore", "QtGui", "QtWidgets"}
+# QtPrintSupport per File → Stampa, con il suo plugin CUPS (libcups dal sistema)
+MODULES = {"QtCore", "QtGui", "QtWidgets", "QtPrintSupport"}
 # i cataloghi di Qt da tenere, uno per lingua dell'interfaccia (i18n.LANGUAGES)
 QT_CATALOGS = {f"qtbase_{code}.qm" for code in ("it", "en", "fr", "de", "es")}
 PLUGINS = {
@@ -35,6 +36,7 @@ PLUGINS = {
     "imageformats": {"libqsvg.so", "libqjpeg.so", "libqgif.so", "libqico.so", "libqwebp.so",
                      "libqtiff.so"},
     "tls": None,
+    "printsupport": None,
 }
 KEEP_TOP = {"__init__.py", "_config.py", "_git_pyside_version.py", "py.typed",
             "support", "Qt", "PySide6_Essentials.json"}

@@ -6,6 +6,16 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Non rilasciato]
 
+### Aggiunto
+
+- **Stampa** (*File → Stampa…*, `Ctrl+P`): stampa il documento così come
+  verrebbe salvato — pagine eliminate, rotazioni, moduli, testo corretto e
+  zone cancellate compresi, anche prima di salvare. Tutte le pagine, un
+  intervallo o la pagina corrente; le pagine orizzontali su carta verticale
+  vengono girate. Nel Flatpak serve l'accesso a CUPS (`--socket=cups`); il
+  `.deb` dipende da libcups. Su Debian e Ubuntu, chi usa il PySide6 del
+  sistema deve installare `python3-pyside6.qtprintsupport`.
+
 ### Sicurezza
 
 Correzioni da due revisioni della 0.1.8.

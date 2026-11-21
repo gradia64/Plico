@@ -108,6 +108,9 @@ Komprimieren nutzt.
   und das Speichern über die Datei (auch komprimiert oder signiert) lässt sie
   verschlüsselt (AES-256), mit demselben Passwort und denselben Rechten. Eine
   neue Datei aus „Speichern unter“ ist nicht geschützt
+- **Drucken** (_Datei → Drucken…_, `Ctrl+P`): das Dokument so, wie es
+  gespeichert würde, geschwärzte Bereiche inbegriffen, ganz oder nur einige
+  Seiten
 
 ### Abnahmevoraussetzung
 

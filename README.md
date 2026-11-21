@@ -96,6 +96,8 @@ A true native PDF editor for Linux, built with **Qt6** and **PySide6**, using
   saving over the file (compressed or signed too) keeps it encrypted
   (AES-256) with the same password and permissions. A new file written with
   “Save As” is not protected
+- **Printing** (_File → Print…_, `Ctrl+P`): the document as it would be
+  saved, redacted zones included, all of it or only some pages
 
 ### Acceptance requirement
 

@@ -14,6 +14,7 @@ sys.path.insert(0, str(APPDIR / "usr" / "share" / "plico"))
 
 from PySide6.QtCore import QLibraryInfo, QLocale  # noqa: E402
 from PySide6.QtGui import QIcon, QImageReader  # noqa: E402
+from PySide6.QtPrintSupport import QPrinter  # noqa: E402  File → Stampa
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 app = QApplication(sys.argv)
@@ -59,6 +60,21 @@ picture = scan.new_page(width=page.rect.width, height=page.rect.height)
 picture.insert_image(picture.rect, pixmap=page.get_pixmap(dpi=200))
 words = " ".join(w.text for w in ocr.recognise(picture, "ita"))
 assert "riconosce" in words, words
+
+# la stampa: QtPrintSupport c'è, e una pagina arriva su un QPrinter (su PDF,
+# perché nel container non c'è una stampante)
+import tempfile  # noqa: E402
+
+from plico.printing import print_pdf  # noqa: E402
+
+with tempfile.TemporaryDirectory() as folder:
+    source = os.path.join(folder, "pagina.pdf")
+    doc.save(source)
+    printer = QPrinter()
+    printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+    printer.setOutputFileName(os.path.join(folder, "stampa.pdf"))
+    assert print_pdf(source, printer) == 1
+    assert os.path.getsize(os.path.join(folder, "stampa.pdf")) > 0
 
 # pikepdf: aprire e salvare
 with pikepdf.new() as pdf:

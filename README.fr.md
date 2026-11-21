@@ -106,6 +106,8 @@ Un véritable éditeur PDF natif pour Linux, construit avec **Qt6** et
   l'ouverture, et enregistrer par-dessus le fichier (compressé ou signé
   aussi) le garde chiffré (AES-256) avec le même mot de passe et les mêmes
   permissions. Un nouveau fichier créé avec « Enregistrer sous » n'est pas protégé
+- **Imprimer** (_Fichier → Imprimer…_, `Ctrl+P`) : le document tel qu'il
+  serait enregistré, zones effacées comprises, en entier ou quelques pages
 
 ### Exigence d'acceptation
 

@@ -97,6 +97,8 @@ comprimerli.
   salvare sopra il file (anche compresso o firmato) lo lascia cifrato
   (AES-256) con la stessa password e gli stessi permessi. Un file nuovo creato
   con «Salva con nome» non è protetto
+- **Stampare** (*File → Stampa…*, `Ctrl+P`): il documento così come verrebbe
+  salvato, zone cancellate comprese, tutto o solo alcune pagine
 
 ### Requisito di accettazione
 

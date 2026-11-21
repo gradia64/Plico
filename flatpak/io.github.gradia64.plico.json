@@ -11,6 +11,7 @@
     "--socket=wayland",
     "--socket=fallback-x11",
     "--device=dri",
+    "--socket=cups",
     "--talk-name=org.kde.StatusNotifierWatcher"
   ],
   "build-options": {

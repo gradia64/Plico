@@ -79,8 +79,15 @@ from .model import (
     save_signed,
     sign_copy,
 )
-from .model.save import file_is_encrypted, owner_only_sources, owner_password_matches
+from .model.save import (
+    discard_copy,
+    file_is_encrypted,
+    owner_only_sources,
+    owner_password_matches,
+    printable_copy,
+)
 from .model.sign import SigningError, keep_root, kept_root_intact
+from .printing import print_pdf
 from .rendering import RenderWorker
 from .widgets.compress import CompressionDialog, CompressionTask, format_size
 from .widgets.find_bar import FindBar
@@ -425,6 +432,10 @@ class MainWindow(QMainWindow):
                 "",
                 self._verify_signatures,
             )
+        )
+        file_menu.addSeparator()
+        file_menu.addAction(
+            self._act(self.tr("St&ampa…"), "document-print", "Ctrl+P", self._print_document)
         )
         file_menu.addSeparator()
         # Close the document, keep the window: the only other way to put a
@@ -1376,6 +1387,94 @@ class MainWindow(QMainWindow):
             QMessageBox.StandardButton.Cancel,
         )
         return choice == QMessageBox.StandardButton.Yes
+
+    # ------------------------------------------------------------------ #
+    #  Printing
+    # ------------------------------------------------------------------ #
+
+    def _print_document(self) -> None:
+        """File → Stampa: the document as a save would write it (see printing.py).
+
+        QtPrintSupport is imported here and not at the top: some
+        distributions package it apart from the rest of PySide6, and Plico
+        must start without it -- only this command needs it.
+        """
+        if not self._doc_model.sources:
+            QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
+            return
+        try:
+            from PySide6.QtPrintSupport import QAbstractPrintDialog, QPrintDialog, QPrinter
+        except ImportError:
+            QMessageBox.warning(
+                self,
+                self.tr("Stampa"),
+                self.tr(
+                    "La stampa non è disponibile: manca il modulo QtPrintSupport di "
+                    "PySide6 (su Debian e Ubuntu, il pacchetto "
+                    "python3-pyside6.qtprintsupport)."
+                ),
+            )
+            return
+        # A word being edited is part of the document to print.
+        self._page_view.finish_text_edit()
+        self._page_view.finish_field_edit()
+        count = self._doc_model.page_count
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        printer.setDocName(os.path.basename(self._proposal_origin()) or "Plico")
+        printer.setFromTo(1, count)
+        dialog = QPrintDialog(printer, self)
+        dialog.setOption(QAbstractPrintDialog.PrintDialogOption.PrintCurrentPage, True)
+        dialog.setOption(QAbstractPrintDialog.PrintDialogOption.PrintPageRange, True)
+        dialog.setMinMax(1, count)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        mode = printer.printRange()
+        if mode == QPrinter.PrintRange.CurrentPage:
+            pages = [min(max(self._current_page_index, 0), count - 1)]
+        elif mode == QPrinter.PrintRange.PageRange and printer.fromPage() > 0:
+            pages = list(range(printer.fromPage() - 1, min(printer.toPage(), count)))
+        else:
+            pages = list(range(count))
+        if printer.pageOrder() == QPrinter.PageOrder.LastPageFirst:
+            pages.reverse()
+        if not pages:
+            return
+
+        progress = QProgressDialog(
+            self.tr("Stampa in corso…"), self.tr("Annulla"), 0, len(pages), self
+        )
+        progress.setWindowTitle(self.tr("Stampa"))
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)
+
+        def advance(done: int) -> bool:
+            progress.setValue(done)
+            QApplication.processEvents()
+            return not progress.wasCanceled()
+
+        copy = ""
+        try:
+            # Only the pages to print are materialised, in their order.
+            copy = printable_copy(self._doc_model, pages)
+            QApplication.processEvents()
+            printed = print_pdf(copy, printer, None, advance)
+        # PyMuPDF and the print system both have their own failures; the user
+        # needs the reason, not the class (same as saving).
+        except Exception as error:  # noqa: BLE001
+            progress.close()
+            QMessageBox.critical(
+                self, self.tr("Errore"), self.tr("Impossibile stampare:\n{0}").format(error)
+            )
+            return
+        finally:
+            if copy:
+                discard_copy(copy)
+        progress.close()
+        if printed < len(pages):
+            printer.abort()
+            self._status.setText(self.tr("Stampa annullata."))
+            return
+        self._status.setText(self.tr("Stampa inviata: {0} pagine.").format(printed))
 
     # ------------------------------------------------------------------ #
     #  Signatures

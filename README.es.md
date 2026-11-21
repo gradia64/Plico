@@ -99,6 +99,8 @@ comprimirlos.
   guardar sobre el archivo (también comprimido o firmado) lo mantiene cifrado
   (AES-256) con la misma contraseña y los mismos permisos. Un archivo nuevo
   creado con «Guardar como» no está protegido
+- **Imprimir** (_Archivo → Imprimir…_, `Ctrl+P`): el documento tal como se
+  guardaría, zonas borradas incluidas, entero o solo algunas páginas
 
 ### Requisito de aceptación
 

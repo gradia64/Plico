@@ -512,6 +512,22 @@ def _write_temporary(model: DocumentModel, target: str, pages: list[int] | None)
     return tmp_path
 
 
+def printable_copy(model: DocumentModel, pages: list[int] | None = None) -> str:
+    """The document as a save would write it, in a temporary only we can read.
+
+    For printing: the paper must show what the file would hold, redactions
+    burnt in, not the sources under the marks. Not encrypted, being nobody
+    else's to open; the caller removes it with :func:`discard_copy`.
+    """
+    assert model.sources, "No document open"
+    return _write_temporary(model, os.path.join(tempfile.gettempdir(), "plico-stampa.pdf"), pages)
+
+
+def discard_copy(path: str) -> None:
+    """Remove a file from :func:`printable_copy`, directory and all."""
+    _discard(path)
+
+
 def _adopt(tmp_path: str, target: str) -> None:
     """Put the temporary in *target*'s place, keeping *target*'s permissions."""
     # Keep the original file's permissions across the swap.

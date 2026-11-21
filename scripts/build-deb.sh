@@ -66,7 +66,8 @@ ln -s /opt/plico/AppRun "$PKG/usr/bin/plico"
 # Depends: le librerie che l'albero chiede al sistema (le stesse dell'AppImage),
 # con il nome t64 di Debian 13 / Ubuntu 24.04 e quello precedente; tzdata
 # perché il Python incluso legge i fusi orari del sistema e pyHanko ne apre
-# uno già all'import. Nel control su una riga sola (lintian: multiline-field)
+# uno già all'import; libcups per il plugin di stampa di Qt (File → Stampa).
+# Nel control su una riga sola (lintian: multiline-field)
 DEPENDS=(
     "libc6 (>= 2.34)" libstdc++6 libgcc-s1 zlib1g libzstd1 libcrypt1
     "libglib2.0-0t64 | libglib2.0-0" libdbus-1-3 libfontconfig1 libfreetype6
@@ -74,6 +75,7 @@ DEPENDS=(
     libx11-xcb1 libxcb1 libxcb-glx0 libxcb-randr0 libxcb-shm0 libxcb-sync1
     libxcb-xfixes0 libxcb-render0 libxcb-shape0 libxcb-xkb1 libxkbcommon-x11-0
     libwayland-client0 libwayland-cursor0 libwayland-egl1
+    "libcups2t64 | libcups2"
     tzdata
 )
 DEPENDS_LINE="$(printf '%s, ' "${DEPENDS[@]}")"
