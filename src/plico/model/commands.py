@@ -13,6 +13,7 @@ import os
 from PySide6.QtCore import QCoreApplication
 from PySide6.QtGui import QUndoCommand
 
+from .annotate import Annotation
 from .document import Bookmark, DocumentModel, PageItem, read_outline
 from .ocr import OcrWord
 from .redact import RedactionRect
@@ -234,6 +235,52 @@ class SetOutline(QUndoCommand):
     def undo(self) -> None:
         self._model.outline = list(self._before)
         self._model.outline_changed.emit()
+
+
+class AddAnnotation(QUndoCommand):
+    """Put *annotation* on the page at *index* (written only when saving)."""
+
+    def __init__(self, model: DocumentModel, index: int, annotation: Annotation) -> None:
+        names = {
+            "highlight": QCoreApplication.translate("AddAnnotation", "Evidenzia su pagina {0}"),
+            "underline": QCoreApplication.translate("AddAnnotation", "Sottolinea su pagina {0}"),
+            "strikeout": QCoreApplication.translate("AddAnnotation", "Barra su pagina {0}"),
+            "note": QCoreApplication.translate("AddAnnotation", "Nota su pagina {0}"),
+            "ink": QCoreApplication.translate("AddAnnotation", "Disegno su pagina {0}"),
+        }
+        super().__init__(names[annotation.kind].format(index + 1))
+        self._model = model
+        self._index = index
+        self._annotation = annotation
+
+    def redo(self) -> None:
+        self._model.pages[self._index].annotations.append(self._annotation)
+        self._model.page_changed.emit(self._index)
+
+    def undo(self) -> None:
+        self._model.pages[self._index].annotations.remove(self._annotation)
+        self._model.page_changed.emit(self._index)
+
+
+class RemoveAnnotation(QUndoCommand):
+    """Take *annotation* back off the page at *index*."""
+
+    def __init__(self, model: DocumentModel, index: int, annotation: Annotation) -> None:
+        name = QCoreApplication.translate("RemoveAnnotation", "Togli annotazione su pagina {0}")
+        super().__init__(name.format(index + 1))
+        self._model = model
+        self._index = index
+        self._annotation = annotation
+        # Back in the same place on undo: overlapping marks paint in order.
+        self._position = model.pages[index].annotations.index(annotation)
+
+    def redo(self) -> None:
+        self._model.pages[self._index].annotations.pop(self._position)
+        self._model.page_changed.emit(self._index)
+
+    def undo(self) -> None:
+        self._model.pages[self._index].annotations.insert(self._position, self._annotation)
+        self._model.page_changed.emit(self._index)
 
 
 class AddRedaction(QUndoCommand):

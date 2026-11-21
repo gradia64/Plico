@@ -19,6 +19,12 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
 - **Duplica pagina** (*Modifica → Duplica pagina*, `Ctrl+D`) e **Inserisci
   pagina vuota** (della misura della pagina scelta, dopo di lei): si
   annullano come ogni altra modifica, e la copia si modifica per conto suo.
+- **Annotazioni** (menu *Annota*): Evidenzia (`Ctrl+Shift+H`), Sottolinea
+  (`Ctrl+Shift+U`) e Barra (`Ctrl+Shift+K`) sulle parole trascinate, Nota con
+  un clic e Disegno a mano libera. Restano modificabili fino al salvataggio
+  (un clic con lo strumento acceso le toglie, `Ctrl+Z` le annulla) e poi
+  diventano annotazioni PDF vere; quelle che toccano una zona cancellata
+  vengono eliminate con lei.
 - **Pannello Segnalibri** (*Visualizza → Segnalibri*, una scheda accanto alle
   miniature): mostra l'indice del PDF, porta alla pagina con un clic e
   permette di aggiungere, rinominare, spostare, cambiare livello ed eliminare

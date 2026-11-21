@@ -23,6 +23,7 @@ verändert, solange Sie nicht speichern.</p>
 <li><a href="#find">Suchen</a></li>
 <li><a href="#redact">Daten löschen</a></li>
 <li><a href="#text">Text korrigieren</a></li>
+<li><a href="#annotate">Anmerkungen</a></li>
 <li><a href="#forms">Formulare ausfüllen</a></li>
 <li><a href="#ocr">Den Text eines Scans erkennen</a></li>
 <li><a href="#sign">Signieren und prüfen</a></li>
@@ -177,6 +178,30 @@ ersetzt den alten in derselben Größe und Farbe, und in derselben Schrift, wenn
 sie installiert ist. Gedacht ist das für kurze Korrekturen, eine Zeile nach
 der anderen.</p>
 
+<h2 id="annotate">Anmerkungen</h2>
+
+<p>Das Menü <b>Anmerkungen</b> hat fünf Werkzeuge; es ist immer nur eines
+aktiv, und <code>Esc</code> schaltet es aus.</p>
+
+<ul>
+<li><b>Hervorheben</b> (<code>Strg+Umschalt+H</code>), <b>Unterstreichen</b>
+(<code>Strg+Umschalt+U</code>) und <b>Durchstreichen</b>
+(<code>Strg+Umschalt+K</code>): über die Wörter ziehen; die Markierung wächst
+auf ganze Wörter, Zeile für Zeile.</li>
+<li><b>Notiz</b>: Ein Klick auf die Seite fragt nach dem Text und setzt das
+Symbol einer Notiz. Wenn die Maus auf dem Symbol ruht, erscheint der
+Text.</li>
+<li><b>Freihandzeichnung</b>: ziehen, um eine Linie zu zeichnen.</li>
+</ul>
+
+<p>Bei aktivem Werkzeug entfernt ein Klick auf eine in Plico erstellte
+Anmerkung diese, und alles lässt sich mit <code>Strg+Z</code> rückgängig
+machen. Die Anmerkungen kommen beim Speichern als echte PDF-Anmerkungen in
+die Datei, die Okular, Acrobat und andere Programme anzeigen und bearbeiten
+können. Die Anmerkungen, die die Datei schon hatte, bleiben, wie sie sind.
+Eine Anmerkung, die einen gelöschten Bereich berührt, wird mit dem Bereich
+entfernt.</p>
+
 <h2 id="forms">Formulare ausfüllen</h2>
 
 <p>Ist das PDF ein Formular, sind seine Felder auf der Seite hervorgehoben:
@@ -281,6 +306,9 @@ schlagen trotzdem die echten Ordner vor.</p>
 <tr><td><code>Strg+Umschalt+L</code></td><td>Auswahl löschen</td></tr>
 <tr><td><code>Strg+Umschalt+F</code></td><td>Wort löschen</td></tr>
 <tr><td><code>Strg+Umschalt+T</code></td><td>Text bearbeiten</td></tr>
+<tr><td><code>Strg+Umschalt+H</code></td><td>Hervorheben</td></tr>
+<tr><td><code>Strg+Umschalt+U</code></td><td>Unterstreichen</td></tr>
+<tr><td><code>Strg+Umschalt+K</code></td><td>Durchstreichen</td></tr>
 <tr><td><code>Strg+Umschalt+O</code></td><td>Text erkennen</td></tr>
 <tr><td><code>Strg++</code> / <code>Strg+-</code></td><td>Vergrößern / Verkleinern</td></tr>
 <tr><td><code>Strg+0</code></td><td>An Breite anpassen</td></tr>

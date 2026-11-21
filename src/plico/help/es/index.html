@@ -23,6 +23,7 @@ hasta que guardas.</p>
 <li><a href="#find">Buscar</a></li>
 <li><a href="#redact">Borrar datos</a></li>
 <li><a href="#text">Corregir el texto</a></li>
+<li><a href="#annotate">Anotar</a></li>
 <li><a href="#forms">Rellenar formularios</a></li>
 <li><a href="#ocr">Reconocer el texto de un escaneo</a></li>
 <li><a href="#sign">Firmar y verificar</a></li>
@@ -172,6 +173,28 @@ confirma, <code>Esc</code> cancela. El texto nuevo ocupa el lugar del antiguo
 con el mismo tamaño y color, y con la misma fuente cuando está instalada. Está
 pensado para correcciones breves, una línea cada vez.</p>
 
+<h2 id="annotate">Anotar</h2>
+
+<p>El menú <b>Anotar</b> tiene cinco herramientas; solo una queda activa a
+la vez, y <code>Esc</code> la desactiva.</p>
+
+<ul>
+<li><b>Resaltar</b> (<code>Ctrl+Mayús+H</code>), <b>Subrayar</b>
+(<code>Ctrl+Mayús+U</code>) y <b>Tachar</b> (<code>Ctrl+Mayús+K</code>): se
+arrastra sobre las palabras, y la marca se amplía a palabras enteras, una
+línea a la vez.</li>
+<li><b>Nota</b>: un clic en la página pide el texto y deja el icono de una
+nota. Al pasar el ratón sobre el icono se lee el texto.</li>
+<li><b>Dibujo a mano alzada</b>: se arrastra para trazar una línea.</li>
+</ul>
+
+<p>Con una herramienta activa, un clic en una anotación hecha en Plico la
+quita, y todo se deshace con <code>Ctrl+Z</code>. Las anotaciones entran en el
+archivo al guardar, como anotaciones PDF reales que Okular, Acrobat y los
+demás lectores muestran y pueden modificar. Las que el archivo ya tenía se
+quedan como están. Una anotación que toca una zona borrada se elimina con la
+zona.</p>
+
 <h2 id="forms">Rellenar formularios</h2>
 
 <p>Si el PDF es un formulario, sus campos aparecen resaltados en la página:
@@ -271,6 +294,9 @@ reales.</p>
 <tr><td><code>Ctrl+Mayús+L</code></td><td>Borrar selección</td></tr>
 <tr><td><code>Ctrl+Mayús+F</code></td><td>Borrar palabra</td></tr>
 <tr><td><code>Ctrl+Mayús+T</code></td><td>Editar texto</td></tr>
+<tr><td><code>Ctrl+Mayús+H</code></td><td>Resaltar</td></tr>
+<tr><td><code>Ctrl+Mayús+U</code></td><td>Subrayar</td></tr>
+<tr><td><code>Ctrl+Mayús+K</code></td><td>Tachar</td></tr>
 <tr><td><code>Ctrl+Mayús+O</code></td><td>Reconocer texto</td></tr>
 <tr><td><code>Ctrl++</code> / <code>Ctrl+-</code></td><td>Ampliar / Reducir</td></tr>
 <tr><td><code>Ctrl+0</code></td><td>Ajustar al ancho</td></tr>

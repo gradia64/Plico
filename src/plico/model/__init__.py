@@ -1,4 +1,6 @@
+from .annotate import Annotation
 from .commands import (
+    AddAnnotation,
     AddRedaction,
     AdjustRedaction,
     AppendDocument,
@@ -8,6 +10,7 @@ from .commands import (
     InsertPage,
     MovePage,
     OcrPage,
+    RemoveAnnotation,
     RemoveRedaction,
     RotatePage,
     SetFieldValue,
@@ -65,8 +68,10 @@ __all__ = [
     "IMAGE_SUFFIXES",
     "LEVELS",
     "LEVELS_BY_KEY",
+    "AddAnnotation",
     "AddRedaction",
     "AdjustRedaction",
+    "Annotation",
     "AppendDocument",
     "Bookmark",
     "CompressionLevel",
@@ -87,6 +92,7 @@ __all__ = [
     "PageItem",
     "PasswordRequired",
     "RedactionRect",
+    "RemoveAnnotation",
     "RemoveRedaction",
     "RotatePage",
     "SetFieldValue",

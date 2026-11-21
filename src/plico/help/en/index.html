@@ -23,6 +23,7 @@ save.</p>
 <li><a href="#find">Finding</a></li>
 <li><a href="#redact">Erasing data</a></li>
 <li><a href="#text">Correcting text</a></li>
+<li><a href="#annotate">Annotating</a></li>
 <li><a href="#forms">Filling in forms</a></li>
 <li><a href="#ocr">Recognizing the text of a scan</a></li>
 <li><a href="#sign">Signing and verifying</a></li>
@@ -167,6 +168,27 @@ opens it in a small editor over the page. <code>Enter</code> confirms,
 same size and colour, and with the same font when it is installed. It is meant
 for short corrections, one line at a time.</p>
 
+<h2 id="annotate">Annotating</h2>
+
+<p>The <b>Annotate</b> menu has five tools; one stays on at a time, and
+<code>Esc</code> turns it off.</p>
+
+<ul>
+<li><b>Highlight</b> (<code>Ctrl+Shift+H</code>), <b>Underline</b>
+(<code>Ctrl+Shift+U</code>) and <b>Strike Out</b> (<code>Ctrl+Shift+K</code>):
+drag over the words, and the mark grows to whole words, one line at a
+time.</li>
+<li><b>Note</b>: a click on the page asks for the text and leaves a note icon.
+Resting the mouse on the icon shows the text.</li>
+<li><b>Freehand Drawing</b>: drag to draw a line.</li>
+</ul>
+
+<p>With a tool on, a click on an annotation made in Plico removes it, and
+everything undoes with <code>Ctrl+Z</code>. Annotations go into the file when
+you save, as real PDF annotations that Okular, Acrobat and other readers show
+and can edit. The ones the file already had stay as they are. An annotation
+that touches an erased area is deleted with the area.</p>
+
 <h2 id="forms">Filling in forms</h2>
 
 <p>If the PDF is a form, its fields are highlighted on the page: a click on a
@@ -264,6 +286,9 @@ protection, not a limit: the dialogs still offer the real folders.</p>
 <tr><td><code>Ctrl+Shift+L</code></td><td>Erase selection</td></tr>
 <tr><td><code>Ctrl+Shift+F</code></td><td>Erase word</td></tr>
 <tr><td><code>Ctrl+Shift+T</code></td><td>Edit text</td></tr>
+<tr><td><code>Ctrl+Shift+H</code></td><td>Highlight</td></tr>
+<tr><td><code>Ctrl+Shift+U</code></td><td>Underline</td></tr>
+<tr><td><code>Ctrl+Shift+K</code></td><td>Strike out</td></tr>
 <tr><td><code>Ctrl+Shift+O</code></td><td>Recognize text</td></tr>
 <tr><td><code>Ctrl++</code> / <code>Ctrl+-</code></td><td>Zoom In / Zoom Out</td></tr>
 <tr><td><code>Ctrl+0</code></td><td>Fit to width</td></tr>

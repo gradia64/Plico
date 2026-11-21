@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 import pymupdf
 from PySide6.QtCore import QCoreApplication, QObject, Signal
 
+from .annotate import Annotation
 from .forms import Field, read_fields
 from .ocr import DEFAULT_DPI, OcrWord, recognise
 from .redact import (
@@ -113,6 +114,9 @@ class PageItem:
     # empty list means "nothing was read", which is also what a page that was
     # never OCR'd carries.
     ocr_words: list[OcrWord] = field(default_factory=list)
+    # Annotations made in Plico (highlights, notes, ink), in PAGE space. The
+    # ones already in the file belong to the source page and are not here.
+    annotations: list[Annotation] = field(default_factory=list)
 
     def edit_for(self, span: TextSpan) -> TextEdit | None:
         """The planned replacement of *span*, if there is one."""

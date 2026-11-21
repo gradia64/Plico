@@ -21,12 +21,18 @@ Komprimieren nutzt.
 <p align="center">
   <img src="flatpak/screenshots/form.png" alt="Formular ausfüllen" width="32%" />
   <img src="flatpak/screenshots/search.png" alt="Suche im Dokument" width="32%" />
+  <img src="flatpak/screenshots/annotate.png" alt="Anmerkungen" width="32%" />
 </p>
 
 ## Funktionen
 
 - **Seiten drehen, löschen, neu anordnen** (Drag & Drop in der
   Miniaturleiste), **duplizieren** (`Ctrl+D`) und **leere Seiten einfügen**
+- **Anmerken** (Menü _Anmerkungen_): Text hervorheben, unterstreichen und
+  durchstreichen (die Markierung wächst auf ganze Wörter), Notizen hinzufügen
+  und freihand zeichnen. Alles lässt sich wie jede Änderung rückgängig machen
+  und wird beim Speichern zu echten PDF-Anmerkungen, die andere Programme
+  anzeigen und bearbeiten
 - **Lesezeichen** (_Ansicht → Lesezeichen_, ein Reiter neben den Miniaturen):
   das Inhaltsverzeichnis des PDFs lesen, per Klick zur Seite springen und
   Einträge hinzufügen, umbenennen, verschieben, verschachteln und löschen.

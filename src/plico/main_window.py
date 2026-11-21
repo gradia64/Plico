@@ -51,6 +51,7 @@ from PySide6.QtWidgets import (
 from . import __version__, preferences, updates
 from .model import (
     IMAGE_SUFFIXES,
+    AddAnnotation,
     AddRedaction,
     AdjustRedaction,
     AppendDocument,
@@ -68,6 +69,7 @@ from .model import (
     PageItem,
     PasswordRequired,
     RedactionRect,
+    RemoveAnnotation,
     RemoveRedaction,
     RotatePage,
     SetFieldValue,
@@ -83,6 +85,7 @@ from .model import (
     save_signed,
     sign_copy,
 )
+from .model.annotate import HIGHLIGHT, INK, NOTE, STRIKEOUT, UNDERLINE, Annotation
 from .model.save import (
     AUTOMATIC,
     Protection,
@@ -280,6 +283,8 @@ class MainWindow(QMainWindow):
         self._page_view.selection_made.connect(self._add_selection)
         self._page_view.text_edited.connect(self._on_text_edited)
         self._page_view.text_edit_refused.connect(self._status.setText)
+        self._page_view.annotation_added.connect(self._add_annotation)
+        self._page_view.annotation_removed.connect(self._remove_annotation)
         dock = QDockWidget(self.tr("Miniature"), self)
         dock.setObjectName("thumbnail_dock")
         dock.setWidget(self._thumb_bar)
@@ -602,6 +607,8 @@ class MainWindow(QMainWindow):
         self._escape_act.triggered.connect(self._leave_tools)
         self.addAction(self._escape_act)
 
+        self._setup_annotate_menu(menubar)
+
         view_menu = menubar.addMenu(self.tr("&Visualizza"))
 
         self._fit_act = self._act(
@@ -626,6 +633,77 @@ class MainWindow(QMainWindow):
         bookmarks_act = self._bookmarks_dock.toggleViewAction()
         bookmarks_act.setText(self.tr("&Segnalibri"))
         view_menu.addAction(bookmarks_act)
+
+    def _setup_annotate_menu(self, menubar) -> None:
+        """Annota: five tools, at most one on, and never with another tool."""
+        menu = menubar.addMenu(self.tr("A&nnota"))
+        self._annotate_acts: dict[str, QAction] = {}
+        undo_tip = self.tr("Un clic su un'annotazione la toglie. Entra nel file al salvataggio.")
+        for kind, text, icon, shortcut, tip in (
+            (HIGHLIGHT, self.tr("&Evidenzia"), "format-text-highlight", "Ctrl+Shift+H",
+             self.tr("Trascina sulle parole da evidenziare.")),
+            (UNDERLINE, self.tr("&Sottolinea"), "format-text-underline", "Ctrl+Shift+U",
+             self.tr("Trascina sulle parole da sottolineare.")),
+            (STRIKEOUT, self.tr("&Barra"), "format-text-strikethrough", "Ctrl+Shift+K",
+             self.tr("Trascina sulle parole da barrare.")),
+            (NOTE, self.tr("&Nota"), "note", "",
+             self.tr("Clic sulla pagina per aggiungere una nota.")),
+            (INK, self.tr("&Disegno a mano libera"), "draw-freehand", "",
+             self.tr("Trascina per disegnare sulla pagina.")),
+        ):
+            action = self._act(
+                text, icon, shortcut, lambda on, k=kind: self._on_annotate_toggled(k, on)
+            )
+            action.setCheckable(True)
+            action.setToolTip(tip + "\n" + undo_tip)
+            menu.addAction(action)
+            self._annotate_acts[kind] = action
+
+    def _annotation_tool_on(self) -> bool:
+        return self._page_view.annotation_tool() is not None
+
+    def _leave_annotation_tool(self) -> None:
+        for action in self._annotate_acts.values():
+            action.setChecked(False)
+        self._page_view.set_annotation_tool(None)
+
+    def _on_annotate_toggled(self, kind: str, active: bool) -> None:
+        """Enter or leave an annotation tool."""
+        if active and not self._doc_model.sources:
+            self._annotate_acts[kind].setChecked(False)
+            QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
+            return
+        if not active:
+            if self._page_view.annotation_tool() == kind:
+                self._page_view.set_annotation_tool(None)
+                self._status.setText(self.tr("Pronto"))
+            return
+        # One tool at a time: the next drag must mean one thing only.
+        for other, action in self._annotate_acts.items():
+            if other != kind:
+                action.setChecked(False)
+        if self._text_act.isChecked():
+            self._text_act.setChecked(False)
+            self._page_view.set_text_mode(False)
+        if self._redact_act.isChecked():
+            self._redact_act.setChecked(False)
+            self._page_view.set_redaction_mode(False)
+        if self._select_act.isChecked():
+            self._select_act.setChecked(False)
+            self._page_view.set_selection_mode(False)
+        self._page_view.set_annotation_tool(kind)
+        self._status.setText(
+            self._annotate_acts[kind].toolTip().replace("\n", " ")
+        )
+
+    def _add_annotation(self, index: int, annotation: Annotation) -> None:
+        if 0 <= index < self._doc_model.page_count:
+            self._undo_stack.push(AddAnnotation(self._doc_model, index, annotation))
+
+    def _remove_annotation(self, index: int, annotation: Annotation) -> None:
+        pages = self._doc_model.pages
+        if 0 <= index < len(pages) and annotation in pages[index].annotations:
+            self._undo_stack.push(RemoveAnnotation(self._doc_model, index, annotation))
 
     def _tabify_bookmarks(self) -> None:
         """Put «Segnalibri» behind «Miniature», as a tab of the same dock."""
@@ -842,6 +920,7 @@ class MainWindow(QMainWindow):
         self._on_selection_toggled(False)
         self._text_act.setChecked(False)
         self._page_view.set_text_mode(False)
+        self._leave_annotation_tool()
         self._refresh_form_panel(0)
         self._save_target = path
         self._save_suggestion = None
@@ -888,6 +967,7 @@ class MainWindow(QMainWindow):
         self._on_selection_toggled(False)
         self._text_act.setChecked(False)
         self._page_view.set_text_mode(False)
+        self._leave_annotation_tool()
         self._undo_stack.clear()
         self._doc_model.close()
         self._thumbnail_cache.clear()
@@ -2135,6 +2215,8 @@ class MainWindow(QMainWindow):
             self._redact_act.setChecked(False)
             QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
             return
+        if active and self._annotation_tool_on():
+            self._leave_annotation_tool()
         if active and self._text_act.isChecked():
             self._text_act.setChecked(False)
             self._page_view.set_text_mode(False)
@@ -2155,6 +2237,8 @@ class MainWindow(QMainWindow):
             self._select_act.setChecked(False)
             QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
             return
+        if active and self._annotation_tool_on():
+            self._leave_annotation_tool()
         if active and self._text_act.isChecked():
             self._text_act.setChecked(False)
             self._page_view.set_text_mode(False)
@@ -2207,6 +2291,7 @@ class MainWindow(QMainWindow):
             self._redact_act.isChecked()
             or self._select_act.isChecked()
             or self._text_act.isChecked()
+            or self._annotation_tool_on()
         ):
             self._find_bar.close_bar()
             return
@@ -2219,6 +2304,9 @@ class MainWindow(QMainWindow):
         if self._text_act.isChecked():
             self._text_act.setChecked(False)
             self._on_text_mode_toggled(False)
+        if self._annotation_tool_on():
+            self._leave_annotation_tool()
+            self._status.setText(self.tr("Pronto"))
 
     # ------------------------------------------------------------------ #
     #  Search (Ctrl+F)
@@ -2303,6 +2391,8 @@ class MainWindow(QMainWindow):
             self._text_act.setChecked(False)
             QMessageBox.warning(self, self.tr("Attenzione"), self.tr("Nessun documento aperto."))
             return
+        if active and self._annotation_tool_on():
+            self._leave_annotation_tool()
         if active and self._redact_act.isChecked():
             self._redact_act.setChecked(False)
             self._page_view.set_redaction_mode(False)

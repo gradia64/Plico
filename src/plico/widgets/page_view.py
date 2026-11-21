@@ -27,6 +27,7 @@ from PySide6.QtGui import (
     QFont,
     QFontMetricsF,
     QPainter,
+    QPainterPath,
     QPen,
     QPixmap,
     QTransform,
@@ -41,6 +42,20 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..model.annotate import (
+    HIGHLIGHT,
+    INK,
+    INK_WIDTH,
+    MARKUP,
+    MAX_INK_POINTS,
+    MAX_NOTE_TEXT,
+    NOTE,
+    NOTE_SIZE,
+    STRIKEOUT,
+    UNDERLINE,
+    Annotation,
+    lines_of,
+)
 from ..model.document import PageItem
 from ..model.forms import CHECKBOX, CHECKED, RADIO, TEXT, UNCHECKED, Field
 from ..model.redact import RedactionRect, map_point, map_rect
@@ -213,6 +228,8 @@ class _PageLabel(QLabel):
         # rotation) may sample differently, and toImage() is too costly to
         # run on every repaint.
         self._backgrounds: dict[tuple[TextSpan, tuple | None], QColor] = {}
+        # The freehand stroke being drawn, in widget pixels.
+        self._stroke: list[QPointF] | None = None
 
     # -- coordinates ---------------------------------------------------- #
 
@@ -267,6 +284,8 @@ class _PageLabel(QLabel):
         # Text edits are always painted: the page must read the way it will
         # be saved, tool or no tool.
         self._paint_text_edits(painter)
+        # Annotations too: they are part of the page as it will be saved.
+        self._paint_annotations(painter)
         self._paint_search(painter)
         if self._view.redaction_mode():
             self._paint_redactions(painter)
@@ -392,6 +411,102 @@ class _PageLabel(QLabel):
                 painter.setBrush(QBrush(SEARCH_HIT))
                 painter.drawRect(area)
         painter.restore()
+
+    def _paint_annotations(self, painter: QPainter) -> None:
+        canvas = self.canvas
+        assert canvas is not None
+        for annotation in canvas.item.annotations:
+            self._paint_annotation(painter, annotation)
+        tool = self._view.annotation_tool()
+        if tool in MARKUP and self._drag_from is not None and self._drag_to is not None:
+            # What the drag will mark: whole words, joined by line.
+            area = QRectF(self._drag_from, self._drag_to).normalized()
+            top_left = self._to_page(area.topLeft())
+            bottom_right = self._to_page(area.bottomRight())
+            words = self._view.words_under(canvas, *top_left, *bottom_right, fresh=False)
+            if words:
+                self._paint_annotation(painter, Annotation(tool, rects=lines_of(words)))
+        if tool == INK and self._stroke and len(self._stroke) > 1:
+            color = QColor.fromRgbF(*Annotation(INK).color)
+            pen = QPen(color, INK_WIDTH * self._scale())
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawPolyline(self._stroke)
+
+    def _paint_annotation(self, painter: QPainter, annotation: Annotation) -> None:
+        """One annotation, drawn the way a PDF reader will draw it once saved."""
+        color = QColor.fromRgbF(*annotation.color)
+        painter.save()
+        if annotation.kind == HIGHLIGHT:
+            color.setAlphaF(0.45)
+            painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Multiply)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(color))
+            for rect in annotation.rects:
+                painter.drawRect(self._to_pixels(rect))
+        elif annotation.kind in (UNDERLINE, STRIKEOUT):
+            # Drawn in page space, so a line under the words stays under them
+            # on a turned page.
+            painter.setTransform(self._page_transform(), True)
+            for rect in annotation.rects:
+                height = rect.y1 - rect.y0
+                pen = QPen(color, max(0.5, height * 0.07))
+                pen.setCosmetic(False)
+                painter.setPen(pen)
+                middle = (rect.y0 + rect.y1) / 2
+                y = rect.y1 - height * 0.08 if annotation.kind == UNDERLINE else middle
+                painter.drawLine(QPointF(rect.x0, y), QPointF(rect.x1, y))
+        elif annotation.kind == INK and len(annotation.points) > 1:
+            painter.setTransform(self._page_transform(), True)
+            pen = QPen(color, INK_WIDTH)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            path = QPainterPath(QPointF(*annotation.points[0]))
+            for point in annotation.points[1:]:
+                path.lineTo(QPointF(*point))
+            painter.drawPath(path)
+        elif annotation.kind == NOTE:
+            # An upright sticky note, whatever the page's rotation: the icon
+            # PDF readers draw is upright too.
+            area = self._to_pixels(annotation.bounds())
+            painter.setPen(QPen(color.darker(160), 1))
+            painter.setBrush(QBrush(color))
+            painter.drawRoundedRect(area, 2, 2)
+            painter.setPen(QPen(color.darker(220), max(1.0, area.height() / 12)))
+            for step in (0.3, 0.5, 0.7):
+                y = area.top() + area.height() * step
+                painter.drawLine(
+                    QPointF(area.left() + area.width() * 0.2, y),
+                    QPointF(area.right() - area.width() * 0.2, y),
+                )
+        painter.restore()
+
+    def annotation_at(self, point: QPointF) -> Annotation | None:
+        """The annotation made in Plico under the widget point, topmost first."""
+        canvas = self.canvas
+        if canvas is None:
+            return None
+        x, y = self._to_page(point)
+        slop = CLICK_SLOP / self._scale()
+        for annotation in reversed(canvas.item.annotations):
+            if annotation.hit(x, y, slop):
+                return annotation
+        return None
+
+    def event(self, event) -> bool:
+        # A note says what it holds when the mouse rests on it, tool or no tool.
+        if event.type() == QEvent.Type.ToolTip and self.canvas is not None:
+            annotation = self.annotation_at(QPointF(event.pos()))
+            if annotation is not None and annotation.kind == NOTE:
+                from PySide6.QtWidgets import QToolTip
+
+                QToolTip.showText(event.globalPos(), annotation.text, self)
+                return True
+        return super().event(event)
 
     def _paint_redactions(self, painter: QPainter) -> None:
         canvas = self.canvas
@@ -539,6 +654,13 @@ class _PageLabel(QLabel):
         if event.button() != Qt.MouseButton.LeftButton:
             super().mousePressEvent(event)
             return
+        if self._view.annotation_tool() is not None:
+            self._drag_from = event.position()
+            self._drag_to = self._drag_from
+            if self._view.annotation_tool() == INK:
+                self._stroke = [event.position()]
+            self.update()
+            return
         if self._view.text_mode():
             canvas = self.canvas
             if canvas is not None:
@@ -570,6 +692,10 @@ class _PageLabel(QLabel):
             super().mouseMoveEvent(event)
             return
         self._drag_to = event.position()
+        if self._stroke is not None:
+            last = self._stroke[-1]
+            if (event.position() - last).manhattanLength() >= 1.0:
+                self._stroke.append(event.position())
         if self._adjust is not None:
             self._move_mark(event.position())
         self.update()
@@ -635,6 +761,9 @@ class _PageLabel(QLabel):
             return
         start = self._drag_from
         end = event.position()
+        if self._view.annotation_tool() is not None:
+            self._release_annotation(start, end)
+            return
         if self._adjust is not None:
             position, corner, before, _start = self._adjust
             canvas = self.canvas
@@ -677,6 +806,36 @@ class _PageLabel(QLabel):
             return
         self._view.commit_redaction(canvas, *self._to_page(start), *self._to_page(end))
 
+    def _release_annotation(self, start: QPointF, end: QPointF) -> None:
+        """The end of a gesture with an annotation tool.
+
+        A click on an annotation made in Plico takes it back, like a click on
+        a redaction; a click elsewhere places a note. A drag marks the words
+        it covered, or draws the stroke.
+        """
+        tool = self._view.annotation_tool()
+        stroke = self._stroke or []
+        self.forget_drag()
+        self.update()
+        canvas = self.canvas
+        assert canvas is not None
+        if (end - start).manhattanLength() < CLICK_SLOP:
+            hit = self.annotation_at(end)
+            if hit is not None:
+                self._view.forget_annotation(canvas, hit)
+            elif tool == NOTE:
+                self._view.commit_note(canvas, *self._to_page(end))
+            return
+        if tool in MARKUP:
+            self._view.commit_markup(canvas, *self._to_page(start), *self._to_page(end))
+        elif tool == INK:
+            width, height = canvas.item.unrotated_size
+            points = []
+            for point in stroke:
+                x, y = self._to_page(point)
+                points.append((min(max(x, 0.0), width), min(max(y, 0.0), height)))
+            self._view.commit_ink(canvas, points)
+
     def forget_drag(self) -> None:
         """Drop the rectangle being dragged, if any (a tool was left).
 
@@ -692,6 +851,7 @@ class _PageLabel(QLabel):
         self._adjust = None
         self._drag_from = None
         self._drag_to = None
+        self._stroke = None
 
 
 @dataclass
@@ -744,6 +904,10 @@ class PageView(QScrollArea):
     # Why the text tool did nothing: a correction the save could not write,
     # or a click that found no editable text. Shown in the status bar.
     text_edit_refused = Signal(str)
+    # (page index, Annotation in page space): a highlight, a stroke or a note
+    # made with an annotation tool; and one taken back with a click.
+    annotation_added = Signal(int, object)
+    annotation_removed = Signal(int, object)
 
     def __init__(self, worker, model=None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -767,6 +931,8 @@ class PageView(QScrollArea):
         self._search_current: tuple[int, int] | None = None
         self._selection_mode = False
         self._text_mode = False
+        # The annotation tool on (a kind from model.annotate), or None.
+        self._annotation_tool: str | None = None
         # The editor open over a span, and which span of which page it edits.
         self._editor: _SpanEditor | None = None
         self._editing: tuple[_Canvas, TextSpan] | None = None
@@ -897,6 +1063,12 @@ class PageView(QScrollArea):
         return h_pt, w_pt
 
     def _tool_cursor(self) -> Qt.CursorShape:
+        if self._annotation_tool in MARKUP:
+            return Qt.CursorShape.IBeamCursor
+        if self._annotation_tool == INK:
+            return Qt.CursorShape.CrossCursor
+        if self._annotation_tool == NOTE:
+            return Qt.CursorShape.PointingHandCursor
         if self._text_mode or self._selection_mode:
             return Qt.CursorShape.IBeamCursor
         if self._redaction_mode:
@@ -1355,7 +1527,13 @@ class PageView(QScrollArea):
         return canvas.words or []
 
     def words_under(
-        self, canvas: _Canvas, x0: float, y0: float, x1: float, y1: float
+        self,
+        canvas: _Canvas,
+        x0: float,
+        y0: float,
+        x1: float,
+        y1: float,
+        fresh: bool = True,
     ) -> list[RedactionRect]:
         """The words a page-space rectangle covers, as redaction rectangles.
 
@@ -1372,12 +1550,12 @@ class PageView(QScrollArea):
             for word in self.page_words(canvas)
             if word.x0 < rect.x1 and rect.x0 < word.x1 and word.y0 < rect.y1 and rect.y0 < word.y1
         ]
-        if self._model is None:
+        if self._model is None or not fresh:
             return covered
         # A word already marked would only add a second rectangle on the same
         # spot: one more undo step for a mark that changes nothing.
-        fresh: list[RedactionRect] = self._model.unmarked(canvas.index, covered)
-        return fresh
+        unmarked: list[RedactionRect] = self._model.unmarked(canvas.index, covered)
+        return unmarked
 
     def commit_selection(
         self, canvas: _Canvas, x0: float, y0: float, x1: float, y1: float
@@ -1395,6 +1573,77 @@ class PageView(QScrollArea):
     def forget_redaction(self, canvas: _Canvas, rect: RedactionRect) -> None:
         """Ask for *rect* to be taken back off *canvas*."""
         self.redaction_removed.emit(canvas.index, rect)
+
+    # ------------------------------------------------------------------ #
+    #  Annotations
+    # ------------------------------------------------------------------ #
+
+    def annotation_tool(self) -> str | None:
+        """The annotation tool on (highlight, underline, …), or None."""
+        return self._annotation_tool
+
+    def set_annotation_tool(self, kind: str | None) -> None:
+        """Turn an annotation tool on, or every one of them off."""
+        self._annotation_tool = kind
+        self._commit_field_edit()
+        cursor = self._tool_cursor()
+        for c in self._canvases:
+            c.label.setCursor(cursor)
+            c.label.forget_drag()
+            c.label.update()
+
+    def commit_markup(
+        self, canvas: _Canvas, x0: float, y0: float, x1: float, y1: float
+    ) -> None:
+        """A drag with a markup tool: report the lines of words it covered."""
+        kind = self._annotation_tool
+        if kind not in MARKUP:
+            return
+        words = self.words_under(canvas, x0, y0, x1, y1, fresh=False)
+        if not words:
+            self.text_edit_refused.emit(
+                QCoreApplication.translate("PageView", "Nessuna parola nella selezione.")
+            )
+            return
+        self.annotation_added.emit(canvas.index, Annotation(kind, rects=lines_of(words)))
+
+    def commit_ink(self, canvas: _Canvas, points: list[tuple[float, float]]) -> None:
+        """A freehand stroke, in page space."""
+        if len(points) < 2:
+            return
+        if len(points) > MAX_INK_POINTS:
+            step = len(points) / MAX_INK_POINTS
+            points = [points[int(i * step)] for i in range(MAX_INK_POINTS - 1)] + [points[-1]]
+        stroke = tuple((round(x, 2), round(y, 2)) for x, y in points)
+        self.annotation_added.emit(canvas.index, Annotation(INK, points=stroke))
+
+    def commit_note(self, canvas: _Canvas, x: float, y: float) -> None:
+        """A click with the note tool: ask what the note says, then report it."""
+        text = self.ask_note_text()
+        if text is None:
+            return
+        width, height = canvas.item.unrotated_size
+        half = NOTE_SIZE / 2
+        # The whole icon on the page: a note half off the edge cannot be clicked.
+        x = min(max(x, half), max(half, width - half))
+        y = min(max(y, half), max(half, height - half))
+        self.annotation_added.emit(canvas.index, Annotation(NOTE, at=(x, y), text=text))
+
+    def ask_note_text(self) -> str | None:
+        """The text of a new note, or None if the user cancelled (tests replace it)."""
+        from PySide6.QtWidgets import QInputDialog
+
+        text, accepted = QInputDialog.getMultiLineText(
+            self,
+            QCoreApplication.translate("PageView", "Nota"),
+            QCoreApplication.translate("PageView", "Testo della nota:"),
+        )
+        text = text.strip()[:MAX_NOTE_TEXT]
+        return text if accepted and text else None
+
+    def forget_annotation(self, canvas: _Canvas, annotation: Annotation) -> None:
+        """Ask for *annotation* to be taken back off *canvas*."""
+        self.annotation_removed.emit(canvas.index, annotation)
 
     # ------------------------------------------------------------------ #
     #  Text editing

@@ -23,6 +23,7 @@ non salvi.</p>
 <li><a href="#find">Trovare</a></li>
 <li><a href="#redact">Cancellare i dati</a></li>
 <li><a href="#text">Correggere il testo</a></li>
+<li><a href="#annotate">Annotare</a></li>
 <li><a href="#forms">Compilare i moduli</a></li>
 <li><a href="#ocr">Riconoscere il testo di una scansione</a></li>
 <li><a href="#sign">Firmare e verificare</a></li>
@@ -169,6 +170,28 @@ conferma, <code>Esc</code> annulla. Il testo nuovo prende il posto del vecchio
 con lo stesso corpo e lo stesso colore, e con lo stesso font quando è
 installato. È pensato per correzioni brevi, una riga alla volta.</p>
 
+<h2 id="annotate">Annotare</h2>
+
+<p>Il menu <b>Annota</b> ha cinque strumenti; ne resta acceso uno alla volta
+ed <code>Esc</code> lo spegne.</p>
+
+<ul>
+<li><b>Evidenzia</b> (<code>Ctrl+Shift+H</code>), <b>Sottolinea</b>
+(<code>Ctrl+Shift+U</code>) e <b>Barra</b> (<code>Ctrl+Shift+K</code>): si
+trascina sulle parole, e il segno si allarga alle parole intere, una riga
+alla volta.</li>
+<li><b>Nota</b>: un clic sulla pagina chiede il testo e lascia l'icona di una
+nota. Passando col mouse sull'icona si legge il testo.</li>
+<li><b>Disegno a mano libera</b>: si trascina per tracciare una linea.</li>
+</ul>
+
+<p>Con uno strumento acceso, un clic su un'annotazione fatta in Plico la
+toglie, e tutto si annulla con <code>Ctrl+Z</code>. Le annotazioni entrano nel
+file al salvataggio come annotazioni PDF vere, che Okular, Acrobat e gli altri
+lettori mostrano e possono modificare. Quelle che il file aveva già restano
+come sono. Un'annotazione che tocca una zona cancellata viene eliminata con
+la zona.</p>
+
 <h2 id="forms">Compilare i moduli</h2>
 
 <p>Se il PDF è un modulo, i campi sono evidenziati sulla pagina: un clic su un
@@ -269,6 +292,9 @@ protezione, non un limite: i dialoghi propongono comunque le cartelle vere.</p>
 <tr><td><code>Ctrl+Shift+L</code></td><td>Cancella selezione</td></tr>
 <tr><td><code>Ctrl+Shift+F</code></td><td>Cancella parola</td></tr>
 <tr><td><code>Ctrl+Shift+T</code></td><td>Modifica testo</td></tr>
+<tr><td><code>Ctrl+Shift+H</code></td><td>Evidenzia</td></tr>
+<tr><td><code>Ctrl+Shift+U</code></td><td>Sottolinea</td></tr>
+<tr><td><code>Ctrl+Shift+K</code></td><td>Barra</td></tr>
 <tr><td><code>Ctrl+Shift+O</code></td><td>Riconosci testo</td></tr>
 <tr><td><code>Ctrl++</code> / <code>Ctrl+-</code></td><td>Zoom avanti / Zoom indietro</td></tr>
 <tr><td><code>Ctrl+0</code></td><td>Adatta alla larghezza</td></tr>

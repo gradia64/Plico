@@ -20,12 +20,17 @@ A true native PDF editor for Linux, built with **Qt6** and **PySide6**, using
 <p align="center">
   <img src="flatpak/screenshots/form.png" alt="Filling a form" width="32%" />
   <img src="flatpak/screenshots/search.png" alt="Search in the document" width="32%" />
+  <img src="flatpak/screenshots/annotate.png" alt="Annotations" width="32%" />
 </p>
 
 ## Features
 
 - **Rotate, delete, reorder** pages (drag & drop in the thumbnail bar),
   **duplicate** them (`Ctrl+D`) and **insert blank pages**
+- **Annotate** (_Annotate_ menu): highlight, underline and strike out text
+  (the mark grows to whole words), add notes and draw freehand. They undo
+  like any other change, and on saving they become real PDF annotations that
+  other readers show and edit
 - **Bookmarks** (_View → Bookmarks_, a tab next to the thumbnails): read the
   PDF's outline, click to jump to a page, and add, rename, move, nest and
   delete entries. Every edit undoes with `Ctrl+Z`, and saving writes the

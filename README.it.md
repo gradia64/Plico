@@ -21,12 +21,17 @@ comprimerli.
 <p align="center">
   <img src="flatpak/screenshots/form.png" alt="Compilazione di un form" width="32%" />
   <img src="flatpak/screenshots/search.png" alt="Ricerca nel documento" width="32%" />
+  <img src="flatpak/screenshots/annotate.png" alt="Annotazioni" width="32%" />
 </p>
 
 ## Caratteristiche
 
 - **Ruotare, eliminare, riordinare** pagine (drag & drop nella barra miniature),
   **duplicarle** (`Ctrl+D`) e **inserire pagine vuote**
+- **Annotare** (menu *Annota*): evidenziare, sottolineare e barrare il
+  testo (il segno si allarga alle parole intere), aggiungere note e disegnare
+  a mano libera. Si annullano come ogni modifica e al salvataggio diventano
+  annotazioni PDF vere, che gli altri lettori mostrano e modificano
 - **Segnalibri** (*Visualizza → Segnalibri*, una scheda accanto alle
   miniature): l'indice del PDF si legge, un clic porta alla pagina, e si
   aggiungono, rinominano, spostano, annidano ed eliminano voci. Ogni modifica

@@ -94,6 +94,15 @@ def report(path: Path) -> None:
             page.insert_htmlbox(pymupdf.Rect(60, 60, 535, 790), html)
             if index == 1:
                 _chart(page, 330)
+        # An outline, as an office suite exports one: it fills «Bookmarks».
+        doc.set_toc([
+            [1, "Annual Report 2026", 1],
+            [2, "1. Summary", 1],
+            [2, "2. Key figures", 1],
+            [2, "3. Contact", 1],
+            [2, "4. Warehouses", 2],
+            [2, "5. Outlook", 3],
+        ])
         doc.save(path)
 
 
@@ -262,7 +271,40 @@ def main() -> None:
         mw.shutdown_worker()
         mw.deleteLater()
 
-        # 5. Ctrl+F: every match highlighted, the current one in orange.
+        # 5. Annotations, with the outline in the side bar.
+        import math
+
+        from plico.model.annotate import HIGHLIGHT, INK, NOTE, UNDERLINE, Annotation, lines_of
+        from plico.model.commands import AddAnnotation
+
+        mw = window(app, scratch / "settings")
+        mw.open_document(str(scratch / "annual-report-2026.pdf"))
+        model = mw._doc_model
+        for kind, text in ((HIGHLIGHT, "4.2 million"), (UNDERLINE, "margin improved")):
+            rects = model.find_text(text)[0]
+            mw._undo_stack.push(AddAnnotation(model, 0, Annotation(kind, rects=lines_of(rects))))
+        figure = model.find_text("2,115")[0][0]
+        cx, cy = (figure.x0 + figure.x1) / 2, (figure.y0 + figure.y1) / 2
+        rx, ry = (figure.x1 - figure.x0) / 2 + 14, (figure.y1 - figure.y0) / 2 + 7
+        ring = tuple(
+            (cx + rx * math.cos(t / 40 * 2.2 * math.pi), cy + ry * math.sin(t / 40 * 2.2 * math.pi))
+            for t in range(41)
+        )
+        mw._undo_stack.push(AddAnnotation(model, 0, Annotation(INK, points=ring)))
+        note = Annotation(NOTE, at=(figure.x1 + 45, cy), text="Check against the register")
+        mw._undo_stack.push(AddAnnotation(model, 0, note))
+        mw._annotate_acts[HIGHLIGHT].setChecked(True)
+        mw._on_annotate_toggled(HIGHLIGHT, True)
+        mw._bookmarks_dock.raise_()
+        mw._page_view.set_zoom_fit_width()
+        pump(app, 0.3)
+        mw._page_view.verticalScrollBar().setValue(120)
+        pump(app)
+        shots.append(_save(mw, "annotate"))
+        mw.shutdown_worker()
+        mw.deleteLater()
+
+        # 6. Ctrl+F: every match highlighted, the current one in orange.
         mw = window(app, scratch / "settings")
         mw.open_document(str(scratch / "annual-report-2026.pdf"))
         mw._page_view.set_zoom_fit_width()

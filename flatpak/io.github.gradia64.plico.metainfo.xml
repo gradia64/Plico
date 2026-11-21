@@ -48,6 +48,11 @@
       <li xml:lang="es">Rellenar formularios PDF y corregir una línea de texto en su sitio</li>
       <li xml:lang="fr">Remplir des formulaires PDF et corriger une ligne de texte sur place</li>
       <li xml:lang="de">PDF-Formulare ausfüllen und eine Textzeile direkt korrigieren</li>
+      <li>Highlight, underline and strike out text, add notes, draw freehand and edit the bookmarks</li>
+      <li xml:lang="it">Evidenziare, sottolineare e barrare il testo, aggiungere note, disegnare a mano libera e modificare i segnalibri</li>
+      <li xml:lang="es">Resaltar, subrayar y tachar texto, añadir notas, dibujar a mano alzada y editar los marcadores</li>
+      <li xml:lang="fr">Surligner, souligner et barrer le texte, ajouter des notes, dessiner à main levée et modifier les signets</li>
+      <li xml:lang="de">Text hervorheben, unterstreichen und durchstreichen, Notizen hinzufügen, freihand zeichnen und die Lesezeichen bearbeiten</li>
       <li>Recognize the text of a scan with OCR and make it searchable</li>
       <li xml:lang="it">Riconoscere con l'OCR il testo di una scansione e renderla cercabile</li>
       <li xml:lang="es">Reconocer con OCR el texto de un escaneo y hacerlo buscable</li>
@@ -108,6 +113,14 @@
       <caption xml:lang="fr">Corriger une ligne de texte là où elle se trouve</caption>
       <caption xml:lang="de">Eine Textzeile direkt an ihrer Stelle korrigieren</caption>
       <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.8/flatpak/screenshots/edit.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Highlights, a note and a freehand mark, with the bookmarks in the side bar</caption>
+      <caption xml:lang="it">Evidenziazioni, una nota e un segno a mano libera, con i segnalibri nella barra laterale</caption>
+      <caption xml:lang="es">Resaltados, una nota y un trazo a mano alzada, con los marcadores en la barra lateral</caption>
+      <caption xml:lang="fr">Surlignages, une note et un trait à main levée, avec les signets dans la barre latérale</caption>
+      <caption xml:lang="de">Hervorhebungen, eine Notiz und eine Freihandmarkierung, mit den Lesezeichen in der Seitenleiste</caption>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.1.8/flatpak/screenshots/annotate.png</image>
     </screenshot>
     <screenshot>
       <caption>Searching the document: every match highlighted, the current one in orange</caption>

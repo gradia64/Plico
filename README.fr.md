@@ -21,6 +21,7 @@ Un véritable éditeur PDF natif pour Linux, construit avec **Qt6** et
 <p align="center">
   <img src="flatpak/screenshots/form.png" alt="Remplissage de formulaire" width="32%" />
   <img src="flatpak/screenshots/search.png" alt="Recherche dans le document" width="32%" />
+  <img src="flatpak/screenshots/annotate.png" alt="Annotations" width="32%" />
 </p>
 
 ## Caractéristiques
@@ -28,6 +29,11 @@ Un véritable éditeur PDF natif pour Linux, construit avec **Qt6** et
 - **Tourner, supprimer, réordonner** des pages (glisser-déposer dans la barre
   de miniatures), les **dupliquer** (`Ctrl+D`) et **insérer des pages
   vierges**
+- **Annoter** (menu _Annoter_) : surligner, souligner et barrer le texte (la
+  marque s'étend aux mots entiers), ajouter des notes et dessiner à main
+  levée. Elles s'annulent comme toute modification et, à l'enregistrement,
+  deviennent de vraies annotations PDF que les autres lecteurs affichent et
+  modifient
 - **Signets** (_Affichage → Signets_, un onglet à côté des miniatures) : on
   lit la table des matières du PDF, un clic mène à la page, et on ajoute,
   renomme, déplace, imbrique et supprime des entrées. Chaque modification
