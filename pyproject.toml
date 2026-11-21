@@ -1,6 +1,6 @@
 [project]
 name = "plico"
-version = "0.1.8"
+version = "0.2.0"
 description = "Plico — un vero editor PDF nativo per Linux"
 readme = "README.md"
 license = "GPL-3.0-or-later"
