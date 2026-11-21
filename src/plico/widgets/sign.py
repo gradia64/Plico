@@ -22,7 +22,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
@@ -39,6 +38,7 @@ from ..model.sign import (
     read_signatures,
     stamp_box,
 )
+from .plain_text import plain_warning
 
 _GOOD = "color: #1b5e20"
 # Amber rather than red: a signature over a document that changed afterwards is
@@ -260,7 +260,7 @@ class SignatureDialog(QDialog):
             try:
                 path = keep_root(path, self._root_store)
             except SigningError as error:
-                QMessageBox.warning(self, self.tr("Certificato fidato"), str(error))
+                plain_warning(self, self.tr("Certificato fidato"), str(error))
                 return
         if path not in self.roots:
             self.roots.append(path)

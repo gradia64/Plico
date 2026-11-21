@@ -95,6 +95,10 @@ comprimirlos.
   tu propio certificado, invisible o impresa en un recuadro en la página, y
   _Archivo → Verificar firmas…_ para releer quién firmó y si el documento se
   tocó después. Una segunda firma se añade a la primera sin romperla
+- **PDF protegidos con contraseña**: Plico pide la contraseña al abrir, y
+  guardar sobre el archivo (también comprimido o firmado) lo mantiene cifrado
+  (AES-256) con la misma contraseña y los mismos permisos. Un archivo nuevo
+  creado con «Guardar como» no está protegido
 
 ### Requisito de aceptación
 

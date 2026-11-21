@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QCoreApplication, QLocale, QObject, QRunnable, Signal
+from PySide6.QtCore import QCoreApplication, QLocale, QObject, QRunnable, Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -91,6 +91,8 @@ class CompressionDialog(QDialog):
         self._explanation.setMinimumWidth(380)
 
         self._summary = QLabel(self)
+        # It can show an error built from the page spec the user typed.
+        self._summary.setTextFormat(Qt.TextFormat.PlainText)
         self._summary.setWordWrap(True)
 
         buttons = QDialogButtonBox(

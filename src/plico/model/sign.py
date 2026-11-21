@@ -20,6 +20,7 @@ import hashlib
 import io
 import logging
 import os
+import re
 import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -310,11 +311,17 @@ def _free_field_name(data: bytes, wanted: str, password: str | None = None) -> s
             # Before any page is touched: see document.open_for_reading.
             if password:
                 document.authenticate(password)
+            # Every field name, not only the signatures': pyHanko refuses a
+            # signature in a field that is already something else. Read from
+            # the widget xrefs and not from page.widgets(), which is quadratic
+            # (see signature_widgets): the pentest file with ten thousand
+            # fields on a page froze the window when it was signed (reported
+            # by a review).
             taken = {
-                widget.field_name
-                for page in document
-                for widget in (page.widgets() or ())
-                if widget.field_name and widget.field_type_string == "Signature"
+                name
+                for index in range(len(document))
+                for xref, kind, *_ in document[index].annot_xrefs()
+                if kind == ANNOT_WIDGET and (name := _field_name(document, xref))
             }
     except Exception:  # noqa: BLE001 -- the worst case is the clash pyHanko reports
         return wanted
@@ -363,8 +370,12 @@ def _sign_bytes(
     )
     try:
         writer = IncrementalPdfFileWriter(io.BytesIO(data))
-        if document_password:
-            writer.encrypt(document_password)
+        # Asked of the file, not of the password: a file with only an owner
+        # password has an empty user password, which is still the key pyHanko
+        # needs ("No key available to decrypt" without it, reported by a
+        # review).
+        if writer.prev.encrypted:
+            writer.encrypt(document_password or "")
         output = pdf_signer.sign_pdf(
             writer, bytes_reserved=RESERVED, appearance_text_params=params
         )
@@ -410,6 +421,55 @@ def signature_widgets(doc: pymupdf.Document) -> list[tuple[int, int]]:
     return found
 
 
+def _field_name(doc: pymupdf.Document, xref: int) -> str:
+    """The fully qualified name (``parent.child``) of the field *xref* is in."""
+    parts: list[str] = []
+    seen = set()
+    while xref and xref not in seen:
+        seen.add(xref)
+        kind, value = doc.xref_get_key(xref, "T")
+        if kind == "string" and value:
+            parts.append(value)
+        kind, value = doc.xref_get_key(xref, "Parent")
+        xref = int(value.split()[0]) if kind == "xref" else 0
+    return ".".join(reversed(parts))
+
+
+# How many entries of /AcroForm/Fields is_signed walks at most: the tree comes
+# from the file, and the question is asked at every opening.
+_MAX_FIELD_NODES = 50_000
+
+
+def _acroform_signed(doc: pymupdf.Document) -> bool:
+    """Whether a signature field in ``/AcroForm/Fields`` holds a value.
+
+    The fields and not the pages: a signature whose widget is in no page's
+    /Annots is a signature all the same -- a validator finds it from here --
+    and read from the pages only it left the document "unsigned" (reported by
+    a review).
+    """
+    kind, value = doc.xref_get_key(doc.pdf_catalog(), "AcroForm/Fields")
+    if kind == "array":
+        pending = [int(ref) for ref in re.findall(r"(\d+) 0 R", value)]
+    elif kind == "xref":
+        array = doc.xref_object(int(value.split()[0]), compressed=True)
+        pending = [int(ref) for ref in re.findall(r"(\d+) 0 R", array)]
+    else:
+        return False
+    seen: set[int] = set()
+    while pending and len(seen) < _MAX_FIELD_NODES:
+        xref = pending.pop()
+        if xref in seen or not 0 < xref < doc.xref_length():
+            continue
+        seen.add(xref)
+        if _field_type(doc, xref) == "/Sig" and doc.xref_get_key(xref, "V")[0] != "null":
+            return True
+        kind, value = doc.xref_get_key(xref, "Kids")
+        if kind == "array":
+            pending.extend(int(ref) for ref in re.findall(r"(\d+) 0 R", value))
+    return False
+
+
 def _field_type(doc: pymupdf.Document, xref: int) -> str | None:
     """The /FT of the field *xref* belongs to, inherited from its parents."""
     seen = set()
@@ -444,7 +504,7 @@ def is_signed(path: str, password: str = "") -> bool:
             return any(
                 holds_signature(document, xref)
                 for _, xref in signature_widgets(document)
-            )
+            ) or _acroform_signed(document)
     except Exception:  # noqa: BLE001 -- unreadable is "not signed" for our purposes
         return False
 
@@ -567,19 +627,35 @@ def keep_root(path: str, directory: str) -> str:
         raise SigningError(
             QCoreApplication.translate("Signing", "«{0}» non contiene certificati PEM.").format(_name_of(path))
         ) from error
-    os.makedirs(directory, mode=0o700, exist_ok=True)
-    os.chmod(directory, 0o700)
     kept = os.path.join(directory, hashlib.sha256(data).hexdigest() + ".pem")
-    descriptor, temporary = tempfile.mkstemp(dir=directory, suffix=".tmp")
+    # Writing fails as a SigningError too, like reading: the callers catch
+    # that one, and a full disk or a read-only store escaped them (reported
+    # by a review).
+    try:
+        os.makedirs(directory, mode=0o700, exist_ok=True)
+        os.chmod(directory, 0o700)
+        descriptor, temporary = tempfile.mkstemp(dir=directory, suffix=".tmp")
+    except OSError as error:
+        raise _store_error(directory, error) from error
     try:
         with os.fdopen(descriptor, "wb") as handle:
             handle.write(data)
         os.replace(temporary, kept)
-    except BaseException:
+    except BaseException as error:
         with contextlib.suppress(OSError):
             os.unlink(temporary)
+        if isinstance(error, OSError):
+            raise _store_error(directory, error) from error
         raise
     return kept
+
+
+def _store_error(directory: str, error: OSError) -> SigningError:
+    return SigningError(
+        QCoreApplication.translate("Signing", "Non riesco a conservare il certificato in «{0}»: {1}").format(
+            directory, error.strerror or error
+        )
+    )
 
 
 def kept_root_intact(path: str, directory: str) -> bool:

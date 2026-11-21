@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QLocale, QObject, QRunnable, Signal
+from PySide6.QtCore import QLocale, QObject, QRunnable, Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -115,6 +115,8 @@ class OcrDialog(QDialog):
         # A page that already has text is left alone by the recognition, so
         # the tool is not going to duplicate what a born-digital PDF carries.
         self._summary = QLabel(self)
+        # It can show an error built from the page spec the user typed.
+        self._summary.setTextFormat(Qt.TextFormat.PlainText)
         self._summary.setWordWrap(True)
         self._summary.setMinimumWidth(420)
 

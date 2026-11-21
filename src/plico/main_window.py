@@ -79,6 +79,7 @@ from .model import (
     save_signed,
     sign_copy,
 )
+from .model.save import file_is_encrypted, owner_only_sources, owner_password_matches
 from .model.sign import SigningError, keep_root, kept_root_intact
 from .rendering import RenderWorker
 from .widgets.compress import CompressionDialog, CompressionTask, format_size
@@ -662,7 +663,7 @@ class MainWindow(QMainWindow):
             return
         self.open_path(path)
 
-    def open_path(self, path: str) -> bool:
+    def open_path(self, path: str, password: str | None = None) -> bool:
         """Open *path*, reporting any failure instead of propagating it.
 
         Shared by the "Apri" action and by the command line, so a document
@@ -673,13 +674,20 @@ class MainWindow(QMainWindow):
         attempt is repeated, for as long as the user wants to try. Giving up
         leaves whatever was on screen untouched -- the model refuses before
         it changes anything.
+
+        *password*, when the window already knows it (the file is one it just
+        wrote over a protected source), is tried first: re-opening a saved
+        file asked for it all over again, and giving up then closed the
+        document (reported by a review). Only if it does not open the file is
+        the user asked, as for any other file.
         """
-        password: str | None = None
+        known = password is not None
         while True:
             try:
                 self.open_document(path, password)
             except PasswordRequired as needed:
-                password = self._ask_password(needed.path, retry=needed.wrong)
+                password = self._ask_password(needed.path, retry=needed.wrong and not known)
+                known = False
                 if password is None:
                     return False
                 continue
@@ -1036,6 +1044,8 @@ class MainWindow(QMainWindow):
 
     def _save_to(self, path: str) -> bool:
         """Write the whole document to *path*; it becomes the "Salva" target."""
+        if not self._confirm_protection_loss(path) or not self._ask_owner_passwords(path):
+            return False
         # A plain save writes a fresh file: the signature of the file it
         # replaces would not be in it. Say so before doing it, because losing
         # a signature is not something an undo can bring back.
@@ -1266,11 +1276,12 @@ class MainWindow(QMainWindow):
         # os.replace() swapped the inode: the worker would keep reading the
         # OLD document under that path from the handle it holds. The evict is
         # queued before the renders the re-open asks for, so it lands first.
+        password = self._known_password(overwritten)
         for source in overwritten:
             self._worker.evict_requested.emit(source)
 
         row = self._thumb_bar.current_row()
-        if not self.open_path(path):
+        if not self.open_path(path, password):
             # The old items point into a file that no longer matches them:
             # keeping them on screen would be the very bug this avoids.
             self._undo_stack.clear()
@@ -1288,6 +1299,78 @@ class MainWindow(QMainWindow):
                 "possono più annullare."
             ).format(path)
         )
+
+    def _known_password(self, sources: list[str]) -> str | None:
+        """The password a file written over *sources* was protected with.
+
+        The save gives the new file the password of the protected source it
+        replaces (see ``save._protection``), so the window knows it already.
+        """
+        for source in sources:
+            password = self._doc_model.passwords.get(source)
+            if password:
+                return password
+        return None
+
+    def _ask_owner_passwords(self, path: str) -> bool:
+        """Ask for the owner password of the sources written over at *path*.
+
+        Only for a file with an owner password only: it opened without
+        asking, and saving over it keeps its restrictions with an owner
+        password Plico does not know, so a new one is made up. The user who
+        knows the original can type it and keep it valid; leaving the field
+        empty takes the made-up one. Asked once per file and session.
+        Returns False when the user cancels the write.
+        """
+        for source in owner_only_sources(self._doc_model, path):
+            name = os.path.basename(source)
+            label = self.tr(
+                "«{0}» limita stampa, copia o modifica con una password del "
+                "proprietario.\n\nSe la conosci scrivila: resterà valida anche sul "
+                "file salvato. Altrimenti lascia vuoto: i limiti restano, con una "
+                "password del proprietario nuova che nessuno conosce."
+            ).format(name)
+            while True:
+                password, accepted = QInputDialog.getText(
+                    self,
+                    self.tr("Password del proprietario"),
+                    label,
+                    QLineEdit.EchoMode.Password,
+                )
+                if not accepted:
+                    return False
+                if not password or owner_password_matches(source, password):
+                    break
+                label = self.tr(
+                    "Password del proprietario errata per «{0}».\n\nRiprova, oppure "
+                    "lascia vuoto per usarne una nuova."
+                ).format(name)
+            self._doc_model.owner_passwords[source] = password
+        return True
+
+    def _confirm_protection_loss(self, path: str) -> bool:
+        """Ask before writing a plain file over a protected one not open here.
+
+        Only the open sources keep their protection when they are written
+        over -- their password is known. Any other encrypted file at *path*
+        is replaced by a file without a password, and "save as" over it did
+        so without a word (reported by a review).
+        """
+        if not os.path.exists(path) or self._doc_model.sources_at(path):
+            return True
+        if not file_is_encrypted(path):
+            return True
+        choice = QMessageBox.question(
+            self,
+            self.tr("File protetto"),
+            self.tr(
+                "«{0}» è protetto da una password. Il file che lo sostituisce non "
+                "avrà password né restrizioni.\n\nSostituirlo lo stesso?"
+            ).format(os.path.basename(path)),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        return choice == QMessageBox.StandardButton.Yes
 
     # ------------------------------------------------------------------ #
     #  Signatures
@@ -1357,6 +1440,19 @@ class MainWindow(QMainWindow):
         if not on_disk and not self._confirm_redactions(self._marks_to_write(path)):
             return
         overwritten = self._doc_model.sources_at(path)
+        if not self._confirm_protection_loss(path):
+            return
+        # The copy signed on disk is the file as it is: its encryption, and
+        # its owner password, are untouched.
+        if not on_disk and not self._ask_owner_passwords(path):
+            return
+        # The copy signed on disk keeps the encryption of the file it copies;
+        # a rebuilt file gets that of the source it replaces, if any.
+        password = (
+            self._doc_model.passwords.get(self._save_target or "")
+            if on_disk
+            else self._known_password(overwritten)
+        )
         try:
             if on_disk:
                 assert self._save_target is not None
@@ -1380,7 +1476,7 @@ class MainWindow(QMainWindow):
         # the unsigned version, and any later save would drop the signature.
         for source in overwritten:
             self._worker.evict_requested.emit(source)
-        if not self.open_path(path):
+        if not self.open_path(path, password):
             return
         self._signed_on_disk = True
         self._update_title()
@@ -1527,6 +1623,8 @@ class MainWindow(QMainWindow):
         # recognise the original.
         # A copy, not the save target: every mark goes into it.
         if not self._confirm_redactions(self._marks()):
+            return
+        if not self._confirm_protection_loss(path) or not self._ask_owner_passwords(path):
             return
         self._compression_overwritten = self._doc_model.sources_at(path)
         self._compression_path = path
@@ -1696,6 +1794,8 @@ class MainWindow(QMainWindow):
             return
 
         if not self._confirm_redactions(self._marks(indices)):
+            return
+        if not self._confirm_protection_loss(path):
             return
         try:
             extract_pages(self._doc_model, path, indices)
@@ -2359,6 +2459,11 @@ class MainWindow(QMainWindow):
                 '<a href="https://github.com/gradia64/Plico">github.com/gradia64/Plico</a></p>'
             ).format(__version__),
         )
+        # Said explicitly: a box built by hand shows an OK of its own only on
+        # some Qt versions (a review found none on one). And deleted once
+        # closed, so every visit does not leave a box behind.
+        box.addButton(QMessageBox.StandardButton.Ok)
+        box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         box.exec()
 
     # ------------------------------------------------------------------ #

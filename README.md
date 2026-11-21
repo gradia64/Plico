@@ -92,6 +92,10 @@ A true native PDF editor for Linux, built with **Qt6** and **PySide6**, using
   _File → Verify Signatures…_ to read back who signed and whether the
   document was touched afterwards. A second signature is appended without
   breaking the first
+- **Password-protected PDFs**: Plico asks for the password when opening, and
+  saving over the file (compressed or signed too) keeps it encrypted
+  (AES-256) with the same password and permissions. A new file written with
+  “Save As” is not protected
 
 ### Acceptance requirement
 

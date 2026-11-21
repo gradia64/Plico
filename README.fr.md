@@ -102,6 +102,10 @@ Un véritable éditeur PDF natif pour Linux, construit avec **Qt6** et
   et _Fichier → Vérifier les signatures…_ pour relire qui a signé et si le
   document a été touché après. Une deuxième signature s'ajoute à la première
   sans la casser
+- **PDF protégés par mot de passe** : Plico demande le mot de passe à
+  l'ouverture, et enregistrer par-dessus le fichier (compressé ou signé
+  aussi) le garde chiffré (AES-256) avec le même mot de passe et les mêmes
+  permissions. Un nouveau fichier créé avec « Enregistrer sous » n'est pas protégé
 
 ### Exigence d'acceptation
 

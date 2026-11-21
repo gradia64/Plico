@@ -242,6 +242,10 @@ class DocumentModel(QObject):
         # scoped, and deliberately NOT cleared when another document is
         # opened: re-opening the same protected file must not ask again.
         self.passwords: dict[str, str] = {}
+        # path -> owner password, for the files with an owner password only
+        # (they open without asking): what the user typed when saving over
+        # one, "" when they did not know it. Same lifetime as ``passwords``.
+        self.owner_passwords: dict[str, str] = {}
 
     @property
     def page_sizes(self) -> list[tuple[float, float]]:
@@ -550,5 +554,6 @@ class DocumentModel(QObject):
         self.pages.clear()
         self.sources.clear()
         self.passwords.clear()
+        self.owner_passwords.clear()
         self.path = None
         self.changed.emit()

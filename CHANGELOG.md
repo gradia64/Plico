@@ -6,6 +6,41 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Non rilasciato]
 
+### Sicurezza
+
+Correzioni da due revisioni della 0.1.8.
+
+- **PDF con sola password del proprietario** (si aprono senza chiedere nulla,
+  ma limitano stampa, copia o modifica): il salvataggio li riscriveva in
+  chiaro, senza permessi. Ora restano cifrati con gli stessi permessi. Al
+  primo salvataggio Plico chiede la password del proprietario: chi la conosce
+  la scrive e resta valida anche sul file salvato; lasciando vuoto ne viene
+  creata una nuova, casuale, e i limiti restano. Firmarli così come sono su
+  disco falliva: ora funziona.
+- **«Salva con nome» sopra un PDF protetto non aperto** lo sostituiva con un
+  file senza password, senza avvisare. Ora Plico chiede prima (anche per
+  «Salva compresso», «Firma» ed «Estrai pagine»).
+- **Firme fuori dalle pagine**: un campo firma presente nel modulo ma non in
+  una pagina non veniva visto, e il salvataggio toglieva la firma senza
+  chiedere. Ora conta anche quello.
+- **Firmare un documento con migliaia di campi** bloccava la finestra: la
+  scelta del nome del campo firma ora è lineare, come l'apertura.
+- Gli errori del dialogo delle firme e i riepiloghi di compressione e OCR
+  mostrano sempre testo semplice, mai markup.
+
+### Corretto
+
+- Dopo aver salvato, compresso o firmato sopra un PDF protetto, la riapertura
+  automatica chiedeva di nuovo la password; annullando, il documento si
+  chiudeva. Ora usa quella già data.
+- La compressione di un PDF protetto misurava il guadagno prima della
+  cifratura: poteva annunciare un risparmio per un file che cresceva. Ora il
+  confronto è col file da sostituire, già cifrato.
+- Un errore di scrittura nel salvare un certificato fidato non veniva
+  mostrato come errore.
+- La finestra «Informazioni su Plico» ha sempre il pulsante OK e non resta in
+  memoria dopo la chiusura.
+
 ## [0.1.8] — 2026-11-10
 
 ### Aggiunto

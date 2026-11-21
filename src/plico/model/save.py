@@ -2,6 +2,7 @@
 
 import os
 import re
+import secrets
 import shutil
 import tempfile
 from collections.abc import Callable
@@ -230,9 +231,14 @@ def _write_pdf(
 
 @dataclass(frozen=True)
 class _Protection:
-    """How the file being replaced was encrypted, to encrypt its successor."""
+    """How the file being replaced was encrypted, to encrypt its successor.
+
+    *password* is the user password, the one that opens the file; *owner* is
+    the owner password the new file gets.
+    """
 
     password: str
+    owner: str
     permissions: int
 
 
@@ -261,16 +267,67 @@ def _protection(model: DocumentModel, target: str) -> _Protection | None:
     the content protected, and the permissions are carried over as they were
     read. A *new* file written with "save as" stays a new, plain file: what is
     protected is the file the user is replacing.
+
+    A file with only an owner password (an empty user password) opens without
+    asking, so no password is known for it, but it is encrypted all the same
+    and its permissions are the point of it: it used to be written back in the
+    clear (reported by a review). It gets an empty user password again, and
+    as owner password the one the user gave when asked (see
+    :func:`owner_only_sources`), or a random one -- an empty owner password
+    would open it with every permission.
     """
     for source in model.sources_at(target):
         password = model.passwords.get(source)
-        if not password:
-            # An owner-password-only file opens without asking: there is no
-            # password to give the new file.
-            continue
         with open_for_reading(source, password) as doc:
-            return _Protection(password, doc.permissions)
+            if password:
+                return _Protection(password, password, doc.permissions)
+            if is_encrypted(doc):
+                owner = model.owner_passwords.get(source) or secrets.token_urlsafe(32)
+                return _Protection("", owner, doc.permissions)
     return None
+
+
+def owner_only_sources(model: DocumentModel, target: str) -> list[str]:
+    """The sources at *target* protected by an owner password only.
+
+    The ones whose owner password the window has not asked for yet: writing
+    over them keeps their restrictions, and the owner password the user
+    knows can stay valid only if they type it.
+    """
+    found = []
+    for source in model.sources_at(target):
+        if model.passwords.get(source) or source in model.owner_passwords:
+            continue
+        if file_is_encrypted(source):
+            found.append(source)
+    return found
+
+
+def owner_password_matches(path: str, password: str) -> bool:
+    """Whether *password* is the owner password of the file at *path*."""
+    try:
+        with pikepdf.open(path, password=password) as pdf:
+            return bool(pdf.owner_password_matched)
+    except (pikepdf.PasswordError, OSError, pikepdf.PdfError):
+        return False
+
+
+def is_encrypted(doc: pymupdf.Document) -> bool:
+    """Whether *doc* carries ``/Encrypt``, even with an empty user password.
+
+    ``needs_pass`` and ``is_encrypted`` both say no for an owner-password-only
+    file; the metadata still names its encryption.
+    """
+    return bool(doc.needs_pass or doc.metadata.get("encryption"))
+
+
+def file_is_encrypted(path: str) -> bool:
+    """Whether the file at *path* is an encrypted PDF (False if unreadable)."""
+    try:
+        with pymupdf.open(path) as doc:
+            return is_encrypted(doc)
+    except Exception:  # noqa: BLE001 -- not a PDF we can read is not a protected one
+        return False
 
 
 def _protection_password(model: DocumentModel, target: str) -> str | None:
@@ -298,7 +355,7 @@ def _protect(tmp_path: str, protection: _Protection | None) -> None:
             pdf.save(
                 encrypted,
                 encryption=pikepdf.Encryption(
-                    user=protection.password, owner=protection.password, R=6, allow=allow
+                    user=protection.password, owner=protection.owner, R=6, allow=allow
                 ),
             )
         os.replace(encrypted, tmp_path)
@@ -456,9 +513,14 @@ def prepare_compressed(
     tmp_path = _write_temporary(model, target, None)
     try:
         result = optimize_in_place(tmp_path, options, progress)
-        # After measuring: the gain is the compression's, and the encryption
-        # adds the same few hundred bytes to the file with or without it.
-        _protect(tmp_path, protection)
+        if protection is not None:
+            _protect(tmp_path, protection)
+            # Measured again once encrypted: the encryption has a cost of its
+            # own, and a small file could come out larger while the window
+            # announced a gain (reported by a review). A protection means
+            # *target* is the open source, so the file it would replace is
+            # the honest term of comparison.
+            result = CompressionResult(os.path.getsize(target), os.path.getsize(tmp_path))
     except BaseException:
         _discard(tmp_path)
         raise

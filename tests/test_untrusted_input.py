@@ -56,9 +56,13 @@ def certificate(tmp_path_factory) -> tuple[str, str]:
     return path, str(folder / "root.pem")
 
 
-def _encrypted_pdf(path: str, password: str = "segreta") -> None:
+def _encrypted_pdf(path: str, password: str = "segreta", filler: int = 0) -> None:
     with pymupdf.open() as doc:
-        doc.new_page().insert_text((72, 72), SECRET)
+        page = doc.new_page()
+        page.insert_text((72, 72), SECRET)
+        for line in range(filler):
+            # Uncompressed text the rebuilt file deflates: room for a gain.
+            page.insert_text((72, 90 + line % 40 * 15), "riempitivo " * 8, fontsize=6)
         doc.save(
             path,
             encryption=pymupdf.PDF_ENCRYPT_AES_256,
@@ -107,8 +111,9 @@ def test_compressing_over_a_protected_file_keeps_it_protected(
     qapp, tmp_path, monkeypatch
 ) -> None:
     path = str(tmp_path / "protetto.pdf")
-    _encrypted_pdf(path)
-    # A gain, whatever this one-line page allows: the file is written.
+    _encrypted_pdf(path, filler=200)
+    # The gain is measured against the file on disk once encrypted: an
+    # uncompressed source rebuilt with deflate is a real one.
     monkeypatch.setattr(
         save_module, "optimize_in_place", lambda *a, **k: CompressionResult(10_000, 1_000)
     )
@@ -351,3 +356,201 @@ def test_roots_remembered_as_paths_are_copied_once(window, tmp_path, certificate
     assert window._settings().value("firma/radici") == [root]
     legacy.write_bytes(b"non un certificato")
     assert window._signed_roots() == [root]
+
+
+# -- found by the reviews of 0.1.8 ----------------------------------------------- #
+
+
+def _owner_only_pdf(path: str) -> None:
+    """A file with an owner password and an empty user password."""
+    with pymupdf.open() as doc:
+        doc.new_page().insert_text((72, 72), SECRET)
+        doc.save(path + ".plain")
+    with pikepdf.open(path + ".plain") as pdf:
+        pdf.save(
+            path,
+            encryption=pikepdf.Encryption(
+                user="", owner="titolare", R=6, allow=pikepdf.Permissions(modify_other=False)
+            ),
+        )
+    os.unlink(path + ".plain")
+
+
+def test_saving_over_an_owner_password_file_keeps_its_protection(qapp, tmp_path) -> None:
+    path = str(tmp_path / "solo-titolare.pdf")
+    _owner_only_pdf(path)
+    model = DocumentModel()
+    model.open(path)
+    save_as(model, path)
+    with pikepdf.open(path) as pdf:
+        assert pdf.is_encrypted
+        assert not pdf.allow.modify_other
+    with pymupdf.open(path) as doc:
+        assert not doc.needs_pass and SECRET in doc[0].get_text()
+
+
+def test_an_owner_password_file_can_be_signed_both_ways(qapp, tmp_path, certificate) -> None:
+    path = str(tmp_path / "solo-titolare.pdf")
+    _owner_only_pdf(path)
+    model = DocumentModel()
+    model.open(path)
+    save_signed(model, path, _request(certificate[0]))
+    with pikepdf.open(path) as pdf:
+        assert pdf.is_encrypted
+    # ...and signed again as it is on disk, where pyHanko needs the empty
+    # user password to append the second signature.
+    save_module.sign_copy(path, path, _request(certificate[0]))
+    assert [s.intact for s in read_signatures(path)] == [True, True]
+
+
+def test_compressing_a_protected_file_is_measured_once_encrypted(
+    qapp, tmp_path, monkeypatch
+) -> None:
+    path = str(tmp_path / "protetto.pdf")
+    _encrypted_pdf(path)
+    before = os.path.getsize(path)
+    # The compression claims a gain the encryption takes back.
+    monkeypatch.setattr(
+        save_module, "optimize_in_place", lambda *a, **k: CompressionResult(10_000, 9_999)
+    )
+    model = DocumentModel()
+    model.open(path, "segreta")
+    preview = save_module.prepare_compressed(model, path, LEVELS_BY_KEY["light"])
+    try:
+        assert preview.result.source_size == before
+        assert preview.result.output_size == os.path.getsize(preview.path)
+    finally:
+        preview.drop()
+
+
+def test_saving_over_a_protected_file_does_not_ask_its_password_again(
+    window, qapp, tmp_path, monkeypatch
+) -> None:
+    path = str(tmp_path / "protetto.pdf")
+    _encrypted_pdf(path)
+    asked = []
+    monkeypatch.setattr(
+        window, "_ask_password", lambda *a, **k: asked.append(a) or "segreta"
+    )
+    assert window.open_path(path)
+    assert len(asked) == 1
+    assert window._save_to(path)
+    assert len(asked) == 1
+    assert window._doc_model.sources == [path]
+
+
+def test_saving_as_over_a_protected_file_not_open_asks_first(
+    window, qapp, tmp_path, monkeypatch
+) -> None:
+    opened = str(tmp_path / "aperto.pdf")
+    with pymupdf.open() as doc:
+        doc.new_page()
+        doc.save(opened)
+    protected = str(tmp_path / "protetto.pdf")
+    _encrypted_pdf(protected)
+    assert window.open_path(opened)
+    questions = []
+
+    def refuse(*args, **kwargs):
+        questions.append(args[1])
+        return QMessageBox.StandardButton.Cancel
+
+    monkeypatch.setattr(QMessageBox, "question", refuse)
+    assert not window._save_to(protected)
+    assert questions
+    assert SECRET in _locked(protected)
+
+
+def test_a_signature_outside_every_page_is_still_found(qapp, tmp_path, certificate) -> None:
+    path = str(tmp_path / "firmato.pdf")
+    with pymupdf.open() as doc:
+        doc.new_page()
+        doc.save(path)
+    sign_in_place(path, _request(certificate[0]))
+    with pikepdf.open(path, allow_overwriting_input=True) as pdf:
+        # The widget is taken off the page; the field stays in the AcroForm.
+        del pdf.pages[0].obj.Annots
+        pdf.save(path)
+    assert is_signed(path)
+
+
+def test_a_field_name_is_found_without_walking_the_widgets(qapp, monkeypatch) -> None:
+    from plico.model import sign as sign_module
+
+    with pymupdf.open() as doc:
+        page = doc.new_page()
+        for name in ("Firma", "Firma 2"):
+            widget = pymupdf.Widget()
+            widget.field_type = pymupdf.PDF_WIDGET_TYPE_TEXT
+            widget.field_name = name
+            widget.rect = pymupdf.Rect(10, 10, 100, 30)
+            page.add_widget(widget)
+        data = doc.tobytes()
+    monkeypatch.setattr(
+        pymupdf.Page, "widgets", lambda *a, **k: pytest.fail("page.widgets() walked")
+    )
+    assert sign_module._free_field_name(data, "Firma") == "Firma 3"
+
+
+def test_a_root_store_that_cannot_be_written_is_a_signing_error(
+    qapp, tmp_path, certificate
+) -> None:
+    from plico.model.sign import SigningError
+
+    root = certificate[1]
+    if not os.path.exists(root):
+        pytest.skip("no root certificate written by the fixture")
+    blocked = tmp_path / "file"
+    blocked.write_text("")
+    with pytest.raises(SigningError):
+        keep_root(root, str(blocked / "radici"))
+
+
+def test_the_owner_password_the_user_knows_stays_valid(qapp, tmp_path) -> None:
+    path = str(tmp_path / "solo-titolare.pdf")
+    _owner_only_pdf(path)
+    assert save_module.owner_password_matches(path, "titolare")
+    assert not save_module.owner_password_matches(path, "sbagliata")
+    model = DocumentModel()
+    model.open(path)
+    assert save_module.owner_only_sources(model, path) == [path]
+    model.owner_passwords[path] = "titolare"
+    assert save_module.owner_only_sources(model, path) == []
+    save_as(model, path)
+    assert save_module.owner_password_matches(path, "titolare")
+    with pikepdf.open(path) as pdf:
+        assert not pdf.allow.modify_other
+
+
+def test_the_window_asks_the_owner_password_once(window, qapp, tmp_path, monkeypatch) -> None:
+    from PySide6.QtWidgets import QInputDialog
+
+    path = str(tmp_path / "solo-titolare.pdf")
+    _owner_only_pdf(path)
+    answers = iter(["sbagliata", "titolare"])
+    asked = []
+
+    def answer(*args, **kwargs):
+        asked.append(args[2])
+        return next(answers), True
+
+    monkeypatch.setattr(QInputDialog, "getText", answer)
+    assert window.open_path(path)
+    assert asked == []  # it opens without a password
+    assert window._save_to(path)
+    assert len(asked) == 2 and "errata" in asked[1]
+    assert save_module.owner_password_matches(path, "titolare")
+    assert window._save_to(path)
+    assert len(asked) == 2
+
+
+def test_cancelling_the_owner_password_saves_nothing(window, qapp, tmp_path, monkeypatch) -> None:
+    from PySide6.QtWidgets import QInputDialog
+
+    path = str(tmp_path / "solo-titolare.pdf")
+    _owner_only_pdf(path)
+    before = Path(path).read_bytes()
+    monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("", False))
+    assert window.open_path(path)
+    assert not window._save_to(path)
+    assert Path(path).read_bytes() == before

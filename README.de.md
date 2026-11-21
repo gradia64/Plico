@@ -104,6 +104,10 @@ Komprimieren nutzt.
   Seite gedruckt, und _Datei → Signaturen prüfen…_ um nachzulesen, wer
   signiert hat und ob das Dokument danach angefasst wurde. Eine zweite
   Signatur wird zur ersten hinzugefügt, ohne sie zu brechen
+- **Passwortgeschützte PDFs**: Plico fragt beim Öffnen nach dem Passwort,
+  und das Speichern über die Datei (auch komprimiert oder signiert) lässt sie
+  verschlüsselt (AES-256), mit demselben Passwort und denselben Rechten. Eine
+  neue Datei aus „Speichern unter“ ist nicht geschützt
 
 ### Abnahmevoraussetzung
 

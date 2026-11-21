@@ -12,7 +12,7 @@ not build itself.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QWidget
+from PySide6.QtWidgets import QLabel, QMessageBox, QWidget
 
 
 def plain_labels(widget: QWidget) -> None:
@@ -24,3 +24,15 @@ def plain_labels(widget: QWidget) -> None:
     for label in widget.findChildren(QLabel):
         if label.textFormat() == Qt.TextFormat.AutoText:
             label.setTextFormat(Qt.TextFormat.PlainText)
+
+
+def plain_warning(parent: QWidget, title: str, text: str) -> None:
+    """``QMessageBox.warning()`` with its text forced to plain text.
+
+    For the dialogs of a dialog: the window turns its own message boxes into
+    plain text as they appear (see ``MainWindow.childEvent``), but only its
+    direct children reach it.
+    """
+    box = QMessageBox(QMessageBox.Icon.Warning, title, text, QMessageBox.StandardButton.Ok, parent)
+    box.setTextFormat(Qt.TextFormat.PlainText)
+    box.exec()

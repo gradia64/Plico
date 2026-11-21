@@ -13,6 +13,7 @@ Configurazione in cima: SRC, VARIANTS, IGNORE.
 import os
 import re
 import sys
+from pathlib import Path
 
 SRC = "README.it.md"
 VARIANTS = ["README.md", "README.fr.md", "README.de.md", "README.es.md"]
@@ -30,7 +31,7 @@ EXT = (".py", ".sh", ".yml", ".yaml", ".toml", ".md", ".ts", ".po", ".1",
 def sections(path):
     """(titolo, righe) per ogni sezione ##, ignorando i blocchi di codice."""
     out, cur, buf, fenced = [], "(introduzione)", [], False
-    for line in open(path, encoding="utf-8").read().splitlines():
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
         if line.startswith("```"):
             fenced = not fenced
             continue
@@ -56,13 +57,13 @@ def identifiers(lines):
 
 
 def bullets(lines):
-    return len(re.findall(r"^\s*- ", "\n".join(lines), re.M))
+    return len(re.findall(r"^\s*- ", "\n".join(lines), re.MULTILINE))
 
 
 def fences(path):
     """Linguaggio dichiarato da ogni blocco, in ordine di apertura."""
     out, fenced = [], False
-    for line in open(path, encoding="utf-8").read().splitlines():
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
         if line.startswith("```"):
             if not fenced:
                 out.append(line[3:].strip())
