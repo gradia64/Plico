@@ -27,8 +27,9 @@ Un véritable éditeur PDF natif pour Linux, construit avec **Qt6** et
 ## Caractéristiques
 
 - **Tourner, supprimer, réordonner** des pages (glisser-déposer dans la barre
-  de miniatures), les **dupliquer** (`Ctrl+D`) et **insérer des pages
-  vierges**
+  de miniatures), les **dupliquer** (`Ctrl+D`), **insérer des pages
+  vierges** et **rogner leurs marges** (à la main ou d'après le contenu ;
+  rogner masque, n'efface pas)
 - **Annoter** (menu _Annoter_) : surligner, souligner et barrer le texte (la
   marque s'étend aux mots entiers), ajouter des notes et dessiner à main
   levée. Elles s'annulent comme toute modification et, à l'enregistrement,

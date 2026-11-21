@@ -283,6 +283,46 @@ class RemoveAnnotation(QUndoCommand):
         self._model.page_changed.emit(self._index)
 
 
+class CropPages(QUndoCommand):
+    """Set the visible part of some pages (Pagine → Ritaglia margini).
+
+    *crops* gives, for each index, the new crop in page space or None for the
+    whole page. One command for the whole dialog, however many pages: it was
+    one decision.
+    """
+
+    def __init__(
+        self,
+        model: DocumentModel,
+        indices: list[int],
+        crops: list[RedactionRect | None],
+    ) -> None:
+        if len(indices) == 1:
+            name = QCoreApplication.translate("CropPages", "Ritaglia pagina {0}").format(
+                indices[0] + 1
+            )
+        else:
+            name = QCoreApplication.translate("CropPages", "Ritaglia {0} pagine").format(
+                len(indices)
+            )
+        super().__init__(name)
+        self._model = model
+        self._indices = list(indices)
+        self._after = list(crops)
+        self._before = [model.pages[i].crop for i in indices]
+
+    def _set(self, crops: list[RedactionRect | None]) -> None:
+        for index, crop in zip(self._indices, crops, strict=True):
+            self._model.pages[index].crop = crop
+            self._model.page_changed.emit(index)
+
+    def redo(self) -> None:
+        self._set(self._after)
+
+    def undo(self) -> None:
+        self._set(self._before)
+
+
 class AddRedaction(QUndoCommand):
     """Mark a region of the page at *index* for redaction.
 

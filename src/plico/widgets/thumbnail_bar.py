@@ -45,7 +45,7 @@ _INVALID = QModelIndex()
 def thumb_key(item: PageItem, zoom: float = THUMB_ZOOM, dpr: float = 1.0) -> tuple:
     """Cache/render key for a thumbnail.
 
-    ("thumb", source_id, source_index, rotation, zoom, dpr, redactions) --
+    ("thumb", source_id, source_index, rotation, zoom, dpr, crop, redactions) --
     source_id is included so a merged document cannot reuse another source's
     pixmap. The redactions are there because a thumbnail shows the page as it
     will be saved: with them burnt in, whatever tool is on.
@@ -61,6 +61,7 @@ def thumb_key(item: PageItem, zoom: float = THUMB_ZOOM, dpr: float = 1.0) -> tup
         item.rotation,
         zoom,
         dpr,
+        item.crop,
         tuple(item.redactions),
     )
 
@@ -113,6 +114,11 @@ class ThumbnailModel(QAbstractListModel):
             return QCoreApplication.translate("ThumbnailModel", "Pagina {0}").format(
                 index.row() + 1
             )
+        if role == Qt.ItemDataRole.SizeHintRole:
+            # Every row the height of a full portrait page. With uniform item
+            # sizes the view measures the first row only: when that page was
+            # cropped to a strip, every row collapsed to the strip.
+            return QSize(THUMB_W + 20, THUMB_H + 31)
         if role == self.SourceIndexRole:
             return item.source_index
         if role == self.SourceIdRole:
@@ -224,6 +230,7 @@ class ThumbnailBar(QListView):
                 THUMB_ZOOM * self._dpr,
                 item.rotation,
                 tuple(item.redactions),
+                item.crop,
             )
         )
 
@@ -398,15 +405,19 @@ class ThumbnailBar(QListView):
 def _is_stale_thumb_key(key: tuple, item: PageItem) -> bool:
     """True for a thumbnail key of *item* that no longer shows it as it is.
 
-    A different rotation, or a different set of redactions: either way the
+    A different rotation, set of redactions or crop: either way the
     picture is of a page that is not there any more.
     """
     return (
-        len(key) == 7
+        len(key) == 8
         and key[0] == "thumb"
         and key[1] == item.source_id
         and key[2] == item.source_index
-        and (key[3] != item.rotation or key[6] != tuple(item.redactions))
+        and (
+            key[3] != item.rotation
+            or key[6] != item.crop
+            or key[7] != tuple(item.redactions)
+        )
     )
 
 

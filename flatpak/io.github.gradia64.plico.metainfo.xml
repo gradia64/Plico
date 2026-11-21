@@ -23,11 +23,11 @@
     <p xml:lang="fr">Ce qu'il sait faire :</p>
     <p xml:lang="de">Was er kann:</p>
     <ul>
-      <li>Rotate, delete and reorder pages, also by drag and drop</li>
-      <li xml:lang="it">Ruotare, eliminare e riordinare le pagine, anche con il trascinamento</li>
-      <li xml:lang="es">Girar, eliminar y reordenar páginas, también arrastrándolas</li>
-      <li xml:lang="fr">Pivoter, supprimer et réordonner les pages, aussi par glisser-déposer</li>
-      <li xml:lang="de">Seiten drehen, löschen und umsortieren, auch per Drag and Drop</li>
+      <li>Rotate, delete and reorder pages, also by drag and drop, and crop their margins</li>
+      <li xml:lang="it">Ruotare, eliminare e riordinare le pagine, anche con il trascinamento, e ritagliarne i margini</li>
+      <li xml:lang="es">Girar, eliminar y reordenar páginas, también arrastrándolas, y recortar sus márgenes</li>
+      <li xml:lang="fr">Pivoter, supprimer et réordonner les pages, aussi par glisser-déposer, et rogner leurs marges</li>
+      <li xml:lang="de">Seiten drehen, löschen und umsortieren, auch per Drag and Drop, und ihre Ränder zuschneiden</li>
       <li>Merge PDFs, including password-protected ones, and add photos and scans</li>
       <li xml:lang="it">Unire più PDF, anche protetti da password, e aggiungere foto e scansioni</li>
       <li xml:lang="es">Unir varios PDF, incluso protegidos con contraseña, y añadir fotos y escaneos</li>

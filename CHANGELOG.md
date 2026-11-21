@@ -19,6 +19,11 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
 - **Duplica pagina** (*Modifica → Duplica pagina*, `Ctrl+D`) e **Inserisci
   pagina vuota** (della misura della pagina scelta, dopo di lei): si
   annullano come ogni altra modifica, e la copia si modifica per conto suo.
+- **Ritaglia margini** (*Modifica → Ritaglia margini…*): margini in millimetri,
+  come si vedono sullo schermo, per la pagina scelta o per tutte, oppure
+  rilevati dal contenuto. Si annulla come ogni modifica; al salvataggio
+  diventa la `/CropBox`. Nasconde, non cancella: il dialogo lo dice e rimanda
+  a Cancella zona.
 - **Annotazioni** (menu *Annota*): Evidenzia (`Ctrl+Shift+H`), Sottolinea
   (`Ctrl+Shift+U`) e Barra (`Ctrl+Shift+K`) sulle parole trascinate, Nota con
   un clic e Disegno a mano libera. Restano modificabili fino al salvataggio

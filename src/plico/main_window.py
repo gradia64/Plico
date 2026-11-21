@@ -58,6 +58,7 @@ from .model import (
     CompressionOptions,
     CompressionPreview,
     CompressionResult,
+    CropPages,
     DeletePage,
     DocumentModel,
     DuplicatePage,
@@ -86,6 +87,7 @@ from .model import (
     sign_copy,
 )
 from .model.annotate import HIGHLIGHT, INK, NOTE, STRIKEOUT, UNDERLINE, Annotation
+from .model.crop import crop_from_margins, margins_of
 from .model.save import (
     AUTOMATIC,
     Protection,
@@ -101,6 +103,7 @@ from .printing import print_pdf
 from .rendering import RenderWorker
 from .widgets.bookmarks import BookmarkPanel
 from .widgets.compress import CompressionDialog, CompressionTask, format_size
+from .widgets.crop import CropDialog
 from .widgets.find_bar import FindBar
 from .widgets.form_panel import FormPanel
 from .widgets.help_window import HelpWindow
@@ -521,6 +524,9 @@ class MainWindow(QMainWindow):
             self._act(
                 self.tr("Inserisci pagina &vuota"), "document-new", "", self._insert_blank_page
             )
+        )
+        edit_menu.addAction(
+            self._act(self.tr("Ritaglia mar&gini…"), "transform-crop", "", self._crop_pages)
         )
 
         edit_menu.addSeparator()
@@ -2159,6 +2165,47 @@ class MainWindow(QMainWindow):
         self._undo_stack.push(DuplicatePage(self._doc_model, idx))
         self._thumb_bar.set_current_row(idx + 1)
 
+    def _crop_pages(self) -> None:
+        """Modifica → Ritaglia margini: the same margins, on screen, for one page or all."""
+        index = self._thumb_bar.current_row()
+        pages = self._doc_model.pages
+        if not 0 <= index < len(pages):
+            self._status.setText(self.tr("Nessun documento aperto."))
+            return
+        item = pages[index]
+
+        def detect() -> tuple[float, float, float, float] | None:
+            content = self._doc_model.content_box(index)
+            if content is None:
+                return None
+            return margins_of(content, *item.unrotated_size, item.total_rotation)
+
+        dialog = CropDialog(
+            margins_of(item.crop, *item.unrotated_size, item.total_rotation),
+            len(pages),
+            detect,
+            self,
+        )
+        if not self._run_crop_dialog(dialog):
+            return
+        margins = dialog.margins()
+        indices = list(range(len(pages))) if dialog.all_pages() else [index]
+        # Margins as seen: each page turns them its own way.
+        crops = [
+            crop_from_margins(margins, *pages[i].unrotated_size, pages[i].total_rotation)
+            for i in indices
+        ]
+        if all(pages[i].crop == crop for i, crop in zip(indices, crops, strict=True)):
+            return
+        self._undo_stack.push(CropPages(self._doc_model, indices, crops))
+        self._status.setText(
+            self.tr("Ritaglio fatto: il contenuto fuori resta nel file, nascosto.")
+        )
+
+    def _run_crop_dialog(self, dialog: CropDialog) -> bool:
+        """Show the dialog; a seam for the tests, which cannot click a modal one."""
+        return dialog.exec() == QDialog.DialogCode.Accepted
+
     def _insert_blank_page(self) -> None:
         """Modifica → Inserisci pagina vuota: after the current page, of its size.
 
@@ -2170,9 +2217,8 @@ class MainWindow(QMainWindow):
         if idx < 0 or idx >= self._doc_model.page_count:
             return
         item = self._doc_model.pages[idx]
-        width, height = item.width_pt, item.height_pt
-        if item.rotation % 180:
-            width, height = height, width
+        # As it is on screen: rotation and crop included.
+        width, height = item.oriented_size
         if self._scratch is None:
             self._scratch = tempfile.TemporaryDirectory(prefix="plico-")
         handle, path = tempfile.mkstemp(dir=self._scratch.name, prefix="vuota-", suffix=".pdf")

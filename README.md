@@ -26,7 +26,8 @@ A true native PDF editor for Linux, built with **Qt6** and **PySide6**, using
 ## Features
 
 - **Rotate, delete, reorder** pages (drag & drop in the thumbnail bar),
-  **duplicate** them (`Ctrl+D`) and **insert blank pages**
+  **duplicate** them (`Ctrl+D`), **insert blank pages** and **crop their
+  margins** (by hand or from the content; cropping hides, it does not delete)
 - **Annotate** (_Annotate_ menu): highlight, underline and strike out text
   (the mark grows to whole words), add notes and draw freehand. They undo
   like any other change, and on saving they become real PDF annotations that

@@ -1049,18 +1049,17 @@ class PageView(QScrollArea):
         a source that reported nothing) so the placeholder still has a sane
         box.
 
-        The swap is driven by the USER offset only. ``item.width_pt`` /
-        ``item.height_pt`` come from ``page.rect``, which MuPDF has already
-        rotated by the page's own /Rotate, so the base rotation is baked into
-        those numbers already; swapping on ``total_rotation`` would apply it a
-        second time and every scan would be laid out the wrong way round.
+        ``item.width_pt`` / ``item.height_pt`` come from ``page.rect``, which
+        MuPDF has already rotated by the page's own /Rotate: swapping THOSE on
+        ``total_rotation`` would apply it a second time and every scan would
+        be laid out the wrong way round. ``PageItem.oriented_size`` starts
+        from the unrotated size instead (and from the crop, when there is
+        one), where turning by the total rotation is the right thing.
         """
-        w_pt, h_pt = item.width_pt, item.height_pt
-        if w_pt <= 0.0 or h_pt <= 0.0:
+        if item.width_pt <= 0.0 or item.height_pt <= 0.0:
             return 595.0, 842.0
-        if item.rotation % 180 == 0:
-            return w_pt, h_pt
-        return h_pt, w_pt
+        # The crop included: what is on screen is the visible box, turned.
+        return item.oriented_size
 
     def _tool_cursor(self) -> Qt.CursorShape:
         if self._annotation_tool in MARKUP:
@@ -1353,7 +1352,8 @@ class PageView(QScrollArea):
                 c.item.rotation,
                 scale,
                 dpr,
-                marks,
+                c.item.crop,
+                marks,  # last: the preview tests read it there
             )
             if c.current_key == key or c.pending_key == key:
                 continue
@@ -1374,6 +1374,7 @@ class PageView(QScrollArea):
                     scale * dpr,        # zoom in real pixels
                     c.item.rotation,    # user offset only: MuPDF has already
                     marks,              # applied the page's own /Rotate
+                    c.item.crop,
                 )
             )
 

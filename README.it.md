@@ -27,7 +27,8 @@ comprimerli.
 ## Caratteristiche
 
 - **Ruotare, eliminare, riordinare** pagine (drag & drop nella barra miniature),
-  **duplicarle** (`Ctrl+D`) e **inserire pagine vuote**
+  **duplicarle** (`Ctrl+D`), **inserire pagine vuote** e **ritagliarne i
+  margini** (a mano o dal contenuto; il ritaglio nasconde, non cancella)
 - **Annotare** (menu *Annota*): evidenziare, sottolineare e barrare il
   testo (il segno si allarga alle parole intere), aggiungere note e disegnare
   a mano libera. Si annullano come ogni modifica e al salvataggio diventano

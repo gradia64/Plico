@@ -27,7 +27,9 @@ Komprimieren nutzt.
 ## Funktionen
 
 - **Seiten drehen, löschen, neu anordnen** (Drag & Drop in der
-  Miniaturleiste), **duplizieren** (`Ctrl+D`) und **leere Seiten einfügen**
+  Miniaturleiste), **duplizieren** (`Ctrl+D`), **leere Seiten einfügen** und
+  **Ränder zuschneiden** (von Hand oder aus dem Inhalt; Zuschneiden verbirgt,
+  es löscht nicht)
 - **Anmerken** (Menü _Anmerkungen_): Text hervorheben, unterstreichen und
   durchstreichen (die Markierung wächst auf ganze Wörter), Notizen hinzufügen
   und freihand zeichnen. Alles lässt sich wie jede Änderung rückgängig machen

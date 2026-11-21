@@ -117,6 +117,12 @@ class PageItem:
     # Annotations made in Plico (highlights, notes, ink), in PAGE space. The
     # ones already in the file belong to the source page and are not here.
     annotations: list[Annotation] = field(default_factory=list)
+    # The part of the page that stays visible (Pagine → Ritaglia margini), in
+    # PAGE space like the marks; None shows the whole page. It hides, it
+    # does not delete: on save it becomes the /CropBox and the rest of the
+    # page stays in the file. Page space itself does not move, so marks,
+    # annotations and edits keep their coordinates when the crop changes.
+    crop: RedactionRect | None = None
 
     def edit_for(self, span: TextSpan) -> TextEdit | None:
         """The planned replacement of *span*, if there is one."""
@@ -142,15 +148,42 @@ class PageItem:
         """
         return unrotated_size(self.width_pt, self.height_pt, self.base_rotation)
 
-    def view_matrix(self) -> Matrix:
-        """Map page space to what is on screen, user rotation included."""
+    @property
+    def visible_box(self) -> RedactionRect:
+        """The part of the page on screen, in page space: the crop, or all of it."""
+        if self.crop is not None:
+            return self.crop
         width, height = self.unrotated_size
-        return rotation_matrix(width, height, self.total_rotation)
+        return RedactionRect(0.0, 0.0, width, height)
+
+    @property
+    def oriented_size(self) -> tuple[float, float]:
+        """The size on screen: the visible box, turned by the total rotation."""
+        box = self.visible_box
+        width, height = box.x1 - box.x0, box.y1 - box.y0
+        if self.total_rotation % 180:
+            return height, width
+        return width, height
+
+    def view_matrix(self) -> Matrix:
+        """Map page space to what is on screen, user rotation included.
+
+        With a crop, the visible box is moved to the origin first and then
+        turned as a page of its own size: the screen shows only that box.
+        """
+        box = self.visible_box
+        a, b, c, d, e, f = rotation_matrix(
+            box.x1 - box.x0, box.y1 - box.y0, self.total_rotation
+        )
+        return (a, b, c, d, e - a * box.x0 - c * box.y0, f - b * box.x0 - d * box.y0)
 
     def page_matrix(self) -> Matrix:
         """The inverse of :meth:`view_matrix`: from the screen to the page."""
-        width, height = self.unrotated_size
-        return derotation_matrix(width, height, self.total_rotation)
+        box = self.visible_box
+        a, b, c, d, e, f = derotation_matrix(
+            box.x1 - box.x0, box.y1 - box.y0, self.total_rotation
+        )
+        return (a, b, c, d, e + box.x0, f + box.y0)
 
 
 def _not_already_marked(
@@ -536,6 +569,19 @@ class DocumentModel(QObject):
             RedactionRect.from_corners(x0, y0, x1, y1, snug=snug).clamped_to(width, height)
             for (x0, y0, x1, y1), snug in boxes
         ]
+
+    def content_box(self, index: int) -> RedactionRect | None:
+        """Where the page at *index* has something on it, in page space.
+
+        Read from the SOURCE page, like the words: what the crop will show.
+        """
+        from .crop import content_box
+
+        item = self.pages[index]
+        source = self.sources[item.source_id]
+        with open_for_reading(source, self.passwords.get(source)) as doc:
+            page = doc[item.source_index]
+            return content_box(page)
 
     def unmarked(self, index: int, rects: list[RedactionRect]) -> list[RedactionRect]:
         """The rectangles an existing redaction on the page does not cover."""

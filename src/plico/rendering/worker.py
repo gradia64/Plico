@@ -36,7 +36,10 @@ class RenderRequest:
     """A single render request emitted to the worker thread.
 
     key = ("page" | "thumb", source_id, source_index, rotation, zoom, dpr,
-           redactions)
+           crop, redactions)
+
+    ``clip`` is the page's crop in page space (None: the whole page): only
+    that part is rendered, so a cropped page is a smaller picture.
 
     ``source_id`` is part of the key so that merging a second PDF cannot be
     served a cached pixmap belonging to a different source document.
@@ -55,6 +58,7 @@ class RenderRequest:
         zoom: float,
         rotation: int,
         redactions: tuple[RedactionRect, ...] = (),
+        clip: RedactionRect | None = None,
     ) -> None:
         self.key = key                      # cache/render identity
         self.source_path = source_path      # which PDF to render from
@@ -62,6 +66,7 @@ class RenderRequest:
         self.zoom = zoom                    # zoom in real pixels (zoom × dpr)
         self.rotation = rotation            # user offset on top of /Rotate
         self.redactions = redactions        # burnt into a copy before rendering
+        self.clip = clip                    # crop, in page space; None: all
 
 
 class RenderWorker(QObject):
@@ -123,7 +128,13 @@ class RenderWorker(QObject):
             else:
                 page = doc[req.source_index]
             mat = pymupdf.Matrix(req.zoom, req.zoom).prerotate(req.rotation)
-            pix = page.get_pixmap(matrix=mat, alpha=False)
+            if req.clip is None:
+                pix = page.get_pixmap(matrix=mat, alpha=False)
+            else:
+                # The crop lives in page space, the clip in the space of
+                # page.rect, where the page's own /Rotate is applied.
+                box = pymupdf.Rect(req.clip.as_tuple()) * page.rotation_matrix
+                pix = page.get_pixmap(matrix=mat, clip=box, alpha=False)
             # QImage wraps the samples buffer; copy so the buffer can be freed
             img = QImage(
                 pix.samples,

@@ -17,6 +17,7 @@ from PySide6.QtCore import QCoreApplication
 
 from .annotate import write_annotations
 from .assemble import acroform_key, assemble, prune_fields
+from .crop import apply_crop
 from .document import Bookmark, DocumentModel, PageItem, open_for_reading
 from .forms import write_fields
 from .ocr import write_layer
@@ -222,6 +223,11 @@ def _write_pdf(
                         write_annotations(page, item.annotations)
                     if item.redactions:
                         _redact(page, item)
+            # Last of all: everything above used the page's coordinates as
+            # they were, and a new crop box moves their origin.
+            for index, item in enumerate(items):
+                if item.crop is not None:
+                    apply_crop(out[index], item.crop)
             dropped = _drop_old_signatures(out)
             # After the redactions and the dropped signatures: both delete
             # widgets, and a field left without one must leave the AcroForm
