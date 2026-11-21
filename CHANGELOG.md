@@ -16,6 +16,9 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
   `.deb` dipende da libcups. Su Debian e Ubuntu, chi usa il PySide6 del
   sistema deve installare `python3-pyside6.qtprintsupport`. Se un PDF vieta
   la stampa, Plico lo dice e stampa solo dopo una conferma.
+- **Duplica pagina** (*Modifica → Duplica pagina*, `Ctrl+D`) e **Inserisci
+  pagina vuota** (della misura della pagina scelta, dopo di lei): si
+  annullano come ogni altra modifica, e la copia si modifica per conto suo.
 - **Proteggi con password** (*File → Proteggi con password…*): salva con una
   password scelta (AES-256) e, se si vuole, senza permesso di stampa, copia o
   modifica, con una password del proprietario facoltativa (se manca e c'è un

@@ -24,7 +24,8 @@ A true native PDF editor for Linux, built with **Qt6** and **PySide6**, using
 
 ## Features
 
-- **Rotate, delete, reorder** pages (drag & drop in the thumbnail bar)
+- **Rotate, delete, reorder** pages (drag & drop in the thumbnail bar),
+  **duplicate** them (`Ctrl+D`) and **insert blank pages**
 - **Merge** another PDF: its pages are appended to the ones already open
   without copying anything, because every virtual page knows which source
   document it belongs to. You can also merge an image (a photographed

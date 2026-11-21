@@ -26,7 +26,7 @@ Komprimieren nutzt.
 ## Funktionen
 
 - **Seiten drehen, löschen, neu anordnen** (Drag & Drop in der
-  Miniaturleiste)
+  Miniaturleiste), **duplizieren** (`Ctrl+D`) und **leere Seiten einfügen**
 - **Ein anderes PDF zusammenführen**: dessen Seiten werden zu den bereits
   geöffneten hinzugefügt, ohne etwas zu kopieren, weil jede virtuelle Seite
   weiß, zu welchem Quelldokument sie gehört. Man kann auch ein Bild

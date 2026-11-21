@@ -6,6 +6,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
+import pymupdf
 from PySide6.QtCore import (
     Q_ARG,
     QEvent,
@@ -58,7 +59,9 @@ from .model import (
     CompressionResult,
     DeletePage,
     DocumentModel,
+    DuplicatePage,
     EditText,
+    InsertPage,
     MovePage,
     OcrPage,
     OcrWord,
@@ -491,6 +494,14 @@ class MainWindow(QMainWindow):
             self.tr("Elimina pagina"), "edit-delete", "Del", self._delete_page
         )
         edit_menu.addAction(self._delete_act)
+        edit_menu.addAction(
+            self._act(self.tr("&Duplica pagina"), "edit-copy", "Ctrl+D", self._duplicate_page)
+        )
+        edit_menu.addAction(
+            self._act(
+                self.tr("Inserisci pagina &vuota"), "document-new", "", self._insert_blank_page
+            )
+        )
 
         edit_menu.addSeparator()
 
@@ -2025,6 +2036,46 @@ class MainWindow(QMainWindow):
         # DeletePage emits ``changed``; the view rebuilds itself from the
         # shorter page list, reusing the surviving pages' pixmaps.
         self._undo_stack.push(DeletePage(self._doc_model, idx))
+
+    def _duplicate_page(self) -> None:
+        """Modifica → Duplica pagina: a copy of the current page, right after it."""
+        idx = self._thumb_bar.current_row()
+        if idx < 0 or idx >= self._doc_model.page_count:
+            return
+        self._undo_stack.push(DuplicatePage(self._doc_model, idx))
+        self._thumb_bar.set_current_row(idx + 1)
+
+    def _insert_blank_page(self) -> None:
+        """Modifica → Inserisci pagina vuota: after the current page, of its size.
+
+        The size the user sees, their rotation included: a blank page after a
+        landscape page is landscape. It is a page of a one-page PDF written
+        in the session's scratch folder, the way "Crea da immagini" works.
+        """
+        idx = self._thumb_bar.current_row()
+        if idx < 0 or idx >= self._doc_model.page_count:
+            return
+        item = self._doc_model.pages[idx]
+        width, height = item.width_pt, item.height_pt
+        if item.rotation % 180:
+            width, height = height, width
+        if self._scratch is None:
+            self._scratch = tempfile.TemporaryDirectory(prefix="plico-")
+        handle, path = tempfile.mkstemp(dir=self._scratch.name, prefix="vuota-", suffix=".pdf")
+        os.close(handle)
+        try:
+            with pymupdf.open() as blank:
+                blank.new_page(width=width, height=height)
+                blank.save(path)
+            source_id = len(self._doc_model.sources)
+            [page] = self._doc_model.read_source(source_id, path)
+        except Exception as error:  # noqa: BLE001 -- a full disk, a scratch folder gone
+            QMessageBox.critical(
+                self, self.tr("Errore"), self.tr("Impossibile creare la pagina:\n{0}").format(error)
+            )
+            return
+        self._undo_stack.push(InsertPage(self._doc_model, idx + 1, source_id, path, page))
+        self._thumb_bar.set_current_row(idx + 1)
 
     def _move_page(self, from_row: int, to_row: int) -> None:
         """Reordering requested by the thumbnail bar (drag & drop)."""

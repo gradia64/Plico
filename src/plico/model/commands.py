@@ -7,6 +7,7 @@ command is not there yet. The context is the class name, which is what
 lupdate expects for a string that belongs to one class.
 """
 
+import copy
 import os
 
 from PySide6.QtCore import QCoreApplication
@@ -140,6 +141,66 @@ class AppendDocument(QUndoCommand):
     def undo(self) -> None:
         count = len(self._items)
         del self._model.pages[len(self._model.pages) - count :]
+        self._model.changed.emit()
+
+
+class DuplicatePage(QUndoCommand):
+    """Put a copy of the page at *index* right after it.
+
+    The copy is a second virtual page on the same source page, with its own
+    copy of everything the user did to the first -- rotation, marks, form
+    values, edits, OCR -- so changing one afterwards does not change the
+    other. The save copies the source page once and places it twice (see
+    assemble.py), which is what keeps its form fields.
+    """
+
+    def __init__(self, model: DocumentModel, index: int) -> None:
+        name = QCoreApplication.translate("DuplicatePage", "Duplica pagina {0}")
+        super().__init__(name.format(index + 1))
+        self._model = model
+        self._index = index
+        self._copy = copy.deepcopy(model.pages[index])
+
+    def redo(self) -> None:
+        self._model.pages.insert(self._index + 1, self._copy)
+        self._model.changed.emit()
+
+    def undo(self) -> None:
+        del self._model.pages[self._index + 1]
+        self._model.changed.emit()
+
+
+class InsertPage(QUndoCommand):
+    """Insert the page *item*, read from the new source *path*, at *index*.
+
+    A blank page is a page of its own small PDF, registered as a source like
+    a merged file: the model has no other kind of page, and so the view, the
+    worker and the save need nothing new. As with :class:`AppendDocument`,
+    undo leaves the source registered: ids are never reused.
+    """
+
+    def __init__(
+        self, model: DocumentModel, index: int, source_id: int, path: str, item: PageItem
+    ) -> None:
+        name = QCoreApplication.translate("InsertPage", "Inserisci pagina vuota {0}")
+        super().__init__(name.format(index + 1))
+        self._model = model
+        self._index = index
+        self._source_id = source_id
+        self._path = path
+        self._item = item
+
+    def redo(self) -> None:
+        sources = self._model.sources
+        if self._source_id == len(sources):
+            sources.append(self._path)
+        else:
+            assert sources[self._source_id] == self._path
+        self._model.pages.insert(self._index, self._item)
+        self._model.changed.emit()
+
+    def undo(self) -> None:
+        del self._model.pages[self._index]
         self._model.changed.emit()
 
 

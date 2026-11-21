@@ -25,7 +25,8 @@ comprimirlos.
 
 ## Características
 
-- **Rotar, eliminar, reordenar** páginas (arrastrar y soltar en la barra de miniaturas)
+- **Rotar, eliminar, reordenar** páginas (arrastrar y soltar en la barra de miniaturas),
+  **duplicarlas** (`Ctrl+D`) e **insertar páginas en blanco**
 - **Unir** otro PDF: sus páginas se añaden a las ya abiertas sin copiar
   nada, porque cada página virtual sabe a qué documento fuente pertenece.
   También se puede unir una imagen (un recibo fotografiado al final de un PDF)
