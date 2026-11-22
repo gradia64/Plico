@@ -682,7 +682,7 @@ GPL v3 — see [LICENSE](LICENSE).
 
 ## About
 
-A true native PDF editor for Linux: merge, split, rotate, reorder, save. Qt6 + PySide6 + PyMuPDF.
+A true native PDF editor for Linux: merge, split, rotate, reorder, redact, OCR, sign, save. Qt6 + PySide6 + PyMuPDF.
 
 ### Topics
 

@@ -739,7 +739,7 @@ GPL v3 — siehe [LICENSE](LICENSE).
 
 ## About
 
-Ein echter nativer PDF-Editor für Linux: zusammenführen, teilen, drehen, neu anordnen, speichern. Qt6 + PySide6 + PyMuPDF.
+Ein echter nativer PDF-Editor für Linux: zusammenführen, teilen, drehen, neu anordnen, schwärzen, OCR, signieren, speichern. Qt6 + PySide6 + PyMuPDF.
 
 ### Topics
 

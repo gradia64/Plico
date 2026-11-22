@@ -701,7 +701,7 @@ GPL v3 — ver [LICENSE](LICENSE).
 
 ## About
 
-Un verdadero editor PDF nativo para Linux: unir, dividir, rotar, reordenar, guardar. Qt6 + PySide6 + PyMuPDF.
+Un verdadero editor PDF nativo para Linux: unir, dividir, rotar, reordenar, censurar, OCR, firmar, guardar. Qt6 + PySide6 + PyMuPDF.
 
 ### Topics
 
