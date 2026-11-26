@@ -62,7 +62,7 @@ def thumb_key(item: PageItem, zoom: float = THUMB_ZOOM, dpr: float = 1.0) -> tup
         zoom,
         dpr,
         item.crop,
-        item.hidden_annotations,
+        item.drawn_edits,
         tuple(item.redactions),
     )
 
@@ -232,7 +232,7 @@ class ThumbnailBar(QListView):
                 item.rotation,
                 tuple(item.redactions),
                 item.crop,
-                item.hidden_annotations,
+                item.drawn_edits,
             )
         )
 
@@ -418,7 +418,7 @@ def _is_stale_thumb_key(key: tuple, item: PageItem) -> bool:
         and (
             key[3] != item.rotation
             or key[6] != item.crop
-            or key[7] != item.hidden_annotations
+            or key[7] != item.drawn_edits
             or key[8] != tuple(item.redactions)
         )
     )

@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 import pymupdf
 from PySide6.QtCore import QCoreApplication, QObject, Signal
 
-from .annotate import Annotation, FileAnnotation, read_file_annotations
+from .annotate import Annotation, FileAnnotation, FileAnnotationEdit, read_file_annotations
 from .forms import Field, read_fields
 from .ocr import DEFAULT_DPI, OcrWord, recognise
 from .redact import (
@@ -119,9 +119,9 @@ class PageItem:
     # The annotations already in the file, read once when it was opened: they
     # are part of the source page's picture, so they are only described here.
     file_annotations: list[FileAnnotation] = field(default_factory=list)
-    # What the user did to those, by FileAnnotation.index: None takes it off
-    # the page, a string is a note's new text. An absent index: as in the file.
-    file_annotation_changes: dict[int, str | None] = field(default_factory=dict)
+    # What the user did to those, by FileAnnotation.index: taken off, new
+    # words, a colour, a move. An absent index: as in the file.
+    file_annotation_changes: dict[int, FileAnnotationEdit] = field(default_factory=dict)
     # The part of the page that stays visible (Pagine → Ritaglia margini), in
     # PAGE space like the marks; None shows the whole page. It hides, it
     # does not delete: on save it becomes the /CropBox and the rest of the
@@ -129,20 +129,42 @@ class PageItem:
     # annotations and edits keep their coordinates when the crop changes.
     crop: RedactionRect | None = None
 
+    def file_edit(self, annotation: FileAnnotation) -> FileAnnotationEdit:
+        """What the user did to *annotation* so far (nothing, by default)."""
+        return self.file_annotation_changes.get(annotation.index, FileAnnotationEdit())
+
     def file_annotations_shown(self) -> list[FileAnnotation]:
         """The file's annotations still on the page, in the file's order."""
-        changes = self.file_annotation_changes
-        return [a for a in self.file_annotations if a.index not in changes or changes[a.index] is not None]
+        return [a for a in self.file_annotations if not self.file_edit(a).removed]
 
     @property
     def hidden_annotations(self) -> tuple[FileAnnotation, ...]:
-        """The file's annotations taken off: the renderer leaves them out."""
-        changes = self.file_annotation_changes
-        return tuple(a for a in self.file_annotations if a.index in changes and changes[a.index] is None)
+        """The file's annotations taken off."""
+        return tuple(a for a in self.file_annotations if self.file_edit(a).removed)
+
+    @property
+    def drawn_edits(self) -> tuple[tuple[FileAnnotation, FileAnnotationEdit], ...]:
+        """The changes to the file's annotations that change the picture.
+
+        The renderer applies them to a copy of the page, and they are in the
+        render keys. A note's new words are not among them: they are in its
+        popup, not on the page.
+        """
+        found = []
+        for annotation in self.file_annotations:
+            edit = self.file_edit(annotation)
+            if (
+                edit.removed
+                or edit.color is not None
+                or edit.offset != (0.0, 0.0)
+                or (edit.text is not None and annotation.subtype == "FreeText")
+            ):
+                found.append((annotation, edit))
+        return tuple(found)
 
     def note_text(self, annotation: FileAnnotation) -> str:
-        """What a note of the file says now."""
-        text = self.file_annotation_changes.get(annotation.index)
+        """What a note or a FreeText of the file says now."""
+        text = self.file_edit(annotation).text
         return annotation.text if text is None else text
 
     def edit_for(self, span: TextSpan) -> TextEdit | None:

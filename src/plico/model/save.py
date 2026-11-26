@@ -224,7 +224,8 @@ def _write_pdf(
                         # file's alone, in the file's order: that is how they
                         # are found again.
                         apply_file_changes(
-                            page, item.file_annotations, item.file_annotation_changes
+                            page,
+                            [(a, item.file_edit(a)) for a in item.file_annotations],
                         )
                     if item.ocr_words:
                         _write_ocr(page, item)

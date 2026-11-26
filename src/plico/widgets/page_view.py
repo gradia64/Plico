@@ -225,6 +225,8 @@ class _PageLabel(QLabel):
         # before the gesture started, and where the grab happened in page
         # space -- the last one so a move keeps the distance the user grabbed).
         self._adjust: tuple[int, str | None, RedactionRect, tuple[float, float]] | None = None
+        # The annotation being dragged to a new place, with no tool on.
+        self._moving: Annotation | FileAnnotation | None = None
         # Background colour behind each edited span, sampled from the render
         # it was painted over. Keyed by the render too: a new pixmap (zoom,
         # rotation) may sample differently, and toImage() is too costly to
@@ -289,6 +291,7 @@ class _PageLabel(QLabel):
         # Annotations too: they are part of the page as it will be saved.
         self._paint_annotations(painter)
         self._paint_search(painter)
+        self._paint_move(painter)
         if self._view.redaction_mode():
             self._paint_redactions(painter)
         elif self._view.selection_mode():
@@ -509,7 +512,7 @@ class _PageLabel(QLabel):
             return None
         x, y = self._to_page(point)
         for annotation in reversed(canvas.item.file_annotations_shown()):
-            if annotation.hit(x, y):
+            if annotation.hit(x, y, canvas.item.file_edit(annotation).offset):
                 return annotation
         return None
 
@@ -548,10 +551,21 @@ class _PageLabel(QLabel):
         if canvas is None or target is None:
             return None
         menu = QMenu(self)
-        is_note = target.kind == NOTE if isinstance(target, Annotation) else target.is_note
-        if is_note:
-            edit = menu.addAction(QCoreApplication.translate("PageView", "&Modifica nota…"))
+        if isinstance(target, Annotation):
+            is_note, has_text, colorable = target.kind == NOTE, target.kind == NOTE, True
+        else:
+            is_note, has_text, colorable = target.is_note, target.has_text, target.colorable
+        if has_text:
+            label = (
+                QCoreApplication.translate("PageView", "&Modifica nota…")
+                if is_note
+                else QCoreApplication.translate("PageView", "Modifica t&esto…")
+            )
+            edit = menu.addAction(label)
             edit.triggered.connect(lambda: self._view.edit_note(canvas, target))
+        if colorable:
+            color = menu.addAction(QCoreApplication.translate("PageView", "&Colore…"))
+            color.triggered.connect(lambda: self._view.recolor(canvas, target))
         remove = menu.addAction(QCoreApplication.translate("PageView", "&Togli annotazione"))
         remove.triggered.connect(lambda: self._view.forget_target(canvas, target))
         return menu
@@ -725,6 +739,14 @@ class _PageLabel(QLabel):
                 )
             return
         if not (self._view.redaction_mode() or self._view.selection_mode()):
+            target = self.target_at(event.position())
+            if target is not None and target.movable:
+                # A drag moves it; a click still reaches the field below, on
+                # release (see mouseReleaseEvent).
+                self._moving = target
+                self._drag_from = event.position()
+                self._drag_to = self._drag_from
+                return
             self._select_field_under(event.position())
             super().mousePressEvent(event)
             return
@@ -820,6 +842,15 @@ class _PageLabel(QLabel):
         if self._view.annotation_tool() is not None:
             self._release_annotation(start, end)
             return
+        if self._moving is not None:
+            target = self._moving
+            self.forget_drag()
+            self.update()
+            if (end - start).manhattanLength() < CLICK_SLOP:
+                self._select_field_under(end)
+                return
+            self._release_move(target, start, end)
+            return
         if self._adjust is not None:
             position, corner, before, _start = self._adjust
             canvas = self.canvas
@@ -893,6 +924,51 @@ class _PageLabel(QLabel):
                 points.append((min(max(x, 0.0), width), min(max(y, 0.0), height)))
             self._view.commit_ink(canvas, points)
 
+    def _bounds_of(self, target: Annotation | FileAnnotation) -> RedactionRect:
+        """Where *target* is drawn now, in page space."""
+        if isinstance(target, Annotation):
+            return target.bounds()
+        canvas = self.canvas
+        assert canvas is not None
+        dx, dy = canvas.item.file_edit(target).offset
+        r = target.rect
+        return RedactionRect(r.x0 + dx, r.y0 + dy, r.x1 + dx, r.y1 + dy)
+
+    def _move_step(
+        self, target: Annotation | FileAnnotation, start: QPointF, end: QPointF
+    ) -> tuple[float, float]:
+        """The page-space step from *start* to *end*, kept inside the page."""
+        canvas = self.canvas
+        assert canvas is not None
+        (x0, y0), (x1, y1) = self._to_page(start), self._to_page(end)
+        box = self._bounds_of(target)
+        width, height = canvas.item.unrotated_size
+        dx = min(max(x1 - x0, -box.x0), width - box.x1) if box.width <= width else 0.0
+        dy = min(max(y1 - y0, -box.y0), height - box.y1) if box.height <= height else 0.0
+        return round(dx, 2), round(dy, 2)
+
+    def _release_move(self, target: Annotation | FileAnnotation, start: QPointF, end: QPointF) -> None:
+        canvas = self.canvas
+        assert canvas is not None
+        dx, dy = self._move_step(target, start, end)
+        if dx or dy:
+            self._view.move_target(canvas, target, dx, dy)
+
+    def _paint_move(self, painter: QPainter) -> None:
+        """The outline of the annotation being dragged, where it will land."""
+        target = self._moving
+        if target is None or self._drag_from is None or self._drag_to is None:
+            return
+        dx, dy = self._move_step(target, self._drag_from, self._drag_to)
+        box = self._bounds_of(target)
+        area = self._to_pixels(RedactionRect(box.x0 + dx, box.y0 + dy, box.x1 + dx, box.y1 + dy))
+        painter.save()
+        pen = QPen(self.palette().color(QPaletteColor.ColorRole.Highlight), 1.5, Qt.PenStyle.DashLine)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(area)
+        painter.restore()
+
     def forget_drag(self) -> None:
         """Drop the rectangle being dragged, if any (a tool was left).
 
@@ -906,6 +982,7 @@ class _PageLabel(QLabel):
             if canvas is not None and position < len(canvas.item.redactions):
                 canvas.item.redactions[position] = before
         self._adjust = None
+        self._moving = None
         self._drag_from = None
         self._drag_to = None
         self._stroke = None
@@ -969,6 +1046,10 @@ class PageView(QScrollArea):
     # note given new words (an Annotation or a FileAnnotation, then the text).
     file_annotation_removed = Signal(int, object)
     note_edited = Signal(int, object, str)
+    # An annotation (either kind) dragged by (dx, dy) page points, and one
+    # given another colour (an RGB tuple in 0..1).
+    annotation_moved = Signal(int, object, float, float)
+    annotation_recolored = Signal(int, object, object)
 
     def __init__(self, worker, model=None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -1414,7 +1495,7 @@ class PageView(QScrollArea):
                 scale,
                 dpr,
                 c.item.crop,
-                c.item.hidden_annotations,
+                c.item.drawn_edits,
                 marks,  # last: the preview tests read it there
             )
             if c.current_key == key or c.pending_key == key:
@@ -1437,7 +1518,7 @@ class PageView(QScrollArea):
                     c.item.rotation,    # user offset only: MuPDF has already
                     marks,              # applied the page's own /Rotate
                     c.item.crop,
-                    c.item.hidden_annotations,
+                    c.item.drawn_edits,
                 )
             )
 
@@ -1717,14 +1798,59 @@ class PageView(QScrollArea):
             self.file_annotation_removed.emit(canvas.index, target)
 
     def edit_note(self, canvas: _Canvas, target: Annotation | FileAnnotation) -> None:
-        """Ask for a note's new words, starting from what it says now.
+        """Ask for a note's (or a FreeText's) new words, from what it says now.
 
         Emptied, it is not a note any more: say so with «Togli annotazione».
         """
         before = target.text if isinstance(target, Annotation) else canvas.item.note_text(target)
-        text = self.ask_note_text(before)
+        if isinstance(target, FileAnnotation) and not target.is_note:
+            text = self.ask_annotation_text(before)
+        else:
+            text = self.ask_note_text(before)
         if text is not None and text != before:
             self.note_edited.emit(canvas.index, target, text)
+
+    def ask_annotation_text(self, text: str) -> str | None:
+        """The words of a FreeText, starting from *text* (tests replace it)."""
+        from PySide6.QtWidgets import QInputDialog
+
+        text, accepted = QInputDialog.getMultiLineText(
+            self,
+            QCoreApplication.translate("PageView", "Testo"),
+            QCoreApplication.translate("PageView", "Testo dell'annotazione:"),
+            text,
+        )
+        text = text.strip()[:MAX_NOTE_TEXT]
+        return text if accepted and text else None
+
+    def recolor(self, canvas: _Canvas, target: Annotation | FileAnnotation) -> None:
+        """Ask for another colour for *target*, starting from its own."""
+        if isinstance(target, Annotation):
+            before: tuple[float, float, float] | None = target.color
+        else:
+            edit = canvas.item.file_edit(target)
+            before = edit.color or target.color
+        color = self.ask_color(before)
+        if color is not None and color != before:
+            self.annotation_recolored.emit(canvas.index, target, color)
+
+    def ask_color(self, color: tuple[float, float, float] | None) -> tuple[float, float, float] | None:
+        """A colour as RGB in 0..1, or None if the user cancelled (tests replace it)."""
+        from PySide6.QtWidgets import QColorDialog
+
+        start = QColor.fromRgbF(*color) if color else QColor(Qt.GlobalColor.yellow)
+        chosen = QColorDialog.getColor(
+            start, self, QCoreApplication.translate("PageView", "Colore dell'annotazione")
+        )
+        if not chosen.isValid():
+            return None
+        return (round(chosen.redF(), 3), round(chosen.greenF(), 3), round(chosen.blueF(), 3))
+
+    def move_target(
+        self, canvas: _Canvas, target: Annotation | FileAnnotation, dx: float, dy: float
+    ) -> None:
+        """Ask for *target* to move by (*dx*, *dy*) page points."""
+        self.annotation_moved.emit(canvas.index, target, dx, dy)
 
     # ------------------------------------------------------------------ #
     #  Text editing

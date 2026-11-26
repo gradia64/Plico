@@ -18,8 +18,9 @@ its own.
 from __future__ import annotations
 
 import itertools
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+import re
+from collections.abc import Sequence
+from dataclasses import dataclass, replace
 
 import pymupdf
 
@@ -37,7 +38,9 @@ KINDS = (*MARKUP, NOTE, INK)
 
 # One colour per kind, as RGB in 0..1: the usual ones of PDF readers, so the
 # file reads the same in Okular or Acrobat.
-COLORS: dict[str, tuple[float, float, float]] = {
+Color = tuple[float, float, float]
+
+COLORS: dict[str, Color] = {
     HIGHLIGHT: (1.0, 0.85, 0.0),
     UNDERLINE: (0.12, 0.53, 0.9),
     STRIKEOUT: (0.86, 0.18, 0.18),
@@ -82,10 +85,25 @@ class Annotation:
     # Note: the centre of its icon, and what it says.
     at: tuple[float, float] = (0.0, 0.0)
     text: str = ""
+    # A colour the user chose instead of the kind's own (RGB in 0..1).
+    tint: Color | None = None
 
     @property
-    def color(self) -> tuple[float, float, float]:
-        return COLORS[self.kind]
+    def color(self) -> Color:
+        return self.tint or COLORS[self.kind]
+
+    @property
+    def movable(self) -> bool:
+        """Markup belongs to the words under it; notes and strokes can move."""
+        return self.kind not in MARKUP
+
+    def moved(self, dx: float, dy: float) -> Annotation:
+        """The same annotation *dx*, *dy* points further on the page."""
+        return replace(
+            self,
+            points=tuple((x + dx, y + dy) for x, y in self.points),
+            at=(self.at[0] + dx, self.at[1] + dy),
+        )
 
     def bounds(self) -> RedactionRect:
         """The page-space box the annotation occupies (to find it under a click)."""
@@ -227,14 +245,56 @@ class FileAnnotation:
     # highlighted at both ends is not part of it.
     parts: tuple[RedactionRect, ...] = ()
     text: str = ""
+    # What it is drawn in now, if PyMuPDF can redraw it in another colour.
+    color: Color | None = None
 
     @property
     def is_note(self) -> bool:
         return self.subtype == "Text"
 
-    def hit(self, x: float, y: float) -> bool:
+    @property
+    def has_text(self) -> bool:
+        """A note's words are in its popup, a FreeText's on the page."""
+        return self.subtype in _WITH_TEXT
+
+    @property
+    def movable(self) -> bool:
+        return self.subtype not in _MARKUP_SUBTYPES
+
+    @property
+    def colorable(self) -> bool:
+        return self.subtype in _COLORABLE
+
+    def hit(self, x: float, y: float, offset: tuple[float, float] = (0.0, 0.0)) -> bool:
+        """Whether (*x*, *y*) falls on it, once moved by *offset*."""
+        x, y = x - offset[0], y - offset[1]
         boxes = self.parts or (self.rect,)
         return any(r.x0 <= x <= r.x1 and r.y0 <= y <= r.y1 for r in boxes)
+
+
+@dataclass(frozen=True)
+class FileAnnotationEdit:
+    """What the user did to one annotation of the file. The default: nothing."""
+
+    removed: bool = False
+    # New words for a note or a FreeText.
+    text: str | None = None
+    color: Color | None = None
+    # How far it was moved, in page points.
+    offset: tuple[float, float] = (0.0, 0.0)
+
+    @property
+    def unchanged(self) -> bool:
+        return self == FileAnnotationEdit()
+
+
+_MARKUP_SUBTYPES = frozenset(("Highlight", "Underline", "StrikeOut", "Squiggly"))
+_WITH_TEXT = frozenset(("Text", "FreeText"))
+# What PyMuPDF redraws in a new colour (measured): a stamp or an attachment
+# keeps an appearance of its own, which a redraw would throw away.
+_COLORABLE = frozenset(
+    ("Text", "FreeText", "Square", "Circle", "Line", "Polygon", "PolyLine", "Ink")
+) | _MARKUP_SUBTYPES
 
 
 def read_file_annotations(page: pymupdf.Page) -> list[FileAnnotation]:
@@ -268,7 +328,28 @@ def _describe(index: int, annot: pymupdf.Annot) -> FileAnnotation:
             for quad in (points[i : i + 4] for i in range(0, len(points) - 3, 4))
         )
     text = (annot.info.get("content") or "")[:MAX_NOTE_TEXT]
-    return FileAnnotation(index, annot.type[1], rect, parts, text)
+    subtype = annot.type[1]
+    return FileAnnotation(index, subtype, rect, parts, text, _color_of(annot, subtype))
+
+
+def _color_of(annot: pymupdf.Annot, subtype: str) -> Color | None:
+    """The colour it is drawn in: a FreeText's is its text's, in /DA."""
+    if subtype not in _COLORABLE:
+        return None
+    if subtype == "FreeText":
+        kind, value = annot.parent.parent.xref_get_key(annot.xref, "DA")
+        found = _DA_RGB.search(value) if kind == "string" else None
+        values = [float(v) for v in found.groups()] if found else []
+    else:
+        values = [float(v) for v in annot.colors.get("stroke") or ()]
+    return (values[0], values[1], values[2]) if len(values) == 3 else None
+
+
+_DA_RGB = re.compile(r"([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+rg")
+_NUMBER = re.compile(r"-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?")
+# Where an annotation keeps its coordinates, in pairs: moving it is adding
+# the same step to every pair, without redrawing it.
+_POSITIONS = ("Rect", "InkList", "L", "Vertices", "CL")
 
 
 _QUAD_KINDS = frozenset(
@@ -283,29 +364,66 @@ _QUAD_KINDS = frozenset(
 
 def apply_file_changes(
     page: pymupdf.Page,
-    annotations: Sequence[FileAnnotation],
-    changes: Mapping[int, str | None],
+    edits: Sequence[tuple[FileAnnotation, FileAnnotationEdit]],
 ) -> None:
     """Do to the copy *page* what the user did to the file's annotations.
 
-    *changes* maps an annotation's index to ``None`` (taken off) or to the new
-    text of a note. Found first and changed afterwards: deleting shifts the
-    indices of the ones after.
+    Found first and changed afterwards: deleting shifts the indices of the
+    ones after.
     """
     present = list(page.annots())
-    targets: list[tuple[pymupdf.Annot, str | None]] = []
-    for annotation in annotations:
-        if annotation.index not in changes:
-            continue
+    targets: list[tuple[pymupdf.Annot, FileAnnotation, FileAnnotationEdit]] = []
+    for annotation, edit in edits:
         annot = _find(present, annotation)
-        if annot is not None:
-            targets.append((annot, changes[annotation.index]))
-    for annot, text in targets:
-        if text is None:
+        if annot is not None and not edit.unchanged:
+            targets.append((annot, annotation, edit))
+    for annot, annotation, edit in targets:
+        if edit.removed:
             page.delete_annot(annot)
-        else:
-            annot.set_info(content=text)
+            continue
+        if edit.offset != (0.0, 0.0) and annotation.movable:
+            _shift(page.parent, annot.xref, *edit.offset)
+        redraw = False
+        if edit.text is not None and annotation.has_text:
+            annot.set_info(content=edit.text)
+            if annotation.subtype == "FreeText":
+                # Readers draw the rich text when there is one, and it still
+                # says the old words.
+                page.parent.xref_set_key(annot.xref, "RC", "null")
+            redraw = True
+        if edit.color is not None and annotation.colorable:
+            if annotation.subtype == "FreeText":
+                annot.update(text_color=edit.color)
+                redraw = False
+            else:
+                annot.set_colors(stroke=edit.color)
+                redraw = True
+        if redraw:
             annot.update()
+
+
+def _shift(doc: pymupdf.Document, xref: int, dx: float, dy: float) -> None:
+    """Move an annotation by (*dx*, *dy*) page points, as it is drawn.
+
+    Its appearance is drawn into /Rect, so moving the numbers moves the
+    picture as it is -- a stamp keeps its image, a box its border (measured,
+    also on turned pages, where PyMuPDF's ``set_rect`` grows a bordered box
+    and lands a note elsewhere). PDF space grows upwards: down the page is
+    minus.
+    """
+    for key in _POSITIONS:
+        kind, value = doc.xref_get_key(xref, key)
+        if kind != "array":
+            continue
+        position = 0
+
+        def step(match: re.Match[str]) -> str:
+            nonlocal position
+            moved = float(match.group()) + (dx if position % 2 == 0 else -dy)
+            position += 1
+            return f"{moved:.4f}"
+
+        doc.xref_set_key(xref, key, _NUMBER.sub(step, value))
 
 
 def _find(present: list[pymupdf.Annot], annotation: FileAnnotation) -> pymupdf.Annot | None:

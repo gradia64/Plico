@@ -66,11 +66,15 @@ from .model import (
     EditNote,
     EditText,
     InsertPage,
+    MoveAnnotation,
+    MoveFileAnnotation,
     MovePage,
     OcrPage,
     OcrWord,
     PageItem,
     PasswordRequired,
+    RecolorAnnotation,
+    RecolorFileAnnotation,
     RedactionRect,
     RemoveAnnotation,
     RemoveFileAnnotation,
@@ -301,6 +305,8 @@ class MainWindow(QMainWindow):
         self._page_view.annotation_removed.connect(self._remove_annotation)
         self._page_view.file_annotation_removed.connect(self._remove_file_annotation)
         self._page_view.note_edited.connect(self._edit_note)
+        self._page_view.annotation_moved.connect(self._move_annotation)
+        self._page_view.annotation_recolored.connect(self._recolor_annotation)
         dock = QDockWidget(self.tr("Miniature"), self)
         dock.setObjectName("thumbnail_dock")
         dock.setWidget(self._thumb_bar)
@@ -739,6 +745,36 @@ class MainWindow(QMainWindow):
                 self._undo_stack.push(EditNote(self._doc_model, index, note, text))
         elif note in page.file_annotations_shown():
             self._undo_stack.push(EditFileNote(self._doc_model, index, note, text))
+
+    def _annotation_page(self, index: int, target: Annotation | FileAnnotation) -> bool:
+        """Whether *target* is still on page *index*: a signal can be late."""
+        pages = self._doc_model.pages
+        if not 0 <= index < len(pages):
+            return False
+        page = pages[index]
+        if isinstance(target, Annotation):
+            return target in page.annotations
+        return target in page.file_annotations_shown()
+
+    def _move_annotation(
+        self, index: int, target: Annotation | FileAnnotation, dx: float, dy: float
+    ) -> None:
+        if not self._annotation_page(index, target) or not target.movable:
+            return
+        if isinstance(target, Annotation):
+            self._undo_stack.push(MoveAnnotation(self._doc_model, index, target, dx, dy))
+        else:
+            self._undo_stack.push(MoveFileAnnotation(self._doc_model, index, target, dx, dy))
+
+    def _recolor_annotation(
+        self, index: int, target: Annotation | FileAnnotation, color: tuple[float, float, float]
+    ) -> None:
+        if not self._annotation_page(index, target):
+            return
+        if isinstance(target, Annotation):
+            self._undo_stack.push(RecolorAnnotation(self._doc_model, index, target, color))
+        elif target.colorable:
+            self._undo_stack.push(RecolorFileAnnotation(self._doc_model, index, target, color))
 
     def _tabify_bookmarks(self) -> None:
         """Put «Segnalibri» behind «Miniature», as a tab of the same dock."""

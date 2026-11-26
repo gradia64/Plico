@@ -6,6 +6,18 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Non rilasciato]
 
+### Aggiunto
+
+- **Spostare e ricolorare le annotazioni**: senza strumenti accesi
+  un'annotazione si trascina in un altro punto della pagina (resta dentro la
+  pagina), e il tasto destro ha *Colore…*. Vale per quelle già nel file e per
+  quelle fatte in Plico; evidenziazioni, sottolineature e barrature restano
+  sul loro testo, timbri e allegati tengono il loro aspetto. Spostare non
+  ridisegna l'annotazione: un timbro o un riquadro col bordo restano come
+  erano.
+- **Testo dei riquadri di testo (FreeText)** già nel file: *Modifica testo…*
+  dal tasto destro, e *Colore…* ne cambia il colore del testo.
+
 ## [0.2.1] — 2026-11-26
 
 ### Aggiunto

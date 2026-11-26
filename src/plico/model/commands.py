@@ -14,7 +14,7 @@ from dataclasses import replace
 from PySide6.QtCore import QCoreApplication
 from PySide6.QtGui import QUndoCommand
 
-from .annotate import Annotation, FileAnnotation
+from .annotate import Annotation, Color, FileAnnotation, FileAnnotationEdit
 from .document import Bookmark, DocumentModel, PageItem, read_outline
 from .ocr import OcrWord
 from .redact import RedactionRect
@@ -284,34 +284,37 @@ class RemoveAnnotation(QUndoCommand):
         self._model.page_changed.emit(self._index)
 
 
-_UNCHANGED = object()
-
-
 class _FileAnnotationChange(QUndoCommand):
-    """Set what happens to one of the file's annotations; undo puts back the old."""
+    """Change what happens to one of the file's annotations; undo puts back the old."""
 
     def __init__(
-        self, name: str, model: DocumentModel, index: int, annotation: FileAnnotation, value: str | None
+        self,
+        name: str,
+        model: DocumentModel,
+        index: int,
+        annotation: FileAnnotation,
+        **change: object,
     ) -> None:
         super().__init__(name.format(index + 1))
         self._model = model
         self._index = index
         self._key = annotation.index
-        self._value = value
-        changes = model.pages[index].file_annotation_changes
-        self._before: object = changes.get(self._key, _UNCHANGED)
+        self._before = model.pages[index].file_edit(annotation)
+        self._after = replace(self._before, **change)  # type: ignore[arg-type]
 
-    def redo(self) -> None:
-        self._model.pages[self._index].file_annotation_changes[self._key] = self._value
-        self._model.page_changed.emit(self._index)
-
-    def undo(self) -> None:
+    def _set(self, edit: FileAnnotationEdit) -> None:
         changes = self._model.pages[self._index].file_annotation_changes
-        if self._before is _UNCHANGED:
+        if edit.unchanged:
             changes.pop(self._key, None)
         else:
-            changes[self._key] = self._before  # type: ignore[assignment]
+            changes[self._key] = edit
         self._model.page_changed.emit(self._index)
+
+    def redo(self) -> None:
+        self._set(self._after)
+
+    def undo(self) -> None:
+        self._set(self._before)
 
 
 class RemoveFileAnnotation(_FileAnnotationChange):
@@ -320,28 +323,50 @@ class RemoveFileAnnotation(_FileAnnotationChange):
     def __init__(self, model: DocumentModel, index: int, annotation: FileAnnotation) -> None:
         # The same name as RemoveAnnotation: to the user it is the same act.
         name = QCoreApplication.translate("RemoveAnnotation", "Togli annotazione su pagina {0}")
-        super().__init__(name, model, index, annotation, None)
+        super().__init__(name, model, index, annotation, removed=True)
 
 
 class EditFileNote(_FileAnnotationChange):
-    """Give a note of the file new words."""
+    """Give a note or a FreeText of the file new words."""
 
     def __init__(self, model: DocumentModel, index: int, annotation: FileAnnotation, text: str) -> None:
         name = QCoreApplication.translate("EditNote", "Modifica nota su pagina {0}")
-        super().__init__(name, model, index, annotation, text)
+        super().__init__(name, model, index, annotation, text=text)
 
 
-class EditNote(QUndoCommand):
-    """Give a note made in Plico new words, in the same place in the list."""
+class RecolorFileAnnotation(_FileAnnotationChange):
+    """Draw one of the file's annotations in another colour."""
 
-    def __init__(self, model: DocumentModel, index: int, note: Annotation, text: str) -> None:
-        name = QCoreApplication.translate("EditNote", "Modifica nota su pagina {0}")
+    def __init__(
+        self, model: DocumentModel, index: int, annotation: FileAnnotation, color: Color
+    ) -> None:
+        name = QCoreApplication.translate("RecolorAnnotation", "Colore dell'annotazione su pagina {0}")
+        super().__init__(name, model, index, annotation, color=color)
+
+
+class MoveFileAnnotation(_FileAnnotationChange):
+    """Move one of the file's annotations by (*dx*, *dy*) page points."""
+
+    def __init__(
+        self, model: DocumentModel, index: int, annotation: FileAnnotation, dx: float, dy: float
+    ) -> None:
+        name = QCoreApplication.translate("MoveAnnotation", "Sposta annotazione su pagina {0}")
+        ox, oy = model.pages[index].file_edit(annotation).offset
+        super().__init__(name, model, index, annotation, offset=(ox + dx, oy + dy))
+
+
+class _ReplaceAnnotation(QUndoCommand):
+    """Put *after* where *before* is in the page's list, and back on undo."""
+
+    def __init__(
+        self, name: str, model: DocumentModel, index: int, before: Annotation, after: Annotation
+    ) -> None:
         super().__init__(name.format(index + 1))
         self._model = model
         self._index = index
-        self._before = note
-        self._after = replace(note, text=text)
-        self._position = model.pages[index].annotations.index(note)
+        self._before = before
+        self._after = after
+        self._position = model.pages[index].annotations.index(before)
 
     def redo(self) -> None:
         self._model.pages[self._index].annotations[self._position] = self._after
@@ -350,6 +375,32 @@ class EditNote(QUndoCommand):
     def undo(self) -> None:
         self._model.pages[self._index].annotations[self._position] = self._before
         self._model.page_changed.emit(self._index)
+
+
+class EditNote(_ReplaceAnnotation):
+    """Give a note made in Plico new words, in the same place in the list."""
+
+    def __init__(self, model: DocumentModel, index: int, note: Annotation, text: str) -> None:
+        name = QCoreApplication.translate("EditNote", "Modifica nota su pagina {0}")
+        super().__init__(name, model, index, note, replace(note, text=text))
+
+
+class RecolorAnnotation(_ReplaceAnnotation):
+    """Draw an annotation made in Plico in another colour."""
+
+    def __init__(self, model: DocumentModel, index: int, annotation: Annotation, color: Color) -> None:
+        name = QCoreApplication.translate("RecolorAnnotation", "Colore dell'annotazione su pagina {0}")
+        super().__init__(name, model, index, annotation, replace(annotation, tint=color))
+
+
+class MoveAnnotation(_ReplaceAnnotation):
+    """Move an annotation made in Plico by (*dx*, *dy*) page points."""
+
+    def __init__(
+        self, model: DocumentModel, index: int, annotation: Annotation, dx: float, dy: float
+    ) -> None:
+        name = QCoreApplication.translate("MoveAnnotation", "Sposta annotazione su pagina {0}")
+        super().__init__(name, model, index, annotation, annotation.moved(dx, dy))
 
 
 class CropPages(QUndoCommand):
