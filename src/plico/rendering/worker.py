@@ -24,8 +24,9 @@ import pymupdf
 from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtGui import QImage
 
+from ..model.annotate import FileAnnotation, apply_file_changes
 from ..model.document import open_for_reading
-from ..model.redact import RedactionRect, redacted_copy
+from ..model.redact import RedactionRect, burn_redactions
 
 # Enough for the handful of documents a merged job realistically interleaves,
 # while keeping the number of open files bounded.
@@ -36,13 +37,17 @@ class RenderRequest:
     """A single render request emitted to the worker thread.
 
     key = ("page" | "thumb", source_id, source_index, rotation, zoom, dpr,
-           crop, redactions)
+           crop, hidden, redactions)
 
     ``clip`` is the page's crop in page space (None: the whole page): only
     that part is rendered, so a cropped page is a smaller picture.
 
     ``source_id`` is part of the key so that merging a second PDF cannot be
     served a cached pixmap belonging to a different source document.
+
+    ``hidden`` are annotations of the file the user took off: like the
+    redactions, they are removed from a copy of the page, and they are in the
+    key (before the redactions).
 
     ``redactions`` (a tuple of :class:`RedactionRect`, empty for none) asks for
     the page as the save will write it: the marks burnt into a copy, the
@@ -59,6 +64,7 @@ class RenderRequest:
         rotation: int,
         redactions: tuple[RedactionRect, ...] = (),
         clip: RedactionRect | None = None,
+        hidden: tuple[FileAnnotation, ...] = (),
     ) -> None:
         self.key = key                      # cache/render identity
         self.source_path = source_path      # which PDF to render from
@@ -67,6 +73,7 @@ class RenderRequest:
         self.rotation = rotation            # user offset on top of /Rotate
         self.redactions = redactions        # burnt into a copy before rendering
         self.clip = clip                    # crop, in page space; None: all
+        self.hidden = hidden                # file annotations taken off
 
 
 class RenderWorker(QObject):
@@ -120,11 +127,17 @@ class RenderWorker(QObject):
             return
         preview: pymupdf.Document | None = None
         try:
-            if req.redactions:
+            if req.redactions or req.hidden:
                 # A copy: the handle is shared and the source stays as it is
-                # on disk until a save.
-                preview = redacted_copy(doc, req.source_index, req.redactions)
+                # on disk until a save. The annotations go first, as in the
+                # save: they are found by their place in the file's list.
+                preview = pymupdf.open()
+                preview.insert_pdf(doc, from_page=req.source_index, to_page=req.source_index)
                 page = preview[0]
+                if req.hidden:
+                    apply_file_changes(page, req.hidden, dict.fromkeys(a.index for a in req.hidden))
+                if req.redactions:
+                    burn_redactions(page, req.redactions)
             else:
                 page = doc[req.source_index]
             mat = pymupdf.Matrix(req.zoom, req.zoom).prerotate(req.rotation)

@@ -45,7 +45,7 @@ _INVALID = QModelIndex()
 def thumb_key(item: PageItem, zoom: float = THUMB_ZOOM, dpr: float = 1.0) -> tuple:
     """Cache/render key for a thumbnail.
 
-    ("thumb", source_id, source_index, rotation, zoom, dpr, crop, redactions) --
+    ("thumb", source_id, source_index, rotation, zoom, dpr, crop, hidden, redactions) --
     source_id is included so a merged document cannot reuse another source's
     pixmap. The redactions are there because a thumbnail shows the page as it
     will be saved: with them burnt in, whatever tool is on.
@@ -62,6 +62,7 @@ def thumb_key(item: PageItem, zoom: float = THUMB_ZOOM, dpr: float = 1.0) -> tup
         zoom,
         dpr,
         item.crop,
+        item.hidden_annotations,
         tuple(item.redactions),
     )
 
@@ -231,6 +232,7 @@ class ThumbnailBar(QListView):
                 item.rotation,
                 tuple(item.redactions),
                 item.crop,
+                item.hidden_annotations,
             )
         )
 
@@ -405,18 +407,19 @@ class ThumbnailBar(QListView):
 def _is_stale_thumb_key(key: tuple, item: PageItem) -> bool:
     """True for a thumbnail key of *item* that no longer shows it as it is.
 
-    A different rotation, set of redactions or crop: either way the
-    picture is of a page that is not there any more.
+    A different rotation, set of redactions, crop or annotations taken off:
+    either way the picture is of a page that is not there any more.
     """
     return (
-        len(key) == 8
+        len(key) == 9
         and key[0] == "thumb"
         and key[1] == item.source_id
         and key[2] == item.source_index
         and (
             key[3] != item.rotation
             or key[6] != item.crop
-            or key[7] != tuple(item.redactions)
+            or key[7] != item.hidden_annotations
+            or key[8] != tuple(item.redactions)
         )
     )
 

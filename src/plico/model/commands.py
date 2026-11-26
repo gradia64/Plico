@@ -9,11 +9,12 @@ lupdate expects for a string that belongs to one class.
 
 import copy
 import os
+from dataclasses import replace
 
 from PySide6.QtCore import QCoreApplication
 from PySide6.QtGui import QUndoCommand
 
-from .annotate import Annotation
+from .annotate import Annotation, FileAnnotation
 from .document import Bookmark, DocumentModel, PageItem, read_outline
 from .ocr import OcrWord
 from .redact import RedactionRect
@@ -280,6 +281,74 @@ class RemoveAnnotation(QUndoCommand):
 
     def undo(self) -> None:
         self._model.pages[self._index].annotations.insert(self._position, self._annotation)
+        self._model.page_changed.emit(self._index)
+
+
+_UNCHANGED = object()
+
+
+class _FileAnnotationChange(QUndoCommand):
+    """Set what happens to one of the file's annotations; undo puts back the old."""
+
+    def __init__(
+        self, name: str, model: DocumentModel, index: int, annotation: FileAnnotation, value: str | None
+    ) -> None:
+        super().__init__(name.format(index + 1))
+        self._model = model
+        self._index = index
+        self._key = annotation.index
+        self._value = value
+        changes = model.pages[index].file_annotation_changes
+        self._before: object = changes.get(self._key, _UNCHANGED)
+
+    def redo(self) -> None:
+        self._model.pages[self._index].file_annotation_changes[self._key] = self._value
+        self._model.page_changed.emit(self._index)
+
+    def undo(self) -> None:
+        changes = self._model.pages[self._index].file_annotation_changes
+        if self._before is _UNCHANGED:
+            changes.pop(self._key, None)
+        else:
+            changes[self._key] = self._before  # type: ignore[assignment]
+        self._model.page_changed.emit(self._index)
+
+
+class RemoveFileAnnotation(_FileAnnotationChange):
+    """Take one of the file's annotations off the page at *index*."""
+
+    def __init__(self, model: DocumentModel, index: int, annotation: FileAnnotation) -> None:
+        # The same name as RemoveAnnotation: to the user it is the same act.
+        name = QCoreApplication.translate("RemoveAnnotation", "Togli annotazione su pagina {0}")
+        super().__init__(name, model, index, annotation, None)
+
+
+class EditFileNote(_FileAnnotationChange):
+    """Give a note of the file new words."""
+
+    def __init__(self, model: DocumentModel, index: int, annotation: FileAnnotation, text: str) -> None:
+        name = QCoreApplication.translate("EditNote", "Modifica nota su pagina {0}")
+        super().__init__(name, model, index, annotation, text)
+
+
+class EditNote(QUndoCommand):
+    """Give a note made in Plico new words, in the same place in the list."""
+
+    def __init__(self, model: DocumentModel, index: int, note: Annotation, text: str) -> None:
+        name = QCoreApplication.translate("EditNote", "Modifica nota su pagina {0}")
+        super().__init__(name.format(index + 1))
+        self._model = model
+        self._index = index
+        self._before = note
+        self._after = replace(note, text=text)
+        self._position = model.pages[index].annotations.index(note)
+
+    def redo(self) -> None:
+        self._model.pages[self._index].annotations[self._position] = self._after
+        self._model.page_changed.emit(self._index)
+
+    def undo(self) -> None:
+        self._model.pages[self._index].annotations[self._position] = self._before
         self._model.page_changed.emit(self._index)
 
 

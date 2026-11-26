@@ -15,7 +15,7 @@ import pikepdf
 import pymupdf
 from PySide6.QtCore import QCoreApplication
 
-from .annotate import write_annotations
+from .annotate import apply_file_changes, write_annotations
 from .assemble import acroform_key, assemble, prune_fields
 from .crop import apply_crop
 from .document import Bookmark, DocumentModel, PageItem, open_for_reading
@@ -211,8 +211,21 @@ def _write_pdf(
             # must be able to delete, and an edit goes before the redaction
             # that has to remove the NEW words, not the old ones.
             for index, item in enumerate(items):
-                if item.ocr_words or item.text_edits or item.annotations or item.redactions:
+                if (
+                    item.ocr_words
+                    or item.text_edits
+                    or item.annotations
+                    or item.file_annotation_changes
+                    or item.redactions
+                ):
                     page = out[index]
+                    if item.file_annotation_changes:
+                        # First, while the page's annotations are still the
+                        # file's alone, in the file's order: that is how they
+                        # are found again.
+                        apply_file_changes(
+                            page, item.file_annotations, item.file_annotation_changes
+                        )
                     if item.ocr_words:
                         _write_ocr(page, item)
                     if item.text_edits:

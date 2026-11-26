@@ -32,7 +32,9 @@ comprimerli.
 - **Annotare** (menu *Annota*): evidenziare, sottolineare e barrare il
   testo (il segno si allarga alle parole intere), aggiungere note e disegnare
   a mano libera. Si annullano come ogni modifica e al salvataggio diventano
-  annotazioni PDF vere, che gli altri lettori mostrano e modificano
+  annotazioni PDF vere, che gli altri lettori mostrano e modificano. Anche le
+  annotazioni che il PDF ha già si possono togliere, e le sue note riscrivere
+  (tasto destro sull'annotazione)
 - **Segnalibri** (*Visualizza → Segnalibri*, una scheda accanto alle
   miniature): l'indice del PDF si legge, un clic porta alla pagina, e si
   aggiungono, rinominano, spostano, annidano ed eliminano voci. Ogni modifica

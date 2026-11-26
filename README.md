@@ -31,7 +31,8 @@ A true native PDF editor for Linux, built with **Qt6** and **PySide6**, using
 - **Annotate** (_Annotate_ menu): highlight, underline and strike out text
   (the mark grows to whole words), add notes and draw freehand. They undo
   like any other change, and on saving they become real PDF annotations that
-  other readers show and edit
+  other readers show and edit. The annotations a PDF already has can be
+  removed, and its notes rewritten (right-click on one)
 - **Bookmarks** (_View → Bookmarks_, a tab next to the thumbnails): read the
   PDF's outline, click to jump to a page, and add, rename, move, nest and
   delete entries. Every edit undoes with `Ctrl+Z`, and saving writes the

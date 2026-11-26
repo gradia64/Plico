@@ -6,6 +6,23 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Non rilasciato]
 
+### Aggiunto
+
+- **Annotazioni già nel PDF**: con uno strumento di *Annota* acceso un clic
+  toglie anche le annotazioni che il file aveva già (evidenziazioni, note,
+  forme, disegni), e il tasto destro su un'annotazione apre *Modifica nota…*
+  e *Togli annotazione*, anche senza strumenti accesi. Le note fatte in Plico
+  si riscrivono allo stesso modo. Tutto si annulla con `Ctrl+Z` e arriva nel
+  file solo al salvataggio; le miniature e la pagina mostrano subito il
+  risultato. Link e campi dei moduli non sono annotazioni da toccare qui e
+  restano come sono.
+
+### Modificato
+
+- I messaggi di `assert` e dei test saltati sono in inglese, come il resto
+  del codice dei test.
+- CI: le action del rilascio e del Flatpak girano su Node 24.
+
 ## [0.2.0] — 2026-11-21
 
 ### Aggiunto

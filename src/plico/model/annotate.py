@@ -7,14 +7,18 @@ undone. They live in PAGE space (unrotated PDF points), the space
 with ``/Rotate 90``: the highlight lands on the word only when it is given the
 unrotated rectangle, exactly like a redaction (see ``redact.py``).
 
-Only the annotations made here are editable. Those already in the file are
-part of the source page: Plico shows and keeps them, but does not own them.
+Those already in the file are part of the source page, and its picture: they
+are described once, when the file is opened (:class:`FileAnnotation`), and
+the page remembers what the user did to them -- taken off, or a note given
+new words. The source stays untouched; the save applies the changes to the
+copy of the page (:func:`apply_file_changes`), and the preview to a copy of
+its own.
 """
 
 from __future__ import annotations
 
 import itertools
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 import pymupdf
@@ -50,6 +54,16 @@ NOTE_SIZE = 16.0
 # bound.
 MAX_INK_POINTS = 5000
 MAX_NOTE_TEXT = 10_000
+# Annotations of the file described per page, at most: a page past this is
+# shown as it is, its annotations not editable -- the file is untrusted, and
+# every one of them is a box to test under each click.
+MAX_FILE_ANNOTATIONS = 1000
+# Not annotations to the reader: a link is the text it sits on, a widget a
+# form field (the form panel's), a popup the window of a note, which goes
+# when its note goes.
+_NOT_EDITABLE = frozenset(
+    (pymupdf.PDF_ANNOT_LINK, pymupdf.PDF_ANNOT_POPUP, pymupdf.PDF_ANNOT_WIDGET)  # type: ignore[attr-defined]
+)
 
 
 @dataclass(frozen=True)
@@ -193,3 +207,125 @@ def _add(page: pymupdf.Page, annotation: Annotation) -> pymupdf.Annot | None:
         point = (2 * x - centre[0], 2 * y - centre[1])
         return page.add_text_annot(point, annotation.text, icon="Note")
     return None
+
+
+@dataclass(frozen=True)
+class FileAnnotation:
+    """An annotation already in the source page, as read when the file opened.
+
+    *index* is its place among ``page.annots()`` of the source page: copying a
+    page keeps that order (measured), so it finds the annotation again in
+    the copy the save and the preview work on. *subtype* is checked there
+    too. Everything is in page space, as ``Annot.rect`` reports it -- for a
+    note, where its icon is drawn.
+    """
+
+    index: int
+    subtype: str
+    rect: RedactionRect
+    # Markup: one box per quadrilateral, so the middle of a paragraph
+    # highlighted at both ends is not part of it.
+    parts: tuple[RedactionRect, ...] = ()
+    text: str = ""
+
+    @property
+    def is_note(self) -> bool:
+        return self.subtype == "Text"
+
+    def hit(self, x: float, y: float) -> bool:
+        boxes = self.parts or (self.rect,)
+        return any(r.x0 <= x <= r.x1 and r.y0 <= y <= r.y1 for r in boxes)
+
+
+def read_file_annotations(page: pymupdf.Page) -> list[FileAnnotation]:
+    """Describe the annotations of *page* a reader sees (not links or fields)."""
+    entries = [entry for entry in page.annot_xrefs() if entry[1] not in _NOT_EDITABLE]
+    if not entries or len(entries) > MAX_FILE_ANNOTATIONS:
+        return []
+    described = (_describe_safely(index, annot) for index, annot in enumerate(page.annots()))
+    return [annotation for annotation in described if annotation is not None]
+
+
+def _describe_safely(index: int, annot: pymupdf.Annot) -> FileAnnotation | None:
+    """Like :func:`_describe`; a malformed annotation is left alone, not a
+    reason to refuse the file."""
+    try:
+        return _describe(index, annot)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _describe(index: int, annot: pymupdf.Annot) -> FileAnnotation:
+    rect = RedactionRect.from_corners(*annot.rect)
+    parts: tuple[RedactionRect, ...] = ()
+    if annot.type[0] in _QUAD_KINDS and annot.vertices:
+        points = annot.vertices
+        parts = tuple(
+            RedactionRect.from_corners(
+                min(p[0] for p in quad), min(p[1] for p in quad),
+                max(p[0] for p in quad), max(p[1] for p in quad),
+            )
+            for quad in (points[i : i + 4] for i in range(0, len(points) - 3, 4))
+        )
+    text = (annot.info.get("content") or "")[:MAX_NOTE_TEXT]
+    return FileAnnotation(index, annot.type[1], rect, parts, text)
+
+
+_QUAD_KINDS = frozenset(
+    (
+        pymupdf.PDF_ANNOT_HIGHLIGHT,  # type: ignore[attr-defined]
+        pymupdf.PDF_ANNOT_UNDERLINE,  # type: ignore[attr-defined]
+        pymupdf.PDF_ANNOT_STRIKE_OUT,  # type: ignore[attr-defined]
+        pymupdf.PDF_ANNOT_SQUIGGLY,  # type: ignore[attr-defined]
+    )
+)
+
+
+def apply_file_changes(
+    page: pymupdf.Page,
+    annotations: Sequence[FileAnnotation],
+    changes: Mapping[int, str | None],
+) -> None:
+    """Do to the copy *page* what the user did to the file's annotations.
+
+    *changes* maps an annotation's index to ``None`` (taken off) or to the new
+    text of a note. Found first and changed afterwards: deleting shifts the
+    indices of the ones after.
+    """
+    present = list(page.annots())
+    targets: list[tuple[pymupdf.Annot, str | None]] = []
+    for annotation in annotations:
+        if annotation.index not in changes:
+            continue
+        annot = _find(present, annotation)
+        if annot is not None:
+            targets.append((annot, changes[annotation.index]))
+    for annot, text in targets:
+        if text is None:
+            page.delete_annot(annot)
+        else:
+            annot.set_info(content=text)
+            annot.update()
+
+
+def _find(present: list[pymupdf.Annot], annotation: FileAnnotation) -> pymupdf.Annot | None:
+    """*annotation* among the annotations of a copy of its page.
+
+    By position, if the subtype agrees; otherwise the one of that subtype
+    whose box matches. A note is matched on its type alone at its position:
+    PyMuPDF reports its box where the icon is drawn, and that moves with the
+    rotation the save gives the page.
+    """
+    if annotation.index < len(present):
+        annot = present[annotation.index]
+        if annot.type[1] == annotation.subtype:
+            return annot
+    for annot in present:
+        if annot.type[1] == annotation.subtype and _close(annot.rect, annotation.rect):
+            return annot
+    return None
+
+
+def _close(rect: pymupdf.Rect, box: RedactionRect, tolerance: float = 1.0) -> bool:
+    found = (rect.x0, rect.y0, rect.x1, rect.y1)
+    return all(abs(a - b) <= tolerance for a, b in zip(found, box.as_tuple(), strict=True))

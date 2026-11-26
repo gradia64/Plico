@@ -62,6 +62,8 @@ from .model import (
     DeletePage,
     DocumentModel,
     DuplicatePage,
+    EditFileNote,
+    EditNote,
     EditText,
     InsertPage,
     MovePage,
@@ -71,6 +73,7 @@ from .model import (
     PasswordRequired,
     RedactionRect,
     RemoveAnnotation,
+    RemoveFileAnnotation,
     RemoveRedaction,
     RotatePage,
     SetFieldValue,
@@ -86,7 +89,15 @@ from .model import (
     save_signed,
     sign_copy,
 )
-from .model.annotate import HIGHLIGHT, INK, NOTE, STRIKEOUT, UNDERLINE, Annotation
+from .model.annotate import (
+    HIGHLIGHT,
+    INK,
+    NOTE,
+    STRIKEOUT,
+    UNDERLINE,
+    Annotation,
+    FileAnnotation,
+)
 from .model.crop import crop_from_margins, margins_of
 from .model.save import (
     AUTOMATIC,
@@ -288,6 +299,8 @@ class MainWindow(QMainWindow):
         self._page_view.text_edit_refused.connect(self._status.setText)
         self._page_view.annotation_added.connect(self._add_annotation)
         self._page_view.annotation_removed.connect(self._remove_annotation)
+        self._page_view.file_annotation_removed.connect(self._remove_file_annotation)
+        self._page_view.note_edited.connect(self._edit_note)
         dock = QDockWidget(self.tr("Miniature"), self)
         dock.setObjectName("thumbnail_dock")
         dock.setWidget(self._thumb_bar)
@@ -710,6 +723,22 @@ class MainWindow(QMainWindow):
         pages = self._doc_model.pages
         if 0 <= index < len(pages) and annotation in pages[index].annotations:
             self._undo_stack.push(RemoveAnnotation(self._doc_model, index, annotation))
+
+    def _remove_file_annotation(self, index: int, annotation: FileAnnotation) -> None:
+        pages = self._doc_model.pages
+        if 0 <= index < len(pages) and annotation in pages[index].file_annotations_shown():
+            self._undo_stack.push(RemoveFileAnnotation(self._doc_model, index, annotation))
+
+    def _edit_note(self, index: int, note: Annotation | FileAnnotation, text: str) -> None:
+        pages = self._doc_model.pages
+        if not 0 <= index < len(pages):
+            return
+        page = pages[index]
+        if isinstance(note, Annotation):
+            if note in page.annotations:
+                self._undo_stack.push(EditNote(self._doc_model, index, note, text))
+        elif note in page.file_annotations_shown():
+            self._undo_stack.push(EditFileNote(self._doc_model, index, note, text))
 
     def _tabify_bookmarks(self) -> None:
         """Put «Segnalibri» behind «Miniature», as a tab of the same dock."""

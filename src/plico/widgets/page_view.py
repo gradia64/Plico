@@ -36,6 +36,7 @@ from PySide6.QtGui import QPalette as QPaletteColor
 from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
+    QMenu,
     QScrollArea,
     QSizePolicy,
     QVBoxLayout,
@@ -54,6 +55,7 @@ from ..model.annotate import (
     STRIKEOUT,
     UNDERLINE,
     Annotation,
+    FileAnnotation,
     lines_of,
 )
 from ..model.document import PageItem
@@ -497,16 +499,70 @@ class _PageLabel(QLabel):
                 return annotation
         return None
 
+    def file_annotation_at(self, point: QPointF) -> FileAnnotation | None:
+        """The file's annotation under the widget point, topmost first.
+
+        Only those still on the page: one taken off is no longer drawn.
+        """
+        canvas = self.canvas
+        if canvas is None:
+            return None
+        x, y = self._to_page(point)
+        for annotation in reversed(canvas.item.file_annotations_shown()):
+            if annotation.hit(x, y):
+                return annotation
+        return None
+
+    def target_at(self, point: QPointF) -> Annotation | FileAnnotation | None:
+        """The annotation a click at *point* acts on: Plico's own are on top."""
+        return self.annotation_at(point) or self.file_annotation_at(point)
+
     def event(self, event) -> bool:
         # A note says what it holds when the mouse rests on it, tool or no tool.
         if event.type() == QEvent.Type.ToolTip and self.canvas is not None:
-            annotation = self.annotation_at(QPointF(event.pos()))
-            if annotation is not None and annotation.kind == NOTE:
+            text = self._note_text_at(QPointF(event.pos()))
+            if text:
                 from PySide6.QtWidgets import QToolTip
 
-                QToolTip.showText(event.globalPos(), annotation.text, self)
+                QToolTip.showText(event.globalPos(), text, self)
                 return True
         return super().event(event)
+
+    def _note_text_at(self, point: QPointF) -> str | None:
+        canvas = self.canvas
+        target = self.target_at(point)
+        if isinstance(target, Annotation):
+            return target.text if target.kind == NOTE else None
+        if target is not None and target.is_note and canvas is not None:
+            return canvas.item.note_text(target)
+        return None
+
+    def annotation_menu(self, point: QPointF) -> QMenu | None:
+        """The menu of the annotation under *point*, or None where there is none.
+
+        Built apart from :meth:`contextMenuEvent`, which only shows it, so a
+        test can trigger its actions without a menu blocking the event loop.
+        """
+        canvas = self.canvas
+        target = self.target_at(point)
+        if canvas is None or target is None:
+            return None
+        menu = QMenu(self)
+        is_note = target.kind == NOTE if isinstance(target, Annotation) else target.is_note
+        if is_note:
+            edit = menu.addAction(QCoreApplication.translate("PageView", "&Modifica nota…"))
+            edit.triggered.connect(lambda: self._view.edit_note(canvas, target))
+        remove = menu.addAction(QCoreApplication.translate("PageView", "&Togli annotazione"))
+        remove.triggered.connect(lambda: self._view.forget_target(canvas, target))
+        return menu
+
+    def contextMenuEvent(self, event) -> None:
+        menu = self.annotation_menu(QPointF(event.pos()))
+        if menu is None:
+            super().contextMenuEvent(event)
+            return
+        menu.exec(event.globalPos())
+        menu.deleteLater()
 
     def _paint_redactions(self, painter: QPainter) -> None:
         canvas = self.canvas
@@ -809,8 +865,9 @@ class _PageLabel(QLabel):
     def _release_annotation(self, start: QPointF, end: QPointF) -> None:
         """The end of a gesture with an annotation tool.
 
-        A click on an annotation made in Plico takes it back, like a click on
-        a redaction; a click elsewhere places a note. A drag marks the words
+        A click on an annotation takes it off, like a click on a redaction --
+        one made in Plico or one already in the file; a click elsewhere places
+        a note. A drag marks the words
         it covered, or draws the stroke.
         """
         tool = self._view.annotation_tool()
@@ -820,9 +877,9 @@ class _PageLabel(QLabel):
         canvas = self.canvas
         assert canvas is not None
         if (end - start).manhattanLength() < CLICK_SLOP:
-            hit = self.annotation_at(end)
+            hit = self.target_at(end)
             if hit is not None:
-                self._view.forget_annotation(canvas, hit)
+                self._view.forget_target(canvas, hit)
             elif tool == NOTE:
                 self._view.commit_note(canvas, *self._to_page(end))
             return
@@ -908,6 +965,10 @@ class PageView(QScrollArea):
     # made with an annotation tool; and one taken back with a click.
     annotation_added = Signal(int, object)
     annotation_removed = Signal(int, object)
+    # An annotation already in the file taken off (a FileAnnotation), and a
+    # note given new words (an Annotation or a FileAnnotation, then the text).
+    file_annotation_removed = Signal(int, object)
+    note_edited = Signal(int, object, str)
 
     def __init__(self, worker, model=None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -1353,6 +1414,7 @@ class PageView(QScrollArea):
                 scale,
                 dpr,
                 c.item.crop,
+                c.item.hidden_annotations,
                 marks,  # last: the preview tests read it there
             )
             if c.current_key == key or c.pending_key == key:
@@ -1375,6 +1437,7 @@ class PageView(QScrollArea):
                     c.item.rotation,    # user offset only: MuPDF has already
                     marks,              # applied the page's own /Rotate
                     c.item.crop,
+                    c.item.hidden_annotations,
                 )
             )
 
@@ -1630,21 +1693,38 @@ class PageView(QScrollArea):
         y = min(max(y, half), max(half, height - half))
         self.annotation_added.emit(canvas.index, Annotation(NOTE, at=(x, y), text=text))
 
-    def ask_note_text(self) -> str | None:
-        """The text of a new note, or None if the user cancelled (tests replace it)."""
+    def ask_note_text(self, text: str = "") -> str | None:
+        """The text of a note, starting from *text*; None if the user cancelled.
+
+        Tests replace it.
+        """
         from PySide6.QtWidgets import QInputDialog
 
         text, accepted = QInputDialog.getMultiLineText(
             self,
             QCoreApplication.translate("PageView", "Nota"),
             QCoreApplication.translate("PageView", "Testo della nota:"),
+            text,
         )
         text = text.strip()[:MAX_NOTE_TEXT]
         return text if accepted and text else None
 
-    def forget_annotation(self, canvas: _Canvas, annotation: Annotation) -> None:
-        """Ask for *annotation* to be taken back off *canvas*."""
-        self.annotation_removed.emit(canvas.index, annotation)
+    def forget_target(self, canvas: _Canvas, target: Annotation | FileAnnotation) -> None:
+        """Ask for an annotation, Plico's or the file's, to go off *canvas*."""
+        if isinstance(target, Annotation):
+            self.annotation_removed.emit(canvas.index, target)
+        else:
+            self.file_annotation_removed.emit(canvas.index, target)
+
+    def edit_note(self, canvas: _Canvas, target: Annotation | FileAnnotation) -> None:
+        """Ask for a note's new words, starting from what it says now.
+
+        Emptied, it is not a note any more: say so with «Togli annotazione».
+        """
+        before = target.text if isinstance(target, Annotation) else canvas.item.note_text(target)
+        text = self.ask_note_text(before)
+        if text is not None and text != before:
+            self.note_edited.emit(canvas.index, target, text)
 
     # ------------------------------------------------------------------ #
     #  Text editing
