@@ -88,7 +88,7 @@
       <caption xml:lang="es">Un documento con sus páginas, ajustado al ancho de la ventana</caption>
       <caption xml:lang="fr">Un document et ses pages, ajusté à la largeur de la fenêtre</caption>
       <caption xml:lang="de">Ein Dokument mit seinen Seiten, an die Fensterbreite angepasst</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.0/flatpak/screenshots/main.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.1/flatpak/screenshots/main.png</image>
     </screenshot>
     <screenshot>
       <caption>Personal data marked for erasure: on saving it leaves the file</caption>
@@ -96,7 +96,7 @@
       <caption xml:lang="es">Datos personales marcados para borrar: al guardar salen del archivo</caption>
       <caption xml:lang="fr">Données personnelles marquées pour l'effacement : à l'enregistrement, elles quittent le fichier</caption>
       <caption xml:lang="de">Persönliche Daten zum Löschen markiert: Beim Speichern verlassen sie die Datei</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.0/flatpak/screenshots/redact.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.1/flatpak/screenshots/redact.png</image>
     </screenshot>
     <screenshot>
       <caption>Filling in a PDF form, on the page or in the side panel</caption>
@@ -104,7 +104,7 @@
       <caption xml:lang="es">Rellenar un formulario PDF, en la página o en el panel lateral</caption>
       <caption xml:lang="fr">Remplir un formulaire PDF, sur la page ou dans le panneau latéral</caption>
       <caption xml:lang="de">Ein PDF-Formular ausfüllen, auf der Seite oder in der Seitenleiste</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.0/flatpak/screenshots/form.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.1/flatpak/screenshots/form.png</image>
     </screenshot>
     <screenshot>
       <caption>Correcting a line of text where it stands</caption>
@@ -112,7 +112,7 @@
       <caption xml:lang="es">Corregir una línea de texto en su sitio</caption>
       <caption xml:lang="fr">Corriger une ligne de texte là où elle se trouve</caption>
       <caption xml:lang="de">Eine Textzeile direkt an ihrer Stelle korrigieren</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.0/flatpak/screenshots/edit.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.1/flatpak/screenshots/edit.png</image>
     </screenshot>
     <screenshot>
       <caption>Highlights, a note and a freehand mark, with the bookmarks in the side bar</caption>
@@ -120,7 +120,7 @@
       <caption xml:lang="es">Resaltados, una nota y un trazo a mano alzada, con los marcadores en la barra lateral</caption>
       <caption xml:lang="fr">Surlignages, une note et un trait à main levée, avec les signets dans la barre latérale</caption>
       <caption xml:lang="de">Hervorhebungen, eine Notiz und eine Freihandmarkierung, mit den Lesezeichen in der Seitenleiste</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.0/flatpak/screenshots/annotate.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.1/flatpak/screenshots/annotate.png</image>
     </screenshot>
     <screenshot>
       <caption>Searching the document: every match highlighted, the current one in orange</caption>
@@ -128,7 +128,7 @@
       <caption xml:lang="es">Buscar en el documento: cada coincidencia resaltada, la actual en naranja</caption>
       <caption xml:lang="fr">Rechercher dans le document : chaque occurrence surlignée, l'occurrence courante en orange</caption>
       <caption xml:lang="de">Im Dokument suchen: jeder Treffer hervorgehoben, der aktuelle in Orange</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.0/flatpak/screenshots/search.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.1/flatpak/screenshots/search.png</image>
     </screenshot>
   </screenshots>
 
@@ -222,6 +222,27 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.2.1" date="2026-11-26">
+      <description>
+        <p>The annotations a PDF already has can now be removed, and its notes rewritten.</p>
+        <p xml:lang="it">Ora si possono togliere le annotazioni che un PDF ha già, e riscriverne le note.</p>
+        <p xml:lang="es">Ahora se pueden quitar las anotaciones que un PDF ya tiene, y reescribir sus notas.</p>
+        <p xml:lang="fr">Les annotations qu'un PDF a déjà peuvent maintenant être retirées, et ses notes réécrites.</p>
+        <p xml:lang="de">Die Anmerkungen, die ein PDF schon hat, lassen sich jetzt entfernen und seine Notizen neu schreiben.</p>
+        <ul>
+          <li>Right-click on an annotation to edit a note or remove it</li>
+          <li xml:lang="it">Tasto destro su un'annotazione per modificare una nota o toglierla</li>
+          <li xml:lang="es">Clic derecho en una anotación para editar una nota o quitarla</li>
+          <li xml:lang="fr">Clic droit sur une annotation pour modifier une note ou la retirer</li>
+          <li xml:lang="de">Rechtsklick auf eine Anmerkung, um eine Notiz zu bearbeiten oder sie zu entfernen</li>
+          <li>Every change undoes, and reaches the file only when saving</li>
+          <li xml:lang="it">Ogni modifica si annulla, e arriva nel file solo al salvataggio</li>
+          <li xml:lang="es">Cada cambio se deshace, y llega al archivo solo al guardar</li>
+          <li xml:lang="fr">Chaque modification s'annule, et n'atteint le fichier qu'à l'enregistrement</li>
+          <li xml:lang="de">Jede Änderung lässt sich rückgängig machen und kommt erst beim Speichern in die Datei</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.0" date="2026-11-21">
       <description>
         <p>Annotations, bookmarks, printing and password protection, with fixes from two reviews of 0.1.8.</p>
