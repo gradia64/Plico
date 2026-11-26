@@ -36,7 +36,7 @@ def _reopened(doc: pymupdf.Document) -> pymupdf.Document:
 def _span(page: pymupdf.Page, words: str) -> textedit.TextSpan:
     hit = page.search_for(words)[0]
     span = span_at(page, (hit.x0 + hit.x1) / 2, (hit.y0 + hit.y1) / 2)
-    assert span is not None, f"nessuno span sotto «{words}»"
+    assert span is not None, f"no span under «{words}»"
     return span
 
 
@@ -123,7 +123,7 @@ def test_edit_replaces_the_text_and_removes_the_old_one():
 
     testo = _reopened(doc)[0].get_text()
     assert "13.950" in testo
-    assert "12.400" not in testo, "il testo vecchio deve sparire dal content stream"
+    assert "12.400" not in testo, "the old text must disappear from the content stream"
 
 
 def test_neighbouring_spans_and_lines_survive():
@@ -183,7 +183,7 @@ def test_edit_on_a_rotated_page_keeps_the_rotate():
     letta = _reopened(doc)[0]
     assert letta.rotation == 90
     dopo = _span(letta, "Consulente").bbox
-    assert dopo[:2] == pytest.approx(prima[:2], abs=0.5), "nello stesso punto della pagina"
+    assert dopo[:2] == pytest.approx(prima[:2], abs=0.5), "at the same place on the page"
 
 
 def test_an_empty_replacement_just_removes_the_text():
@@ -312,7 +312,7 @@ def test_characters_outside_latin1_are_written_correctly(no_system_fonts):
 
 def test_an_installed_font_is_found_by_postscript_name(monkeypatch):
     if textedit._system_font_path("LiberationSerif") is None:
-        pytest.skip("Liberation Serif non è installato qui")
+        pytest.skip("Liberation Serif is not installed here")
     doc = pymupdf.open()
     page = doc.new_page()
     page.insert_font(
@@ -411,4 +411,4 @@ def test_a_broken_copy_of_a_font_does_not_hide_the_good_one():
             ]
 
     font = textedit._embedded_font(Page(), "Helvetica")
-    assert font is not None, "la seconda copia, quella buona, va usata"
+    assert font is not None, "the second copy, the good one, must be used"

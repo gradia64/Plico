@@ -215,7 +215,7 @@ def test_edits_to_the_same_field_are_merged(tmp_path):
     for value in ("A", "An", "Ann", "Anna"):
         stack.push(SetFieldValue(model, 0, "nome", value))
 
-    assert stack.count() == 1, "i tasti dello stesso campo sono un solo comando"
+    assert stack.count() == 1, "keystrokes in the same field are a single command"
     assert model.pages[0].form_values["nome"] == "Anna"
 
     stack.undo()
@@ -292,10 +292,10 @@ def test_geometry_does_not_change_with_a_rotated_page(tmp_path):
 
     one = {field.name: field.rect for field in first.pages[0].form_fields}
     two = {field.name: field.rect for field in second.pages[0].form_fields}
-    assert one == two, "ruotare la pagina non deve spostare i campi"
+    assert one == two, "rotating the page must not move the fields"
 
     assert second.pages[0].unrotated_size == (595, 842)
-    assert second.pages[0].width_pt == 842, "la dimensione orientata si scambia"
+    assert second.pages[0].width_pt == 842, "the oriented size is swapped"
 
 
 def test_a_rotated_page_saves_the_value(tmp_path):
@@ -347,7 +347,7 @@ def test_clearing_a_field_repaints_it_empty(tmp_path):
     save_as(model, output)
 
     assert _values(output)["nome"] == ""
-    assert _ink(source, (72, 100, 300, 128)) > 0, "il file aveva del testo"
+    assert _ink(source, (72, 100, 300, 128)) > 0, "the file had some text"
     assert _ink(output, (72, 100, 300, 128)) == 0
 
 
@@ -362,7 +362,7 @@ def test_a_ticked_checkbox_can_be_unticked(tmp_path):
 
     second = DocumentModel()
     second.open(checked)
-    assert second.pages[0].form_fields[2].checked, "la casella risulta spuntata"
+    assert second.pages[0].form_fields[2].checked, "the checkbox is checked"
     second.pages[0].form_values["accetto"] = "Off"
     save_as(second, empty)
 
@@ -404,8 +404,8 @@ def test_a_repeated_field_changes_on_every_page_that_shows_it(tmp_path):
     save_as(model, output)
 
     assert _values(output, 0)["nome"] == "nuovo"
-    assert _values(output, 1)["nome"] == "nuovo", "lo stesso nome e` lo stesso campo"
-    assert _values(source, 1)["nome"] == "vecchio", "la sorgente e` intatta"
+    assert _values(output, 1)["nome"] == "nuovo", "the same name is the same field"
+    assert _values(source, 1)["nome"] == "vecchio", "the source is untouched"
 
 
 def test_a_repeated_field_survives_page_reordering(tmp_path):
@@ -469,7 +469,7 @@ def test_the_buttons_are_where_the_page_draws_them(tmp_path):
     model, _ = _radio_opened(tmp_path)
 
     boxes = [field.rect for field in model.pages[0].form_fields]
-    assert boxes[0][0] < boxes[1][0], "il primo bottone sta a sinistra del secondo"
+    assert boxes[0][0] < boxes[1][0], "the first button is left of the second"
     assert boxes[0][1] == boxes[1][1]
 
 
@@ -498,7 +498,7 @@ def test_choosing_a_button_names_the_choice(tmp_path):
 
     assert _radio_raw(output) == ("/secondo", ["/Off", "/secondo"])
     assert _values(output)["pasto"] == "secondo"
-    assert _radio_raw(source)[0] == "/primo", "la sorgente non si tocca"
+    assert _radio_raw(source)[0] == "/primo", "the source is not touched"
 
 
 def test_only_the_button_that_stands_for_the_option_is_turned_on(tmp_path):
@@ -588,7 +588,7 @@ def _names_by_page(path: str) -> list[list[str]]:
 def _top_fields(path: str) -> list[str]:
     with pymupdf.open(path) as doc:
         kind, fields = doc.xref_get_key(doc.pdf_catalog(), "AcroForm/Fields")
-        assert kind == "array", f"AcroForm/Fields non e` un array: {kind} {fields}"
+        assert kind == "array", f"AcroForm/Fields is not an array: {kind} {fields}"
         return [doc.xref_get_key(int(x), "T")[1] for x in fields.strip("[]").split()[::3]]
 
 
@@ -606,7 +606,7 @@ def test_a_field_on_two_pages_survives_reordering(tmp_path):
     save_as(model, output)
 
     assert _names_by_page(output) == [["nome"], ["nome"]]
-    assert _top_fields(output) == ["nome"], "un campo solo, non uno per copia"
+    assert _top_fields(output) == ["nome"], "one field, not one per copy"
     assert _values(output, 0)["nome"] == _values(output, 1)["nome"] == "nuovo"
 
 

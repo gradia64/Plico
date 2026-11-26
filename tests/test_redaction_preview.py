@@ -118,12 +118,12 @@ def test_the_view_asks_for_the_preview_only_without_a_mark_tool(windows, tmp_pat
     rect = _mark(mw)
     _pump()
     canvas = mw._page_view._canvases[0]
-    assert canvas.current_key[-1] == (rect,), "senza strumento: pagina come salvata"
+    assert canvas.current_key[-1] == (rect,), "without the tool: the page as saved"
 
     mw._redact_act.setChecked(True)
     mw._on_redaction_toggled(True)
     _pump()
-    assert canvas.current_key[-1] == (), "con lo strumento: la pagina vera, sotto i segni"
+    assert canvas.current_key[-1] == (), "with the tool: the real page, under the marks"
 
     mw._redact_act.setChecked(False)
     mw._on_redaction_toggled(False)
@@ -150,7 +150,7 @@ def test_the_thumbnail_follows_the_marks(windows, tmp_path):
     rect = _mark(mw)
     after = thumb_key(mw._doc_model.pages[0], THUMB_ZOOM, 1.0)
     assert before != after and after[-1] == (rect,)
-    assert before not in mw._thumbnail_cache, "la miniatura senza il segno non serve più"
+    assert before not in mw._thumbnail_cache, "the thumbnail without the mark is no longer needed"
 
 
 # -- saying it ----------------------------------------------------------- #
@@ -167,7 +167,7 @@ def test_the_title_counts_what_waits_for_a_save(windows, tmp_path):
     assert "2 cancellazioni da applicare" in mw.windowTitle()
 
     assert mw._save_to(str(tmp_path / "copia.pdf"))
-    assert "da applicare" not in mw.windowTitle(), "nella copia ci sono già"
+    assert "da applicare" not in mw.windowTitle(), "the copy already has them"
 
 
 def test_a_drawn_zone_is_announced_over_the_page(windows, tmp_path):
@@ -219,7 +219,7 @@ def test_the_save_asks_with_the_numbers_and_can_be_refused(windows, tmp_path, mo
 
     assert not mw._save_to(str(out))
 
-    assert not out.exists(), "rifiutato: niente file"
+    assert not out.exists(), "refused: no file"
     assert len(asked) == 1
     assert "2 zone" in asked[0] and "1, 3" in asked[0]
     assert sum(len(item.redactions) for item in mw._doc_model.pages) == 2
@@ -236,10 +236,10 @@ def test_marks_already_in_the_target_are_not_asked_again(windows, tmp_path, monk
 
     assert mw._save_to(target)
     assert mw._save_to(target)
-    assert len(asked) == 1, "lo stesso file ha già quella cancellazione"
+    assert len(asked) == 1, "the same file already has that erasure"
 
     assert mw._save_to(str(tmp_path / "altro.pdf"))
-    assert len(asked) == 2, "un file nuovo la riceve di nuovo, e va chiesto"
+    assert len(asked) == 2, "a new file receives it again, and must be asked"
     with pymupdf.open(target) as doc:
         assert "SEGRETO" not in doc[0].get_text()
 

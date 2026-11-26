@@ -183,14 +183,14 @@ def test_adding_a_redaction_is_undoable(tmp_path) -> None:
 
     command.redo()
     assert model.pages[0].redactions == [rect]
-    assert seen == [0], "la pagina deve ridisegnarsi subito"
+    assert seen == [0], "the page must be redrawn at once"
 
     command.undo()
     assert model.pages[0].redactions == []
-    assert seen == [0, 0], "anche l'annullamento deve ridisegnare"
+    assert seen == [0, 0], "undoing must redraw too"
 
     command.redo()
-    assert model.pages[0].redactions == [rect], "un redo dopo l'undo deve rimetterla"
+    assert model.pages[0].redactions == [rect], "a redo after the undo must put it back"
 
 
 def test_removing_a_redaction_is_undoable(tmp_path) -> None:
@@ -207,7 +207,7 @@ def test_removing_a_redaction_is_undoable(tmp_path) -> None:
     assert model.pages[0].redactions == []
 
     command.undo()
-    assert model.pages[0].redactions == [rect], "l'undo deve rimetterla dov'era"
+    assert model.pages[0].redactions == [rect], "the undo must put it back where it was"
 
     command.redo()
     assert model.pages[0].redactions == []
@@ -230,13 +230,13 @@ def test_moving_a_redaction_is_undoable(tmp_path) -> None:
 
     command.redo()
     assert model.pages[0].redactions == [after]
-    assert drawn == [0, 0], "anche lo spostamento deve far ridisegnare la pagina"
+    assert drawn == [0, 0], "moving must redraw the page too"
 
     command.undo()
     assert model.pages[0].redactions == [before]
 
     command.redo()
-    assert model.pages[0].redactions == [after], "un redo dopo l'undo deve rimetterla"
+    assert model.pages[0].redactions == [after], "a redo after the undo must put it back"
 
 
 def test_resizing_a_redaction_is_undoable(tmp_path) -> None:
@@ -252,7 +252,7 @@ def test_resizing_a_redaction_is_undoable(tmp_path) -> None:
 
     command.redo()
     assert model.pages[0].redactions == [after]
-    assert after.x0 == before.x0, "l'angolo opposto non si muove"
+    assert after.x0 == before.x0, "the opposite corner does not move"
 
     command.undo()
     assert model.pages[0].redactions == [before]
@@ -275,8 +275,8 @@ def test_the_marked_text_is_no_longer_in_the_file(tmp_path) -> None:
 
     with pymupdf.open(out) as doc:
         text = doc[0].get_text()
-    assert SEGRETO not in text, "il testo marcato e` ancora nel documento"
-    assert PUBBLICO in text, "la redazione ha portato via anche il resto"
+    assert SEGRETO not in text, "the marked text is still in the document"
+    assert PUBBLICO in text, "the redaction took away the rest too"
 
 
 def test_the_source_is_not_touched(tmp_path) -> None:
@@ -291,7 +291,7 @@ def test_the_source_is_not_touched(tmp_path) -> None:
     save_as(model, out)
 
     with pymupdf.open(src) as doc:
-        assert SEGRETO in doc[0].get_text(), "la redazione e` finita sulla sorgente"
+        assert SEGRETO in doc[0].get_text(), "the redaction ended up on the source"
 
 
 def _pdf_with_notes(path: str) -> None:
@@ -325,7 +325,7 @@ def test_an_annotation_on_a_redaction_goes_with_the_text(tmp_path) -> None:
     model.pages[0].redactions.append(_secret_rect(src))
     save_as(model, out)
 
-    assert SEGRETO not in _notes_of(out), "la nota sopra la redazione e` rimasta"
+    assert SEGRETO not in _notes_of(out), "the note over the redaction stayed"
 
 
 def test_an_annotation_away_from_the_redaction_stays(tmp_path) -> None:
@@ -339,7 +339,7 @@ def test_an_annotation_away_from_the_redaction_stays(tmp_path) -> None:
     model.pages[0].redactions.append(_secret_rect(src))
     save_as(model, out)
 
-    assert PUBBLICO in _notes_of(out), "la nota lontana e` stata tolta"
+    assert PUBBLICO in _notes_of(out), "the distant note was removed"
 
 
 @pytest.mark.parametrize("rotation", [90, 180, 270])
@@ -358,9 +358,9 @@ def test_the_redaction_also_holds_with_a_rotated_page(tmp_path, rotation: int) -
 
     with pymupdf.open(out) as doc:
         page = doc[0]
-        assert page.rotation == rotation, "il salvataggio ha perso la rotazione"
+        assert page.rotation == rotation, "the save lost the rotation"
         text = page.get_text()
-    assert SEGRETO not in text, "ruotando, il rettangolo e` finito altrove"
+    assert SEGRETO not in text, "after rotating, the rectangle ended up elsewhere"
     assert PUBBLICO in text
 
 
@@ -394,9 +394,9 @@ def test_a_redaction_lands_on_its_own_page(tmp_path) -> None:
     save_as(model, out)
 
     with pymupdf.open(out) as doc:
-        assert SEGRETO in doc[0].get_text(), "la prima pagina non era marcata"
-        assert SEGRETO not in doc[1].get_text(), "la seconda pagina non e` stata redatta"
-        assert SEGRETO in doc[2].get_text(), "la terza pagina non era marcata"
+        assert SEGRETO in doc[0].get_text(), "the first page was not marked"
+        assert SEGRETO not in doc[1].get_text(), "the second page was not redacted"
+        assert SEGRETO in doc[2].get_text(), "the third page was not marked"
 
 
 def test_the_text_disappears_when_saving_compressed_too(tmp_path) -> None:

@@ -39,7 +39,7 @@ def test_an_empty_choice_shows_nothing_chosen(qapp):
     combo = _combo(panel)
     assert combo.currentText() == ""
     assert [combo.itemText(i) for i in range(combo.count())] == ["", "Rosso", "Verde"]
-    assert changed == [], "costruire il pannello non scrive niente nel modello"
+    assert changed == [], "building the panel writes nothing to the model"
 
 
 def test_a_stored_choice_is_shown_as_it_is(qapp):

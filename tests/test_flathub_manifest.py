@@ -98,7 +98,7 @@ def repo(tmp_path, monkeypatch):
     is pointed at this key instead of packaging/plico-release-key.asc.
     """
     if shutil.which("gpg") is None:
-        pytest.skip("gpg non disponibile")
+        pytest.skip("gpg not available")
     work = tmp_path / "repo"
     (work / "flatpak").mkdir(parents=True)
     for name in (f"{fm.APP_ID}.json", "python3-pymupdf.json", "python3-pikepdf.json",

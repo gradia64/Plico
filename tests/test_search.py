@@ -73,7 +73,7 @@ def test_every_occurrence_is_found_in_reading_order(window):
     # Case-insensitive, two per page on the first three pages, none on the fourth.
     assert [index for index, _ in window._find_hits] == [0, 0, 1, 1, 2, 2]
     first, second = (rect for index, rect in window._find_hits if index == 0)
-    assert first.y0 < second.y0, "dall'alto in basso"
+    assert first.y0 < second.y0, "top to bottom"
     assert window._find_bar._count.text() == "1 di 6"
     assert window._page_view.search_current() == (0, 0)
     assert len(window._page_view.search_hits(1)) == 2
@@ -85,11 +85,11 @@ def test_f3_walks_forward_and_wraps_round(window):
         window._step_search(1)
     assert window._find_bar._count.text() == "4 di 6"
     assert window._page_view.search_current() == (1, 1)
-    assert window._thumb_bar.current_row() == 1, "la miniatura segue l'occorrenza"
+    assert window._thumb_bar.current_row() == 1, "the thumbnail follows the match"
 
     window._find_position = 5
     window._step_search(1)
-    assert window._find_bar._count.text() == "1 di 6", "dopo l'ultima si riparte"
+    assert window._find_bar._count.text() == "1 di 6", "after the last one it starts over"
     window._step_search(-1)
     assert window._find_bar._count.text() == "6 di 6"
 

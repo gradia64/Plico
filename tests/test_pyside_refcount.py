@@ -39,7 +39,7 @@ def test_emitting_a_signal_keeps_true_alive(qapp):
     gc.collect()
     lost = before - sys.getrefcount(True)
     assert lost <= 0, (
-        f"{lost} riferimenti a True persi in 50 emit(): su Python < 3.12 l'interprete "
-        "abortira` (bool_dealloc, PYSIDE-3474). Escludere questa versione di PySide6 "
+        f"{lost} references to True lost in 50 emit(): on Python < 3.12 the interpreter "
+        "will abort (bool_dealloc, PYSIDE-3474). Exclude this PySide6 version "
         "in pyproject.toml."
     )

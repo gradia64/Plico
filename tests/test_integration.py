@@ -686,7 +686,7 @@ def test_a_merge_after_an_undone_merge_shows_its_own_pages(windows, tmp_path):
     mw._page_view.ensure_page_visible(1)
     _pump(1.5)
 
-    assert mw._doc_model.pages[1].source_id == 2, "un id liberato non si riusa"
+    assert mw._doc_model.pages[1].source_id == 2, "a released id is not reused"
     # A late render of the red page, as if it had still been in flight.
     mw._worker.rendered.emit(red_key, red_image)
     _pump(0.2)
@@ -694,7 +694,7 @@ def test_a_merge_after_an_undone_merge_shows_its_own_pages(windows, tmp_path):
     canvas = mw._page_view._canvases[1]
     image = canvas.label.pixmap().toImage()
     colour = image.pixelColor(image.width() // 2, image.height() // 2)
-    assert (colour.red(), colour.blue()) == (0, 255), "la pagina unita deve essere blu"
+    assert (colour.red(), colour.blue()) == (0, 255), "the merged page must be blue"
     thumb = mw._thumbnail_cache.get(thumb_key(mw._doc_model.pages[1], THUMB_ZOOM, 1.0))
     if thumb is not None:
         pixel = thumb.pixelColor(thumb.width() // 2, thumb.height() // 2)
@@ -718,7 +718,7 @@ def test_saving_over_a_file_whose_merge_was_undone_keeps_the_history(
     assert mw._save_to(merged)
 
     assert mw._save_target == merged
-    assert mw._undo_stack.canUndo(), "nessuna sorgente in uso è stata sovrascritta"
+    assert mw._undo_stack.canUndo(), "no source in use was overwritten"
 
 
 def test_merged_page_identity_does_not_collide(windows, tmp_path):
@@ -984,7 +984,7 @@ def test_selection_survives_a_delete(windows, tmp_path):
     mw._delete_page()  # deletes row 3
 
     row = mw._thumb_bar.current_row()
-    assert row >= 0, "la selezione è andata persa dopo il delete"
+    assert row >= 0, "the selection was lost after the delete"
 
     # ...and now the command really acts on that row.
     mw._rotate_selected(90)
@@ -1011,8 +1011,8 @@ def test_rotation_drops_the_stale_thumbnail_of_that_page(windows, tmp_path):
     mw._thumb_bar.set_current_row(0)
     mw._rotate_selected(90)
 
-    assert old_key not in mw._thumbnail_cache, "miniatura stantia non scartata"
-    assert other_key in mw._thumbnail_cache, "scartata la miniatura di un'altra pagina"
+    assert old_key not in mw._thumbnail_cache, "stale thumbnail not discarded"
+    assert other_key in mw._thumbnail_cache, "discarded the thumbnail of another page"
 
 
 def test_thumbnail_requests_are_not_duplicated(windows, tmp_path):
@@ -1034,12 +1034,12 @@ def test_thumbnail_requests_are_not_duplicated(windows, tmp_path):
 
     mw._thumb_bar.refresh()
     in_flight = dict(mw._thumb_bar._pending)
-    assert in_flight, "la barra non ha chiesto nessuna miniatura"
+    assert in_flight, "the bar asked for no thumbnail"
 
     mw._thumb_bar.refresh()
     mw._thumb_bar.refresh()
 
-    assert mw._thumb_bar._pending == in_flight, "richieste duplicate in volo"
+    assert mw._thumb_bar._pending == in_flight, "duplicate requests in flight"
 
 
 def test_late_render_for_a_key_nobody_asked_is_dropped(windows, tmp_path):
@@ -1073,7 +1073,7 @@ def test_failed_thumbnail_render_clears_pending(windows, tmp_path):
     mw._thumbnail_cache.clear()
     mw._thumb_bar._pending.clear()
     mw._thumb_bar.refresh()
-    assert mw._thumb_bar._pending, "niente in volo: il test non prova nulla"
+    assert mw._thumb_bar._pending, "nothing in flight: the test proves nothing"
 
     for key in list(mw._thumb_bar._pending):
         mw._thumb_bar._on_render_failed(key)
@@ -1114,8 +1114,8 @@ def test_fit_to_width_renders_the_page_at_the_width_it_lays_out(windows, tmp_pat
     drawn = pixmap.width() / pixmap.devicePixelRatio()
     assert abs(drawn - canvas.label.width()) <= 1, (drawn, canvas.label.width())
     viewport = mw._page_view.viewport().width()
-    assert abs(canvas.label.width() - (viewport - 20)) <= 1, "la larghezza della vista"
-    assert canvas.current_key[4] != 1.0, "resa alla scala dell'impaginazione, non allo zoom"
+    assert abs(canvas.label.width() - (viewport - 20)) <= 1, "the width of the view"
+    assert canvas.current_key[4] != 1.0, "rendered at the layout scale, not at the zoom"
 
 
 def test_the_page_cache_frees_the_bytes_it_replaced(windows):
@@ -1133,7 +1133,7 @@ def test_the_page_cache_frees_the_bytes_it_replaced(windows):
     assert view._cache_bytes == 100 * 100 * 4
 
     view._cache_put(key, QPixmap(50, 50))
-    assert view._cache_bytes == 50 * 50 * 4, "i byte della pixmap sostituita"
+    assert view._cache_bytes == 50 * 50 * 4, "the bytes of the replaced pixmap"
     assert len(view._cache) == 1
 
     # And the same key must not stay twice in the queue.
@@ -1153,7 +1153,7 @@ def test_saving_over_the_open_file_makes_the_worker_forget_it(windows, tmp_path)
     mw = windows()
     _open(mw, pdf)
     previous = mw._worker._docs.get(pdf)
-    assert previous is not None, "il worker non ha aperto la sorgente"
+    assert previous is not None, "the worker did not open the source"
 
     mw._delete_page()
     with mock.patch.object(
@@ -1164,7 +1164,7 @@ def test_saving_over_the_open_file_makes_the_worker_forget_it(windows, tmp_path)
 
     # The file is re-opened, so the worker may well hold a handle again --
     # just never the one it had before the save.
-    assert previous.is_closed, "il worker tiene ancora il documento sovrascritto"
+    assert previous.is_closed, "the worker still holds the overwritten document"
     assert mw._worker._docs.get(pdf) is not previous
     with pymupdf.open(pdf) as doc:
         assert doc.page_count == 4 - 1
@@ -1241,7 +1241,7 @@ def test_saving_over_the_open_file_then_saving_again_keeps_every_page(
         mw._page_view.ensure_page_visible(index)
         _pump()
         pix = canvas.label.pixmap()
-        assert not pix.isNull(), "la pagina non è stata resa dopo il salvataggio"
+        assert not pix.isNull(), "the page was not rendered after saving"
         horizontal = degrees % 180 == 90
         assert (pix.width() > pix.height()) == horizontal
 
@@ -1356,13 +1356,13 @@ def test_compress_writes_a_smaller_copy_and_leaves_the_source_alone(
     mw._compress_file()
     _wait_for_compression(mw)
 
-    assert os.path.getsize(out) < before * 0.5, "il file compresso non e` piu` piccolo"
+    assert os.path.getsize(out) < before * 0.5, "the compressed file is not smaller"
     with pymupdf.open(out) as doc:
         assert doc.page_count == 20
         assert "della pagina 1" in doc[0].get_text()
-    assert os.path.getsize(pdf) == before, "la sorgente non si tocca"
-    assert messaggi and "Prima:" in messaggi[0], f"il guadagno va raccontato: {messaggi}"
-    assert mw._progress is None, "il dialogo di avanzamento deve sparire"
+    assert os.path.getsize(pdf) == before, "the source is not touched"
+    assert messaggi and "Prima:" in messaggi[0], f"the gain must be reported: {messaggi}"
+    assert mw._progress is None, "the progress dialog must go away"
     assert mw._compression_task is None
 
 
@@ -1440,7 +1440,7 @@ def test_compress_can_be_cancelled_at_the_level_dialog(qapp, tmp_path, monkeypat
 
     mw._compress_file()
 
-    assert calls == [], "annullare il livello non deve chiedere un file"
+    assert calls == [], "cancelling the level must not ask for a file"
     assert not os.path.exists(out)
 
 
@@ -1458,7 +1458,7 @@ def test_compress_without_a_document_warns(qapp, monkeypatch, windows):
 
     mw._compress_file()
 
-    assert opened_files == [], "senza documento non si sceglie nemmeno il livello"
+    assert opened_files == [], "without a document the level is not even chosen"
     assert avvisi and "Nessun documento" in avvisi[0]
 
 
@@ -1472,7 +1472,7 @@ def test_compressing_over_the_open_file_evicts_the_stale_handle(
     mw = windows()
     _open(mw, pdf)
     previous = mw._worker._docs.get(pdf)
-    assert previous is not None, "il worker non ha aperto la sorgente"
+    assert previous is not None, "the worker did not open the source"
 
     monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (pdf, "")))
     monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
@@ -1481,7 +1481,7 @@ def test_compressing_over_the_open_file_evicts_the_stale_handle(
     mw._compress_file()
     _wait_for_compression(mw)
 
-    assert previous.is_closed, "il worker tiene ancora il documento sovrascritto"
+    assert previous.is_closed, "the worker still holds the overwritten document"
     assert mw._worker._docs.get(pdf) is not previous
     with pymupdf.open(pdf) as doc:
         assert doc.page_count == 6
@@ -1535,7 +1535,7 @@ def test_extract_over_the_open_file_is_refused(qapp, tmp_path, monkeypatch, wind
 
     mw._extract_pages()
 
-    assert messaggi, "il rifiuto deve arrivare all'utente"
+    assert messaggi, "the refusal must reach the user"
     assert len(_content(pdf)) == 3
     assert mw._doc_model.page_count == 3
 
@@ -1563,7 +1563,7 @@ def test_a_failed_compression_arrives_as_a_message(qapp, tmp_path, monkeypatch, 
     _wait_for_compression(mw)
 
     assert errors and "Impossibile comprimere" in errors[0], errors
-    assert mw._progress is None, "anche fallendo, il dialogo di avanzamento deve sparire"
+    assert mw._progress is None, "even on failure, the progress dialog must go away"
 
 
 def _noisy_pdf(path: str, pages: int = 2, size: int = 900, shared: bool = False) -> None:
@@ -1632,8 +1632,8 @@ def test_resampling_can_be_limited_to_some_pages(qapp, tmp_path, monkeypatch, wi
     _wait_for_compression(mw)
 
     assert os.path.exists(out)
-    assert _image_bytes(out, 0) < _image_bytes(pdf, 0) / 2, "la pagina scelta rimpicciolisce"
-    assert _image_bytes(out, 1) == _image_bytes(pdf, 1), "quella non scelta resta com'e`"
+    assert _image_bytes(out, 0) < _image_bytes(pdf, 0) / 2, "the chosen page shrinks"
+    assert _image_bytes(out, 1) == _image_bytes(pdf, 1), "the one not chosen stays as it was"
 
 
 def test_a_page_whose_image_is_shared_with_another_gains_nothing(
@@ -1658,9 +1658,9 @@ def test_a_page_whose_image_is_shared_with_another_gains_nothing(
     mw._compress_file()
     _wait_for_compression(mw)
 
-    assert not os.path.exists(out), "un file che non guadagna non si scrive"
+    assert not os.path.exists(out), "a file that gains nothing is not written"
     assert messages and "pagine che non hai scelto" in messages[0], messages
-    assert mw._doc_model.sources == [pdf], "la sorgente resta la sorgente"
+    assert mw._doc_model.sources == [pdf], "the source stays the source"
 
 
 def test_skipping_the_structural_pass_is_reported_when_it_gains_nothing(
@@ -1687,7 +1687,7 @@ def test_skipping_the_structural_pass_is_reported_when_it_gains_nothing(
 def test_the_dialog_explains_each_choice(qapp):
     """The real dialog: the preset, the two adjustments, and the refusals."""
     dialog = CompressionDialog(20)
-    assert dialog.level.key == "medium", "il compromesso e` il predefinito"
+    assert dialog.level.key == "medium", "the compromise is the default"
     assert dialog.options.groom is True
     assert dialog.options.image_pages is None
     assert dialog._ok.isEnabled()
@@ -1696,7 +1696,7 @@ def test_the_dialog_explains_each_choice(qapp):
     assert dialog.options.image_pages == (2, 3, 4)
 
     dialog._pages.setText("99")
-    assert not dialog._ok.isEnabled(), "una pagina che non esiste non si accetta"
+    assert not dialog._ok.isEnabled(), "a page that does not exist is not accepted"
 
     dialog._pages.setText("3-5")
     dialog._images_only.setChecked(True)
@@ -1704,7 +1704,7 @@ def test_the_dialog_explains_each_choice(qapp):
     assert "ricompattato" in dialog._explanation.text()
 
     dialog._choice.setCurrentIndex([level.key for level in LEVELS].index("light"))
-    assert not dialog._images_only.isChecked(), "senza immagini da toccare non ha senso"
+    assert not dialog._images_only.isChecked(), "with no images to touch it makes no sense"
     assert not dialog._pages.isEnabled()
     dialog.deleteLater()
 
@@ -1774,7 +1774,7 @@ def test_redaction_is_a_mode_in_the_edit_menu(windows):
         for action in mw.menuBar().actions()[1].menu().actions()
     }
     assert "Cancella zona" in entries, sorted(entries)
-    assert entries["Cancella zona"].isCheckable(), "e` una modalita`, non un comando secco"
+    assert entries["Cancella zona"].isCheckable(), "it is a mode, not a one-shot command"
     assert entries["Cancella zona"].shortcut().toString() == "Ctrl+Shift+X"
 
 
@@ -1791,7 +1791,7 @@ def test_redaction_without_a_document_warns(qapp, monkeypatch, windows):
     mw._redact_act.trigger()
 
     assert avvisi and "Nessun documento" in avvisi[0]
-    assert not mw._redact_act.isChecked(), "la spunta deve tornare indietro"
+    assert not mw._redact_act.isChecked(), "the check mark must go back"
     assert not mw._page_view.redaction_mode()
 
 
@@ -1856,7 +1856,7 @@ def test_dragging_on_the_page_creates_a_redaction(qapp, tmp_path, windows):
     _pump(0.1)
 
     redactions = mw._doc_model.pages[0].redactions
-    assert len(redactions) == 1, "il trascinamento non ha lasciato una redazione"
+    assert len(redactions) == 1, "the drag did not leave a redaction"
     rect = redactions[0]
     width, height = mw._doc_model.pages[0].unrotated_size
     assert 0.0 <= rect.x0 < rect.x1 <= width
@@ -1949,7 +1949,7 @@ def test_a_mark_is_moved_with_the_mouse(qapp, tmp_path, windows):
     assert after.height == pytest.approx(before.height)
     assert after.x0 > before.x0
     assert after.y0 > before.y0
-    assert mw._undo_stack.count() == 2, "lo spostamento deve essere un solo passo"
+    assert mw._undo_stack.count() == 2, "the move must be a single step"
     assert mw._undo_stack.undoText() == "Sposta zona su pagina 1"
 
     mw._undo_stack.undo()
@@ -2002,13 +2002,13 @@ def test_leaving_the_tool_puts_back_a_mark_still_in_the_air(qapp, tmp_path, wind
     label = canvas.label
     label.mousePressEvent(_event(QEvent.Type.MouseButtonPress, (70, 50)))
     label.mouseMoveEvent(_event(QEvent.Type.MouseMove, (110, 70)))
-    assert mw._doc_model.pages[0].redactions[0] != before, "la zona deve seguire il mouse"
+    assert mw._doc_model.pages[0].redactions[0] != before, "the area must follow the mouse"
 
     # The button is never released: the tool goes off instead.
     mw._redact_act.trigger()
 
     assert mw._doc_model.pages[0].redactions[0] == before
-    assert mw._undo_stack.count() == 1, "niente è finito nella pila"
+    assert mw._undo_stack.count() == 1, "nothing ended up on the stack"
 
 
 def test_from_the_drag_to_the_file_the_text_disappears(qapp, tmp_path, monkeypatch, windows):
@@ -2033,8 +2033,8 @@ def test_from_the_drag_to_the_file_the_text_disappears(qapp, tmp_path, monkeypat
 
     with pymupdf.open(out) as doc:
         text = doc[0].get_text()
-    assert "SEGRETO" not in text, "il giro completo non ha rimosso il testo"
-    assert "PUBBLICO" in text, "la redazione ha portato via anche il resto"
+    assert "SEGRETO" not in text, "the full round did not remove the text"
+    assert "PUBBLICO" in text, "the redaction took away the rest too"
 
 
 def test_the_drag_also_holds_with_a_rotated_page(qapp, tmp_path, monkeypatch, windows):
@@ -2062,7 +2062,7 @@ def test_the_drag_also_holds_with_a_rotated_page(qapp, tmp_path, monkeypatch, wi
     with pymupdf.open(out) as doc:
         assert doc[0].rotation == 90
         text = doc[0].get_text()
-    assert "SEGRETO" not in text, "ruotando, il rettangolo e` finito altrove"
+    assert "SEGRETO" not in text, "after rotating, the rectangle ended up elsewhere"
     assert "PUBBLICO" in text
 
 
@@ -2090,7 +2090,7 @@ def test_selecting_words_redacts_exactly_them(qapp, tmp_path, windows):
     with pymupdf.open(pdf) as doc:
         word = doc[0].search_for("SEGRETO")[0]
     mark = redactions[0]
-    assert mark.x0 <= word.x0 and mark.x1 >= word.x1, "la parola non e` coperta per intero"
+    assert mark.x0 <= word.x0 and mark.x1 >= word.x1, "the word is not fully covered"
     assert mw._undo_stack.count() == 1
     assert mw._undo_stack.undoText() == "Cancella la selezione su pagina 1"
 
@@ -2111,7 +2111,7 @@ def test_a_selection_over_two_words_is_one_undo_step(qapp, tmp_path, windows):
     _pump(0.1)
 
     assert len(mw._doc_model.pages[0].redactions) == 2
-    assert mw._undo_stack.count() == 1, "la selezione e` un gesto solo"
+    assert mw._undo_stack.count() == 1, "the selection is a single gesture"
 
     mw._undo_stack.undo()
     assert mw._doc_model.pages[0].redactions == []
@@ -2167,14 +2167,14 @@ def test_the_three_tools_never_stay_on_together(qapp, tmp_path, windows):
     assert view.selection_mode()
 
     mw._redact_act.trigger()
-    assert not view.selection_mode(), "la zona non deve convivere con la selezione"
+    assert not view.selection_mode(), "the area must not coexist with the selection"
     assert view.redaction_mode()
 
     mw._text_act.trigger()
-    assert not view.redaction_mode(), "il testo non deve convivere con la zona"
+    assert not view.redaction_mode(), "the text must not coexist with the area"
 
     mw._select_act.trigger()
-    assert not view.text_mode(), "la selezione non deve convivere con il testo"
+    assert not view.text_mode(), "the selection must not coexist with the text"
     assert view.selection_mode()
 
 
@@ -2210,8 +2210,8 @@ def test_the_selected_words_really_disappear_from_the_file(
 
     with pymupdf.open(out) as doc:
         text = doc[0].get_text()
-    assert "SEGRETO" not in text, "la selezione non ha portato via il testo"
-    assert "PUBBLICO" in text, "la selezione ha portato via anche il resto"
+    assert "SEGRETO" not in text, "the selection did not take away the text"
+    assert "PUBBLICO" in text, "the selection took away the rest too"
 
 
 # --------------------------------------------------------------------- #
@@ -2330,7 +2330,7 @@ def test_a_changed_field_does_not_show_the_old_value_under_the_new(qapp, tmp_pat
         for y in range(y0 + 6, y1 - 6, 2)
         if image.pixelColor(x, y).lightness() < 120
     )
-    assert ink == 0, f"{ink} punti scuri: il vecchio valore si vede ancora"
+    assert ink == 0, f"{ink} dark points: the old value is still visible"
 
 
 def test_the_panel_shows_the_page_fields(qapp, tmp_path, windows):
@@ -2359,7 +2359,7 @@ def test_the_panel_follows_the_selected_page(qapp, tmp_path, windows):
 
     mw = windows()
     _open(mw, pdf)
-    assert mw._form_panel._editors == {}, "la prima pagina non ha campi"
+    assert mw._form_panel._editors == {}, "the first page has no fields"
 
     mw._thumb_bar.set_current_row(1)
     _pump()
@@ -2391,7 +2391,7 @@ def test_typing_in_the_panel_becomes_a_command_and_reaches_the_file(
     _pump()
 
     assert _file_values(out)["nome"] == "Anna"
-    assert _file_values(pdf)["nome"] == "vecchio", "la sorgente non si tocca"
+    assert _file_values(pdf)["nome"] == "vecchio", "the source is not touched"
 
 
 def test_undo_removes_the_panel_edit(qapp, tmp_path, windows):
@@ -2437,7 +2437,7 @@ def test_a_click_on_a_choice_field_selects_it_in_the_panel(qapp, tmp_path, windo
     canvas = mw._page_view._canvases[0]
     _click_field(canvas, "colore")
 
-    assert mw._page_view.field_editor() is None, "una tendina non si compila sulla pagina"
+    assert mw._page_view.field_editor() is None, "a drop-down is not filled in on the page"
     assert mw._page_view.selected_field() == (0, "colore")
     assert mw._form_panel.focusWidget() is not None
 
@@ -2456,8 +2456,8 @@ def test_a_click_on_a_text_field_opens_the_editor_over_it(qapp, tmp_path, window
     _click_field(canvas, "nome")
 
     editor = mw._page_view.field_editor()
-    assert editor is not None, "un campo di testo si compila sulla pagina"
-    assert editor.text() == "vecchio", "l'editor si apre sul valore mostrato"
+    assert editor is not None, "a text field is filled in on the page"
+    assert editor.text() == "vecchio", "the editor opens on the value shown"
 
     # Where the field is: what is typed and what is drawn must agree on the
     # rectangle, or the correction lands somewhere else.
@@ -2478,7 +2478,7 @@ def test_a_value_typed_on_the_page_is_one_undo_step(qapp, tmp_path, windows):
     editor.setText("Anna")
     _press(editor, Qt.Key.Key_Return)
 
-    assert mw._page_view.field_editor() is None, "confermando l'editor si chiude"
+    assert mw._page_view.field_editor() is None, "confirming closes the editor"
     assert mw._doc_model.pages[0].form_values["nome"] == "Anna"
     assert mw._undo_stack.count() == 1
     assert mw._undo_stack.undoText() == "Campo «nome» su pagina 1"
@@ -2509,7 +2509,7 @@ def test_typing_on_the_page_reaches_the_saved_file(qapp, tmp_path, monkeypatch, 
     _pump()
 
     assert _file_values(out)["nome"] == "Anna"
-    assert _file_values(pdf)["nome"] == "vecchio", "la sorgente non si tocca"
+    assert _file_values(pdf)["nome"] == "vecchio", "the source is not touched"
 
 
 def test_a_click_on_a_checkbox_flips_it(qapp, tmp_path, windows):
@@ -2655,7 +2655,7 @@ def test_the_drawn_value_comes_from_the_model(qapp, tmp_path, windows):
     _type_in_panel(mw, "nome", "Anna")
 
     assert canvas.label._value_shown(canvas.item, field) == "Anna"
-    assert field.value == "vecchio", "il descrittore resta quello del file"
+    assert field.value == "vecchio", "the descriptor stays the file's"
 
 
 # --------------------------------------------------------------------- #
@@ -2693,7 +2693,7 @@ def test_redact_text_marks_every_occurrence_in_one_step(
 
     _search(mw, monkeypatch, "Pagina")
 
-    assert mw._undo_stack.count() == 1, "una macro, non un comando per pagina"
+    assert mw._undo_stack.count() == 1, "one macro, not one command per page"
     assert mw._undo_stack.undoText() == "Cancella «Pagina»"
     assert sum(len(item.redactions) for item in mw._doc_model.pages) == 3
     # No tool turned on: the pages show the marks applied, which is how the
@@ -2724,7 +2724,7 @@ def test_redact_text_saves_a_file_without_the_word(
             assert "Pagina" not in page.get_text()
 
     with pymupdf.open(pdf) as doc:
-        assert "Pagina 1" in doc[0].get_text(), "la sorgente resta com'era"
+        assert "Pagina 1" in doc[0].get_text(), "the source stays as it was"
 
 
 def test_redact_text_cancelled_marks_nothing(windows, monkeypatch, tmp_path) -> None:
@@ -2785,7 +2785,7 @@ def test_the_search_does_not_mark_the_same_spot_twice(
     _search(mw, monkeypatch, "Pagina")
 
     assert sum(len(item.redactions) for item in mw._doc_model.pages) == 1
-    assert mw._undo_stack.count() == 1, "la seconda ricerca non crea un comando"
+    assert mw._undo_stack.count() == 1, "the second search does not create a command"
     assert "Nessuna occorrenza" in mw._status.text()
 
 
@@ -2822,7 +2822,7 @@ def test_a_fresh_document_is_not_modified(windows, tmp_path, monkeypatch):
     assert not mw.is_modified()
     assert not mw.isWindowModified()
     assert mw.windowTitle() == "doc.pdf[*]"
-    assert _close_window(mw), "niente da perdere: la finestra si chiude senza chiedere"
+    assert _close_window(mw), "nothing to lose: the window closes without asking"
     assert domande == []
 
 
@@ -2837,7 +2837,7 @@ def test_an_edit_marks_the_title_and_undo_clears_it(windows, tmp_path):
     assert mw.is_modified() and mw.isWindowModified()
 
     mw._undo_stack.undo()
-    assert not mw.is_modified(), "tornati al documento salvato: niente da salvare"
+    assert not mw.is_modified(), "back to the saved document: nothing to save"
     assert not mw.isWindowModified()
 
 
@@ -2853,7 +2853,7 @@ def test_closing_with_changes_can_be_cancelled(windows, tmp_path, monkeypatch):
     assert not _close_window(mw)
     assert len(domande) == 1 and "doc.pdf" in domande[0]
     assert mw._doc_model.page_count == 2
-    assert mw._thread.isRunning(), "una chiusura annullata non ferma il worker"
+    assert mw._thread.isRunning(), "a cancelled close does not stop the worker"
 
 
 def test_closing_with_changes_can_discard_them(windows, tmp_path, monkeypatch):
@@ -2866,7 +2866,7 @@ def test_closing_with_changes_can_discard_them(windows, tmp_path, monkeypatch):
 
     assert _close_window(mw)
     with pymupdf.open(pdf) as doc:
-        assert doc.page_count == 3, "«Non salvare» non scrive niente"
+        assert doc.page_count == 3, "«Non salvare» writes nothing"
 
 
 def test_closing_with_changes_can_save_them(windows, tmp_path, monkeypatch):
@@ -2902,7 +2902,7 @@ def test_a_failed_save_keeps_the_window_open(windows, tmp_path, monkeypatch):
 
     monkeypatch.setattr(plico.main_window, "save_as", _guasto)
 
-    assert not _close_window(mw), "il salvataggio è fallito: le modifiche ci sono ancora"
+    assert not _close_window(mw), "the save failed: the changes are still there"
     assert mw.is_modified()
 
 
@@ -2919,7 +2919,7 @@ def test_save_as_moves_the_target_and_keeps_the_undo_history(windows, tmp_path, 
     assert mw._save_file_as()
     assert not mw.is_modified()
     assert mw.windowTitle() == "altro.pdf[*]"
-    assert mw._undo_stack.canUndo(), "le sorgenti non sono cambiate: l'annulla resta"
+    assert mw._undo_stack.canUndo(), "the sources did not change: the undo stays"
 
     mw._thumb_bar.set_current_row(0)
     mw._delete_page()
@@ -2928,7 +2928,7 @@ def test_save_as_moves_the_target_and_keeps_the_undo_history(windows, tmp_path, 
     with pymupdf.open(altro) as doc:
         assert doc.page_count == 1
     with pymupdf.open(pdf) as doc:
-        assert doc.page_count == 3, "Ctrl+S scrive sull'ultimo «Salva con nome»"
+        assert doc.page_count == 3, "Ctrl+S writes to the last «Salva con nome»"
 
 
 def test_a_merge_counts_as_a_change(windows, tmp_path, monkeypatch):
@@ -3037,7 +3037,7 @@ def test_the_page_of_an_encrypted_file_is_rendered(windows, tmp_path, monkeypatc
         image.pixel(x, y) != image.pixel(0, 0)
         for y in range(0, 150, 3)
         for x in range(0, 300, 3)
-    ), "la pagina decifrata e` rimasta vuota"
+    ), "the decrypted page stayed blank"
 
 
 def test_a_wrong_password_is_asked_again(windows, tmp_path, monkeypatch):
@@ -3095,7 +3095,7 @@ def test_merging_from_the_window_is_undoable(windows, tmp_path):
     assert mw._doc_model.page_count == 5
     assert mw._undo_stack.count() == 1
     assert mw._undo_stack.undoText() == "Unisci «secondo.pdf»"
-    assert mw.is_modified(), "un'unione non ancora salvata e` una modifica"
+    assert mw.is_modified(), "a merge not yet saved is a change"
     assert mw._status.text().startswith("Unite 3 pagine")
 
     mw._undo_stack.undo()
@@ -3146,7 +3146,7 @@ def test_merging_an_encrypted_file_can_be_cancelled(windows, tmp_path, monkeypat
     _pump()
 
     assert mw._doc_model.page_count == 1
-    assert mw._undo_stack.count() == 0, "un'unione annullata non e` un passo di undo"
+    assert mw._undo_stack.count() == 0, "an undone merge is not an undo step"
     assert not mw.is_modified()
 
 
@@ -3749,7 +3749,7 @@ def test_the_app_id_names_every_desktop_file():
     from plico.app import APP_ID
 
     flatpak = pathlib.Path(__file__).parent.parent / "flatpak"
-    assert APP_ID == APP_ID.lower(), "AppStream vuole un id minuscolo"
+    assert APP_ID == APP_ID.lower(), "AppStream wants a lowercase id"
     assert (flatpak / f"{APP_ID}.desktop").is_file()
     assert (flatpak / f"{APP_ID}.svg").is_file()
     assert json.loads((flatpak / f"{APP_ID}.json").read_text())["app-id"] == APP_ID
@@ -3878,7 +3878,7 @@ def test_the_italian_menus_have_no_two_equal_accelerators(windows) -> None:
     mw = windows()
     titles = [action.text() for action in mw.menuBar().actions()]
     top = accelerators(titles)
-    assert len(top) == len(set(top)), f"barra dei menu: {titles}"
+    assert len(top) == len(set(top)), f"menu bar: {titles}"
     for action in mw.menuBar().actions():
         texts = [item.text() for item in action.menu().actions()]
         letters = accelerators(texts)

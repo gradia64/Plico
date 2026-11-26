@@ -47,7 +47,7 @@ def _extract(tmp_path: Path) -> Path:
     """Run the extractor over the sources, as the release does."""
     tool = shutil.which("pylupdate6")
     if tool is None:
-        pytest.skip("pylupdate6 non c'e`: l'estrazione gira dove ci sono i tool Qt")
+        pytest.skip("no pylupdate6: extraction runs where the Qt tools are")
     output = tmp_path / "estratto.ts"
     subprocess.run(
         [tool, str(SOURCES), "-ts", str(output)],
@@ -62,7 +62,7 @@ def test_the_sources_still_hold_the_strings_we_show(tmp_path):
     """The extractor understands how this code calls tr()."""
     messages = _messages(_extract(tmp_path))
 
-    assert len(messages) > 150, f"solo {len(messages)} messaggi estratti"
+    assert len(messages) > 150, f"only {len(messages)} messages extracted"
     assert any(source == A_VISIBLE_STRING for _, source in messages)
 
 
@@ -72,7 +72,7 @@ def test_the_shipped_catalog_is_the_one_the_sources_produce(tmp_path):
     shipped = _messages(CATALOG)
 
     assert shipped == extracted, (
-        "il catalogo non e` aggiornato: rigenera con "
+        "the catalogue is out of date: regenerate it with "
         f"`pylupdate6 src/plico -ts {CATALOG.relative_to(ROOT)}`"
     )
 
@@ -81,7 +81,7 @@ def test_the_catalog_says_which_language_it_translates_to():
     root = ET.parse(CATALOG).getroot()
 
     assert root.get("language") == "en_US"
-    assert root.get("sourcelanguage") == "it", "le stringhe nel codice sono italiane"
+    assert root.get("sourcelanguage") == "it", "the strings in the code are Italian"
 
 
 def test_the_c_locale_asks_for_no_catalog():
@@ -103,7 +103,7 @@ def test_the_environment_variable_comes_first(tmp_path, monkeypatch):
     directories = i18n.catalog_dirs()
 
     assert directories[0] == tmp_path
-    assert i18n.PACKAGE_DIR in directories, "un checkout resta una sorgente valida"
+    assert i18n.PACKAGE_DIR in directories, "a checkout stays a valid source"
 
 
 def test_without_a_catalog_nothing_is_loaded(qapp, monkeypatch):
@@ -117,7 +117,7 @@ def test_a_compiled_catalog_is_loaded_and_translates(qapp, tmp_path, monkeypatch
     """The whole way round: a .ts with a translation becomes a .qm that is used."""
     tool = shutil.which("lrelease") or shutil.which("pyside6-lrelease")
     if tool is None:
-        pytest.skip("lrelease sta solo nell'ambiente di build di Qt")
+        pytest.skip("lrelease is only in Qt's build environment")
 
     source = tmp_path / "plico_it.ts"
     source.write_text(

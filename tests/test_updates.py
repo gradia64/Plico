@@ -70,7 +70,7 @@ def test_the_daily_check_is_only_where_nothing_else_updates_plico():
     assert {c for c in Channel if updates.automatic_allowed(c)} == {
         Channel.APPIMAGE, Channel.DEB, Channel.PYTHON
     }
-    assert not updates.can_fetch(Channel.FLATPAK), "la sandbox non ha la rete"
+    assert not updates.can_fetch(Channel.FLATPAK), "the sandbox has no network"
     assert updates.can_fetch(Channel.SYSTEM)
 
 
@@ -93,7 +93,7 @@ def test_at_most_one_request_a_day():
     assert updates.due(None, now)
     assert not updates.due(now - 60, now)
     assert updates.due(now - updates.INTERVAL_S, now)
-    assert updates.due(now + 3600, now), "un orologio tornato indietro non blocca per sempre"
+    assert updates.due(now + 3600, now), "a clock set back does not block forever"
 
 
 def test_the_page_is_built_here_not_taken_from_the_answer():
@@ -272,14 +272,14 @@ def test_the_checker_answers_in_the_gui_thread_one_request_at_a_time(qapp, monke
     )
 
     assert checker.start(manual=True)
-    assert not checker.start(manual=False), "una richiesta alla volta"
+    assert not checker.start(manual=False), "one request at a time"
     release_it.set()
     _pump(lambda: answers)
 
     assert answers == [(Release("9.0.0", updates.release_page("9.0.0")), True, True)]
     assert calls == ["plico-updates"]
     assert not checker.is_running()
-    assert checker.start(manual=False), "finita la prima, se ne può fare un'altra"
+    assert checker.start(manual=False), "once the first is done, another can be made"
     _pump(lambda: len(answers) == 2)
 
 
@@ -385,8 +385,8 @@ def test_one_request_a_day_even_when_it_failed(window, github, monkeypatch):
     _check(mw)
     _check(mw)
 
-    assert github["requests"] == 1, "il secondo controllo aspetta domani"
-    assert warnings == [], "senza rete il controllo automatico tace"
+    assert github["requests"] == 1, "the second check waits for tomorrow"
+    assert warnings == [], "without network the automatic check stays quiet"
     assert not mw._download_act.isVisible()
 
 
@@ -432,8 +432,8 @@ def test_asking_by_hand_says_up_to_date_and_offers_the_daily_check(
     _pump(lambda: shown)
 
     assert shown == [f"Plico {__version__} è la versione più recente."]
-    assert mw._choices().check_updates, "la casella accende il controllo giornaliero"
-    assert not mw._download_act.isVisible(), "una versione trovata prima non vale più"
+    assert mw._choices().check_updates, "the checkbox turns on the daily check"
+    assert not mw._download_act.isVisible(), "a version found earlier no longer counts"
     assert opened == []
 
 
@@ -443,7 +443,7 @@ def test_asking_by_hand_opens_the_page_of_the_newer_version(window, github, monk
 
     def answer(box):
         shown.append(box.text())
-        assert box.checkBox() is None, "il controllo giornaliero è già acceso"
+        assert box.checkBox() is None, "the daily check is already on"
         box.buttons()[0].click()  # «Apri la pagina»
         return 0
 

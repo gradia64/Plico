@@ -18,7 +18,7 @@ VERIFY = ROOT / "scripts" / "verify-tag.sh"
 PUBLIC_KEY = ROOT / "packaging" / "plico-release-key.asc"
 
 pytestmark = pytest.mark.skipif(
-    shutil.which("gpg") is None or shutil.which("git") is None, reason="servono gpg e git"
+    shutil.which("gpg") is None or shutil.which("git") is None, reason="needs gpg and git"
 )
 
 
@@ -46,7 +46,7 @@ def test_the_published_key_is_the_one_the_scripts_trust():
     primary = next(r for r in rows if r[0] == "pub")
     subkey = next(r for r in rows if r[0] == "sub")
     assert primary[11].lower().startswith("c") and "s" not in primary[11][:1]
-    assert subkey[11] == "s", "la sottochiave dei tag firma e basta"
+    assert subkey[11] == "s", "the tag subkey only signs"
 
 
 def _run(cmd: list[str], **kwargs) -> str:

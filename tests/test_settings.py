@@ -64,7 +64,7 @@ def window(qapp):
 def test_a_chosen_language_is_a_locale_and_auto_is_the_system():
     assert i18n.chosen_locale("fr").language() == QLocale.Language.French
     assert i18n.chosen_locale(preferences.AUTOMATIC) is None
-    assert i18n.chosen_locale("xx") is None, "un codice sconosciuto vale «automatica»"
+    assert i18n.chosen_locale("xx") is None, "an unknown code means «automatica»"
     assert i18n.chosen_locale(None) is None
 
 
@@ -127,7 +127,7 @@ def test_ok_saves_the_choices_and_says_when_the_language_applies(
     mw._open_settings()
 
     assert mw._choices() == Choices("es", True, True)
-    assert mw._tray is not None, "l'icona compare subito, senza riavviare"
+    assert mw._tray is not None, "the icon appears at once, without restarting"
     assert told == ["La nuova lingua sarà usata al prossimo avvio di Plico."]
 
 
@@ -147,8 +147,8 @@ def test_with_close_to_tray_the_x_only_hides(window, tray_available):
     mw.close()
 
     assert not mw.isVisible()
-    assert mw._thread.isRunning(), "Plico resta attivo"
-    assert tray_available == [], "nascondere non esce"
+    assert mw._thread.isRunning(), "Plico stays running"
+    assert tray_available == [], "hiding does not quit"
     assert not QApplication.instance().quitOnLastWindowClosed()
 
 
@@ -179,7 +179,7 @@ def test_the_icon_alone_leaves_the_x_quitting(window, tray_available):
     QApplication.processEvents()  # the quit is deferred by one turn of the loop
 
     assert not mw._thread.isRunning()
-    assert tray_available == [1], "con l'icona l'uscita passa da closeEvent"
+    assert tray_available == [1], "with the icon, quitting goes through closeEvent"
 
 
 def test_esci_quits_even_from_the_tray(window, tray_available):
@@ -218,7 +218,7 @@ def test_turning_the_tray_off_brings_a_hidden_window_back(window, tray_available
     mw._sync_tray()
 
     assert mw._tray is None
-    assert mw.isVisible(), "senza icona non ci sarebbe più modo di raggiungerla"
+    assert mw.isVisible(), "without the icon there would be no way to reach it"
 
 
 def test_a_chosen_language_reaches_the_desktop_buttons_too():
@@ -231,7 +231,7 @@ def test_a_chosen_language_reaches_the_desktop_buttons_too():
 
     untouched = {"LANGUAGE": "it:en"}
     language_environment(preferences.AUTOMATIC, untouched)
-    assert untouched == {"LANGUAGE": "it:en"}, "«automatica» non tocca l'ambiente"
+    assert untouched == {"LANGUAGE": "it:en"}, "«automatica» does not touch the environment"
 
 
 # -- review of 2026-10-19 (0.1.3) ------------------------------------------- #
@@ -268,7 +268,7 @@ def test_esci_from_the_tray_waits_for_a_modal_dialog(window, tray_available):
 
     assert mw.isVisible() and mw._thread.isRunning()
     assert not mw._really_quit
-    assert tray_available == [], "nessuna uscita mentre il lavoro è in corso"
+    assert tray_available == [], "no quitting while work is in progress"
     progress.close()
     progress.deleteLater()
 
@@ -283,8 +283,8 @@ def test_a_logout_with_unsaved_changes_asks_and_can_be_cancelled(window, monkeyp
 
     mw._on_commit_data(session)
 
-    assert asked == [1] and session.cancelled, "«Annulla» ferma il logout"
-    assert mw.isVisible(), "la domanda ha una finestra, anche dalla tray"
+    assert asked == [1] and session.cancelled, "«Annulla» stops the logout"
+    assert mw.isVisible(), "the question has a window, even from the tray"
 
 
 def test_a_logout_goes_on_when_the_user_saves_or_discards(window, monkeypatch):
@@ -305,7 +305,7 @@ def test_a_logout_asks_nothing_when_there_is_nothing_to_lose(window, monkeypatch
         assert not session.cancelled
     monkeypatch.setattr(mw, "is_modified", lambda: True)
     mw._on_commit_data(_Session(interaction=False))
-    assert asked == [], "senza documento modificato, o senza permesso, nessuna domanda"
+    assert asked == [], "without a modified document, or without permission, no question"
 
 
 def test_after_a_cancelled_logout_the_x_still_hides(window, tray_available, monkeypatch):
@@ -318,7 +318,7 @@ def test_after_a_cancelled_logout_the_x_still_hides(window, tray_available, monk
 
     mw.close()
 
-    assert not mw.isVisible() and mw._thread.isRunning(), "nascosta, non uscita"
+    assert not mw.isVisible() and mw._thread.isRunning(), "hidden, not quit"
     assert not mw._really_quit
 
 
@@ -351,7 +351,7 @@ def test_the_tray_is_tried_again_when_the_desktop_is_late(window, monkeypatch, q
     try:
         mw = window(**{preferences.TRAY_ICON: True})
         assert mw._tray is None
-        assert mw._tray_retries == [30_000], "un nuovo tentativo è in programma"
+        assert mw._tray_retries == [30_000], "a new attempt is scheduled"
 
         available[0] = True
         mw._sync_tray()  # what the timer does

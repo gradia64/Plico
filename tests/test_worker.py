@@ -203,7 +203,7 @@ def test_authenticate_unlocks_the_document(tmp_path):
     worker._render(RenderRequest(("page", 0, 0, 0, 1.0, 1.0), path, 0, 1.0, 0))
 
     assert len(images) == 1
-    assert _has_ink(images[0]), "la pagina decifrata deve mostrare il suo testo"
+    assert _has_ink(images[0]), "the decrypted page must show its text"
 
 
 def test_a_failed_render_does_not_poison_the_handle(tmp_path):
@@ -231,4 +231,4 @@ def test_a_failed_render_does_not_poison_the_handle(tmp_path):
 
     assert len(failed) == 1
     assert len(images) == 1
-    assert _has_ink(images[0]), "la pagina e` tornata vuota dopo lo sblocco"
+    assert _has_ink(images[0]), "the page went blank after unlocking"

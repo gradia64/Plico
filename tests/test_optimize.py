@@ -129,7 +129,7 @@ def test_optimize_shrinks_a_fragmented_text_pdf(qapp, tmp_path):
     risultato = optimize_in_place(path, LEVELS_BY_KEY["light"])
 
     after = os.path.getsize(path)
-    assert after < before * SOGLIA_TESTO, f"{before} -> {after} byte"
+    assert after < before * SOGLIA_TESTO, f"{before} -> {after} bytes"
     assert risultato.source_size == before
     assert risultato.output_size == after
     assert risultato.shrank
@@ -210,7 +210,7 @@ def test_optimize_reports_progress(qapp, tmp_path):
 
     optimize_in_place(path, LEVELS_BY_KEY["light"], progress=seen.append)
 
-    assert seen, "pikepdf deve riportare l'avanzamento"
+    assert seen, "pikepdf must report progress"
     assert seen[-1] == 100
     assert all(0 <= value <= 100 for value in seen)
 
@@ -237,11 +237,11 @@ def test_medium_level_shrinks_a_scan(qapp, tmp_path):
     risultato = optimize_in_place(path, LEVELS_BY_KEY["medium"])
 
     after = os.path.getsize(path)
-    assert after < before * SOGLIA_SCANSIONE, f"{before} -> {after} byte"
+    assert after < before * SOGLIA_SCANSIONE, f"{before} -> {after} bytes"
     assert risultato.shrank
     with pymupdf.open(path) as doc:
         assert doc.page_count == 3
-        assert doc[0].get_images(), "l'immagine non deve sparire"
+        assert doc[0].get_images(), "the image must not disappear"
 
 
 def test_light_level_leaves_a_scan_alone(qapp, tmp_path):
@@ -296,7 +296,7 @@ def test_save_compressed_writes_the_virtual_document(qapp, tmp_path):
         assert doc[0].rotation == 90
         assert "della pagina 3" in doc[0].get_text()
     with pymupdf.open(source) as doc:
-        assert doc.page_count == 10, "la sorgente non si tocca"
+        assert doc.page_count == 10, "the source is not touched"
 
 
 def test_save_compressed_can_overwrite_the_open_source(qapp, tmp_path):

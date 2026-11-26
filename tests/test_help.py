@@ -60,9 +60,9 @@ def _read(code: str) -> tuple[_Page, str]:
 def test_every_language_has_the_same_handbook(code):
     page, _ = _read(code)
     italian, _ = _read("it")
-    assert page.ids == italian.ids, "le sezioni devono essere le stesse, nello stesso ordine"
-    assert page.toc == page.ids, "l'indice punta a ogni sezione, e solo a quelle"
-    assert page.rows == italian.rows, "la tabella delle scorciatoie ha le stesse righe"
+    assert page.ids == italian.ids, "the sections must be the same, in the same order"
+    assert page.toc == page.ids, "the index points to every section, and only to those"
+    assert page.rows == italian.rows, "the shortcut table has the same rows"
 
 
 def test_every_shortcut_of_the_menus_is_in_the_handbook(qapp):
@@ -81,7 +81,7 @@ def test_every_shortcut_of_the_menus_is_in_the_handbook(qapp):
         keys |= {"Ctrl+R", "Ctrl+Shift+R", "F3", "Shift+F3", "Esc"}
         portable = text.replace("Canc", "Del")
         missing = sorted(key for key in keys if key not in portable)
-        assert not missing, f"scorciatoie assenti dalla guida: {missing}"
+        assert not missing, f"shortcuts missing from the guide: {missing}"
     finally:
         window.shutdown_worker()
         window.deleteLater()
@@ -90,7 +90,7 @@ def test_every_shortcut_of_the_menus_is_in_the_handbook(qapp):
 def _compiled(tmp_path: Path, code: str) -> Path:
     tool = shutil.which("lrelease") or shutil.which("pyside6-lrelease")
     if tool is None:
-        pytest.skip("lrelease sta solo nell'ambiente di build di Qt")
+        pytest.skip("lrelease is only in Qt's build environment")
     target = tmp_path / f"plico_{code}.qm"
     subprocess.run(
         [tool, str(ROOT / "src/plico/translations" / f"plico_{code}.ts"), "-qm", str(target)],
@@ -126,7 +126,7 @@ def test_the_handbook_names_the_commands_as_the_menus_do(qapp, tmp_path, code):
             names.add(" ".join(action.text().replace("&", "").rstrip("…").split()))
         lowered = text.lower()
         missing = sorted(name for name in names if name.lower() not in lowered)
-        assert not missing, f"{code}: comandi non nominati nella guida: {missing}"
+        assert not missing, f"{code}: commands not named in the guide: {missing}"
     finally:
         window.shutdown_worker()
         window.deleteLater()
@@ -164,7 +164,7 @@ def test_f1_opens_one_handbook_window(qapp):
         window._open_help()
         first = window._help_window
         window._open_help()
-        assert window._help_window is first, "F1 due volte non apre due finestre"
+        assert window._help_window is first, "F1 twice does not open two windows"
         assert isinstance(first, HelpWindow)
         assert "Plico" in first.windowTitle()
         assert "Ctrl+F" in first.browser.toPlainText()

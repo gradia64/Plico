@@ -713,7 +713,7 @@ def test_a_broken_signature_is_never_called_intact(certificate, tmp_path) -> Non
     rebuilt = path
 
     broken = next(s for s in read_signatures(rebuilt) if not s.intact)
-    assert broken.changed, "il caso che l'ordine vecchio sbagliava"
+    assert broken.changed, "the case the old order got wrong"
     text, style = _verdict(broken)
 
     assert "integra" not in text

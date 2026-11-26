@@ -330,7 +330,7 @@ def test_the_window_is_locked_from_the_moment_the_task_starts(
     finally:
         monkeypatch.setattr(QThreadPool, "start", start)
 
-    assert seen and seen[0] is not None, "nessuna finestra modale mentre il task parte"
+    assert seen and seen[0] is not None, "no modal window while the task starts"
 
 
 # --------------------------------------------------------------------- #
@@ -376,7 +376,7 @@ def test_languages_are_named_in_their_own_language() -> None:
 
     assert language_name("deu") == "Deutsch"
     assert language_name("fra") == "Français"
-    assert language_name("swe") == "Svenska", "la tabella non c'e`: risponde Qt"
+    assert language_name("swe") == "Svenska", "the table does not have it: Qt answers"
     assert language_name("xyz") == "xyz"
 
 

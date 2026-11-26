@@ -222,7 +222,7 @@ def test_extract_over_an_open_source_is_refused(mixed_model, mixed_pdf):
     with pytest.raises(ValueError):
         extract_pages(mixed_model, mixed_pdf, [0])
     with pymupdf.open(mixed_pdf) as doc:
-        assert doc.page_count == 3, "il sorgente non deve essere toccato"
+        assert doc.page_count == 3, "the source must not be touched"
 
 
 def test_saved_file_reopened_is_the_document(qapp, tmp_path):
@@ -296,7 +296,7 @@ def test_a_failed_save_does_not_destroy_the_destination(
     assert sorted(p.name for p in tmp_path.iterdir()) == [
         "importante.pdf",
         "mixed.pdf",
-    ], "nessun temporaneo lasciato in giro"
+    ], "no temporary file left behind"
 
 
 def test_the_destination_file_keeps_its_permissions(mixed_model, tmp_path):
@@ -420,7 +420,7 @@ def test_merging_an_encrypted_file_asks_too(mixed_model, qapp, tmp_path):
     with pytest.raises(PasswordRequired):
         mixed_model.append_document(path)
 
-    assert mixed_model.page_count == 3, "il rifiuto non deve toccare il modello"
+    assert mixed_model.page_count == 3, "the refusal must not touch the model"
     assert mixed_model.append_document(path, SEGRETA) == 1
     assert mixed_model.page_count == 4
     assert mixed_model.passwords == {path: SEGRETA}
@@ -453,7 +453,7 @@ def test_a_merge_goes_on_the_undo_stack(mixed_model, mixed_pdf, qapp, tmp_path):
     assert mixed_model.page_count == 4
     assert mixed_model.sources == [mixed_pdf, other]
     assert stack.count() == 1
-    assert not stack.isClean(), "un'unione non ancora salvata e` una modifica"
+    assert not stack.isClean(), "a merge not yet saved is a change"
     assert stack.undoText() == "Unisci «altro.pdf»"
 
 
@@ -467,7 +467,7 @@ def test_undoing_a_merge_takes_the_pages_away(mixed_model, mixed_pdf, qapp, tmp_
     # The source stays registered, unused: its id is never handed out again.
     assert mixed_model.sources == [mixed_pdf, other]
     assert {item.source_id for item in mixed_model.pages} == {0}
-    assert stack.isClean(), "tornati al documento di partenza"
+    assert stack.isClean(), "back to the starting document"
 
 
 def test_redoing_a_merge_puts_them_back(mixed_model, mixed_pdf, qapp, tmp_path):
@@ -521,8 +521,8 @@ def test_words_on_answers_in_page_space(tmp_path, qapp):
     m.open(str(path))
     straight = m.words_on(0)
     m.pages[0].rotation = 90
-    assert m.words_on(0) == straight, "ruotare la pagina non sposta le parole"
-    assert [w for w in straight], "nessuna parola trovata"
+    assert m.words_on(0) == straight, "rotating the page does not move the words"
+    assert [w for w in straight], "no word found"
     box = straight[0].as_tuple()
     assert box[0] < box[2] and box[1] < box[3]
     assert box[2] <= m.pages[0].unrotated_size[0]
@@ -581,7 +581,7 @@ def test_a_merge_after_an_undone_one_gets_a_fresh_source_id(
 
     assert mixed_model.pages[-1].source_id == 2
     assert mixed_model.source_for(mixed_model.pages[-1]) == second
-    assert mixed_model.sources_at(first) == [], "nessuna pagina legge il file tolto"
+    assert mixed_model.sources_at(first) == [], "no page reads the removed file"
 
 
 def test_undoing_an_empty_append_takes_no_page(tmp_path):

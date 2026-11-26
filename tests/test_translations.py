@@ -83,7 +83,7 @@ def test_placeholders_and_accelerators_survive(code):
 def _compiled(tmp_path: Path, code: str) -> Path:
     tool = shutil.which("lrelease") or shutil.which("pyside6-lrelease")
     if tool is None:
-        pytest.skip("lrelease sta solo nell'ambiente di build di Qt")
+        pytest.skip("lrelease is only in Qt's build environment")
     target = tmp_path / f"plico_{code}.qm"
     subprocess.run(
         [tool, str(TRANSLATIONS / f"plico_{code}.ts"), "-qm", str(target)],
@@ -114,12 +114,12 @@ def test_the_window_speaks_the_language(qapp, tmp_path, code):
                 text = action.text()
                 assert not any(
                     italian in text for italian in ("Salva", "Cancella", "Unisci", "Riconosci")
-                ), f"{code}: «{text}» non tradotto"
+                ), f"{code}: «{text}» not translated"
                 if "&" in text:
                     letters.append(text[text.index("&") + 1].lower())
-            assert len(letters) == len(set(letters)), f"{code}: acceleratori doppi {letters}"
+            assert len(letters) == len(set(letters)), f"{code}: duplicate accelerators {letters}"
         top = [title[title.index("&") + 1].lower() for title in titles if "&" in title]
-        assert len(top) == len(set(top)), f"{code}: acceleratori doppi nei menu {top}"
+        assert len(top) == len(set(top)), f"{code}: duplicate accelerators in the menus {top}"
     finally:
         window.shutdown_worker()
         window.deleteLater()
@@ -153,7 +153,7 @@ def test_qt_s_own_buttons_follow_the_language(qapp):
     """«Discard» under an Italian question was Qt's catalog not being loaded."""
     translator = i18n.install_qt_translator(qapp, QLocale("it_IT"))
     if translator is None:
-        pytest.skip("i cataloghi di Qt non sono installati qui")
+        pytest.skip("Qt's catalogues are not installed here")
     try:
         assert QCoreApplication.translate("QPlatformTheme", "Cancel") != "Cancel"
     finally:
