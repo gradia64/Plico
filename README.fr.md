@@ -35,7 +35,8 @@ Un véritable éditeur PDF natif pour Linux, construit avec **Qt6** et
   levée. Elles s'annulent comme toute modification et, à l'enregistrement,
   deviennent de vraies annotations PDF que les autres lecteurs affichent et
   modifient. Les annotations que le PDF a déjà peuvent être retirées,
-  déplacées (en les faisant glisser) et recolorées, et ses notes et zones de
+  déplacées (en les faisant glisser), redimensionnées (par un coin) et
+  recolorées, et ses notes et zones de
   texte réécrites (clic droit sur l'annotation)
 - **Signets** (_Affichage → Signets_, un onglet à côté des miniatures) : on
   lit la table des matières du PDF, un clic mène à la page, et on ajoute,

@@ -79,6 +79,8 @@ from .model import (
     RemoveAnnotation,
     RemoveFileAnnotation,
     RemoveRedaction,
+    ResizeAnnotation,
+    ResizeFileAnnotation,
     RotatePage,
     SetFieldValue,
     SetOutline,
@@ -307,6 +309,7 @@ class MainWindow(QMainWindow):
         self._page_view.note_edited.connect(self._edit_note)
         self._page_view.annotation_moved.connect(self._move_annotation)
         self._page_view.annotation_recolored.connect(self._recolor_annotation)
+        self._page_view.annotation_resized.connect(self._resize_annotation)
         dock = QDockWidget(self.tr("Miniature"), self)
         dock.setObjectName("thumbnail_dock")
         dock.setWidget(self._thumb_bar)
@@ -765,6 +768,16 @@ class MainWindow(QMainWindow):
             self._undo_stack.push(MoveAnnotation(self._doc_model, index, target, dx, dy))
         else:
             self._undo_stack.push(MoveFileAnnotation(self._doc_model, index, target, dx, dy))
+
+    def _resize_annotation(
+        self, index: int, target: Annotation | FileAnnotation, box: RedactionRect
+    ) -> None:
+        if not self._annotation_page(index, target) or not target.resizable:
+            return
+        if isinstance(target, Annotation):
+            self._undo_stack.push(ResizeAnnotation(self._doc_model, index, target, box))
+        else:
+            self._undo_stack.push(ResizeFileAnnotation(self._doc_model, index, target, box))
 
     def _recolor_annotation(
         self, index: int, target: Annotation | FileAnnotation, color: tuple[float, float, float]

@@ -33,8 +33,8 @@ comprimirlos.
   se amplía a palabras enteras), añadir notas y dibujar a mano alzada. Se
   deshacen como cualquier cambio y al guardar se convierten en anotaciones
   PDF reales, que los demás lectores muestran y modifican. También las
-  anotaciones que el PDF ya tiene se pueden quitar, mover (arrastrándolas) y
-  cambiar de color, y sus notas y cuadros de texto reescribir (clic derecho en
+  anotaciones que el PDF ya tiene se pueden quitar, mover (arrastrándolas),
+  redimensionar (por una esquina) y cambiar de color, y sus notas y cuadros de texto reescribir (clic derecho en
   la anotación)
 - **Marcadores** (_Ver → Marcadores_, una pestaña junto a las miniaturas): se
   lee el índice del PDF, un clic lleva a la página, y se añaden, renombran,

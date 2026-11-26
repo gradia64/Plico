@@ -17,11 +17,13 @@ from plico.model import (
     RecolorAnnotation,
     RecolorFileAnnotation,
     RemoveFileAnnotation,
+    ResizeFileAnnotation,
     RotatePage,
     save_as,
 )
 from plico.model.annotate import (
     HIGHLIGHT,
+    INK,
     MAX_FILE_ANNOTATIONS,
     NOTE,
     FileAnnotationEdit,
@@ -30,6 +32,7 @@ from plico.model.annotate import (
 )
 from plico.model.redact import RedactionRect
 from plico.rendering.worker import RenderRequest, RenderWorker
+from plico.widgets.page_view import MIN_ANNOTATION_SIZE
 
 
 @pytest.fixture(scope="module")
@@ -368,9 +371,11 @@ def test_undo_takes_a_move_back_one_step_at_a_time(qapp, tmp_path) -> None:
     first.redo()
     second = RecolorFileAnnotation(model, 0, square, (1.0, 0.0, 0.0))
     second.redo()
-    assert item.file_edit(square) == FileAnnotationEdit(color=(1.0, 0.0, 0.0), offset=(30, 40))
+    r = square.rect
+    moved = RedactionRect(r.x0 + 30, r.y0 + 40, r.x1 + 30, r.y1 + 40)
+    assert item.file_edit(square) == FileAnnotationEdit(color=(1.0, 0.0, 0.0), box=moved)
     second.undo()
-    assert item.file_edit(square) == FileAnnotationEdit(offset=(30, 40))
+    assert item.file_edit(square) == FileAnnotationEdit(box=moved)
     first.undo()
     assert item.file_annotation_changes == {}, "back to the file: nothing recorded"
 
@@ -384,7 +389,8 @@ def test_the_preview_shows_a_moved_annotation_where_it_went(qapp, tmp_path) -> N
     worker = RenderWorker()
     images: dict[str, object] = {}
     worker.rendered.connect(lambda key, image: images.__setitem__(key[0], image))
-    edit = FileAnnotationEdit(offset=(0.0, 150.0))
+    r = square.rect
+    edit = FileAnnotationEdit(box=RedactionRect(r.x0, r.y0 + 150, r.x1, r.y1 + 150))
     worker._render(RenderRequest(("moved",), path, 0, 1.0, 0, edits=((square, edit),)))
     worker.shutdown()
     assert _blue(images["moved"], SQUARE) == 0
@@ -435,7 +441,8 @@ def test_dragging_moves_an_annotation_and_stays_on_the_page(window, qapp, tmp_pa
     label.mouseMoveEvent(_event(QEvent.Type.MouseMove, start + QPointF(15, 0)))
     label.grab()  # the outline of where it will land is painted
     label.mouseReleaseEvent(_event(QEvent.Type.MouseButtonRelease, start + QPointF(30, 20)))
-    dx, dy = item.file_edit(square).offset
+    box = item.file_box(square)
+    dx, dy = box.x0 - square.rect.x0, box.y0 - square.rect.y0
     scale = canvas.label._scale()
     assert dx == pytest.approx(30 / scale, abs=0.5) and dy == pytest.approx(20 / scale, abs=0.5)
     assert canvas.label.file_annotation_at(start + QPointF(30, 20)) == square
@@ -445,7 +452,7 @@ def test_dragging_moves_an_annotation_and_stays_on_the_page(window, qapp, tmp_pa
         square.rect.x0 + dx, square.rect.y0 + dy, square.rect.x1 + dx, square.rect.y1 + dy
     ))
     _drag(canvas.label, [moved, moved - QPointF(5000, 0)])
-    assert square.rect.x0 + item.file_edit(square).offset[0] == pytest.approx(0, abs=0.01)
+    assert item.file_box(square).x0 == pytest.approx(0, abs=0.01)
     window._undo_stack.undo()
     window._undo_stack.undo()
     assert item.file_annotation_changes == {}
@@ -477,3 +484,136 @@ def test_the_menu_recolours_and_rewrites_a_freetext(window, qapp, tmp_path, monk
     assert item.note_text(free) == "testo libero e altre"
     menu = canvas.label.annotation_menu(_centre(canvas, stamp.rect))
     assert [a.text() for a in menu.actions()] == ["&Togli annotazione"], "a stamp keeps its look"
+
+
+# -- size -------------------------------------------------------------------
+
+
+def test_reading_knows_what_can_take_another_size(tmp_path) -> None:
+    path = str(tmp_path / "shapes.pdf")
+    _shapes(path)
+    with pymupdf.open(path) as doc:
+        square, free, ink, stamp = read_file_annotations(doc[0])
+    assert square.resizable and free.resizable and ink.resizable and stamp.resizable
+    path = str(tmp_path / "doc.pdf")
+    _pdf(path)
+    with pymupdf.open(path) as doc:
+        highlight, note, _square = read_file_annotations(doc[0])
+    assert not highlight.resizable and not note.resizable
+    assert Annotation(INK).resizable and not Annotation(NOTE).resizable
+
+
+def _drawn(page: pymupdf.Page, clip: pymupdf.Rect) -> pymupdf.Rect | None:
+    """The box of what is drawn inside *clip*, in page space."""
+    pix = page.get_pixmap(clip=clip * page.rotation_matrix, alpha=False)
+    xs, ys = [], []
+    for y in range(pix.height):
+        for x in range(pix.width):
+            if min(pix.pixel(x, y)) < 200:
+                xs.append(x)
+                ys.append(y)
+    if not xs:
+        return None
+    at = (clip * page.rotation_matrix).tl
+    seen = pymupdf.Rect(min(xs) + at.x, min(ys) + at.y, max(xs) + 1 + at.x, max(ys) + 1 + at.y)
+    return seen * page.derotation_matrix
+
+
+@pytest.mark.parametrize("rotate", [0, 90])
+def test_a_new_size_reaches_the_saved_file(qapp, tmp_path, rotate) -> None:
+    path = str(tmp_path / "shapes.pdf")
+    out = str(tmp_path / "out.pdf")
+    _shapes(path, rotate)
+    model = DocumentModel()
+    model.open(path)
+    square, free, ink, _stamp = model.pages[0].file_annotations
+    bigger = RedactionRect(square.rect.x0, square.rect.y0, square.rect.x1 + 100, square.rect.y1 + 50)
+    ResizeFileAnnotation(model, 0, square, bigger).redo()
+    wider = RedactionRect(free.rect.x0 - 100, free.rect.y0, free.rect.x1, free.rect.y1 + 40)
+    ResizeFileAnnotation(model, 0, free, wider).redo()
+    half = RedactionRect(ink.rect.x0, ink.rect.y0, (ink.rect.x0 + ink.rect.x1) / 2, ink.rect.y1)
+    ResizeFileAnnotation(model, 0, ink, half).redo()
+    MoveFileAnnotation(model, 0, square, 0, 20).redo()  # a move keeps the new size
+    save_as(model, out)
+    with pymupdf.open(out) as doc:
+        page = doc[0]
+        saved_square, saved_free, saved_ink, _stamp = page.annots()
+        assert tuple(saved_square.rect) == pytest.approx(
+            (bigger.x0, bigger.y0 + 20, bigger.x1, bigger.y1 + 20), abs=0.6
+        )
+        # Redrawn, not stretched: the border keeps its width.
+        assert saved_square.border["width"] == pytest.approx(4)
+        assert tuple(saved_free.rect) == pytest.approx(wider.as_tuple(), abs=0.6)
+        assert saved_free.info["content"] == "testo libero"
+        xs = [x for x, _ in saved_ink.vertices[0]]
+        assert max(xs) - min(xs) == pytest.approx((INK_POINTS[2][0] - INK_POINTS[0][0]) / 2, abs=4)
+
+
+def test_a_stamp_is_stretched_with_its_picture(qapp, tmp_path) -> None:
+    path = str(tmp_path / "shapes.pdf")
+    out = str(tmp_path / "out.pdf")
+    _shapes(path)
+    model = DocumentModel()
+    model.open(path)
+    stamp = model.pages[0].file_annotations[3]
+    r = stamp.rect
+    taller = RedactionRect(r.x0, r.y0 - 40, r.x1 + 60, r.y1)
+    ResizeFileAnnotation(model, 0, stamp, taller).redo()
+    save_as(model, out)
+    with pymupdf.open(out) as doc:
+        page = doc[0]
+        drawn = _drawn(page, pymupdf.Rect(0, 560, 316, 760))  # the stroke is right of it
+    assert drawn is not None
+    assert drawn.width == pytest.approx(taller.width, abs=4)
+    assert drawn.height == pytest.approx(taller.height, abs=4)
+
+
+def test_a_plico_stroke_stretches_into_its_new_box(qapp) -> None:
+    stroke = Annotation(INK, points=((100.0, 100.0), (200.0, 150.0)))
+    box = stroke.bounds()
+    double = RedactionRect(box.x0, box.y0, box.x0 + box.width * 2, box.y1)
+    stretched = stroke.resized(double)
+    assert stretched.bounds().as_tuple() == pytest.approx(double.as_tuple(), abs=0.05)
+
+
+def _corner(canvas, x: float, y: float) -> QPointF:
+    return canvas.label._page_transform().map(QPointF(x, y))
+
+
+def test_a_corner_handle_stretches_and_a_note_has_none(window, qapp, tmp_path) -> None:
+    path = str(tmp_path / "shapes.pdf")
+    _shapes(path)
+    assert window.open_path(path)
+    canvas = window._page_view._canvases[0]
+    label = canvas.label
+    item = window._doc_model.pages[0]
+    square = item.file_annotations[0]
+    r = square.rect
+    corner = _corner(canvas, r.x1, r.y1)
+    label.mouseMoveEvent(_event(QEvent.Type.MouseMove, corner))
+    assert label._hover == square
+    assert label.cursor().shape() == Qt.CursorShape.SizeFDiagCursor
+    label.grab()  # the handles are painted
+    _drag(label, [corner, corner + QPointF(20, 10), corner + QPointF(40, 30)])
+    box = item.file_box(square)
+    assert (box.x0, box.y0) == pytest.approx((r.x0, r.y0), abs=0.01), "the opposite corner stays"
+    scale = label._scale()
+    assert box.x1 == pytest.approx(r.x1 + 40 / scale, abs=0.5)
+    assert box.y1 == pytest.approx(r.y1 + 30 / scale, abs=0.5)
+    label.mouseMoveEvent(_event(QEvent.Type.MouseMove, _centre(canvas, box)))
+    assert label.cursor().shape() == Qt.CursorShape.SizeAllCursor, "inside: a move"
+    # Shrunk past the opposite corner: never below the smallest size.
+    top_left = _corner(canvas, box.x0, box.y0)
+    end = _corner(canvas, box.x1, box.y1)
+    _drag(label, [end, top_left])
+    small = item.file_box(square)
+    assert small.width == pytest.approx(MIN_ANNOTATION_SIZE, abs=0.05)
+    assert window._undo_stack.count() == 2
+
+
+def test_a_note_moves_but_does_not_stretch(window, qapp, tmp_path) -> None:
+    _, canvas = _open(window, tmp_path)
+    item = window._doc_model.pages[0]
+    note = item.file_annotations[1]
+    corner = _corner(canvas, note.rect.x1, note.rect.y1)
+    assert canvas.label._corner_at(note, corner) is None

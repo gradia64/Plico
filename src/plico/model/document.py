@@ -156,11 +156,15 @@ class PageItem:
             if (
                 edit.removed
                 or edit.color is not None
-                or edit.offset != (0.0, 0.0)
+                or edit.box is not None
                 or (edit.text is not None and annotation.subtype == "FreeText")
             ):
                 found.append((annotation, edit))
         return tuple(found)
+
+    def file_box(self, annotation: FileAnnotation) -> RedactionRect:
+        """Where *annotation* is drawn now, in page space."""
+        return self.file_edit(annotation).box or annotation.rect
 
     def note_text(self, annotation: FileAnnotation) -> str:
         """What a note or a FreeText of the file says now."""

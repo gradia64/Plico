@@ -15,6 +15,12 @@ versioni il [Semantic Versioning](https://semver.org/lang/it/).
   sul loro testo, timbri e allegati tengono il loro aspetto. Spostare non
   ridisegna l'annotazione: un timbro o un riquadro col bordo restano come
   erano.
+- **Ridimensionare le annotazioni**: le maniglie agli angoli di forme,
+  riquadri di testo, disegni, linee e timbri ne cambiano la misura, per quelle
+  già nel file e per i disegni fatti in Plico. Il bordo resta dello stesso
+  spessore, il testo di un riquadro va a capo di nuovo, un timbro si allarga
+  con la sua immagine; le note restano della loro misura. Si annulla con
+  `Ctrl+Z`.
 - **Testo dei riquadri di testo (FreeText)** già nel file: *Modifica testo…*
   dal tasto destro, e *Colore…* ne cambia il colore del testo.
 

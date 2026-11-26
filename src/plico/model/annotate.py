@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import itertools
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 
 import pymupdf
@@ -96,6 +96,33 @@ class Annotation:
     def movable(self) -> bool:
         """Markup belongs to the words under it; notes and strokes can move."""
         return self.kind not in MARKUP
+
+    @property
+    def resizable(self) -> bool:
+        """A stroke can be stretched; a note's icon has one size."""
+        return self.kind == INK
+
+    def resized(self, box: RedactionRect) -> Annotation:
+        """The stroke stretched so that its bounds become *box*.
+
+        The bounds have the pen's margin around the points: the points go
+        into *box* less that margin, which the new bounds add back.
+        """
+        pad = INK_WIDTH * 2
+        xs = [x for x, _ in self.points]
+        ys = [y for _, y in self.points]
+        x0, y0 = min(xs), min(ys)
+        old_w, old_h = max(xs) - x0, max(ys) - y0
+        new_w, new_h = max(0.0, box.width - 2 * pad), max(0.0, box.height - 2 * pad)
+        sx = new_w / old_w if old_w else 1.0
+        sy = new_h / old_h if old_h else 1.0
+        return replace(
+            self,
+            points=tuple(
+                (round(box.x0 + pad + (x - x0) * sx, 2), round(box.y0 + pad + (y - y0) * sy, 2))
+                for x, y in self.points
+            ),
+        )
 
     def moved(self, dx: float, dy: float) -> Annotation:
         """The same annotation *dx*, *dy* points further on the page."""
@@ -265,9 +292,17 @@ class FileAnnotation:
     def colorable(self) -> bool:
         return self.subtype in _COLORABLE
 
-    def hit(self, x: float, y: float, offset: tuple[float, float] = (0.0, 0.0)) -> bool:
-        """Whether (*x*, *y*) falls on it, once moved by *offset*."""
-        x, y = x - offset[0], y - offset[1]
+    @property
+    def resizable(self) -> bool:
+        return self.subtype in _RESIZABLE
+
+    def hit(self, x: float, y: float, box: RedactionRect | None = None) -> bool:
+        """Whether (*x*, *y*) falls on it; *box* is where it was moved to.
+
+        Markup, which never moves, answers for its own lines.
+        """
+        if box is not None:
+            return box.x0 <= x <= box.x1 and box.y0 <= y <= box.y1
         boxes = self.parts or (self.rect,)
         return any(r.x0 <= x <= r.x1 and r.y0 <= y <= r.y1 for r in boxes)
 
@@ -280,8 +315,8 @@ class FileAnnotationEdit:
     # New words for a note or a FreeText.
     text: str | None = None
     color: Color | None = None
-    # How far it was moved, in page points.
-    offset: tuple[float, float] = (0.0, 0.0)
+    # Where its box was moved or stretched to, in page space; None: as it is.
+    box: RedactionRect | None = None
 
     @property
     def unchanged(self) -> bool:
@@ -290,6 +325,11 @@ class FileAnnotationEdit:
 
 _MARKUP_SUBTYPES = frozenset(("Highlight", "Underline", "StrikeOut", "Squiggly"))
 _WITH_TEXT = frozenset(("Text", "FreeText"))
+# What can take another size (measured): the shapes, strokes and FreeText are
+# redrawn by PyMuPDF at the new size, a stamp's own picture is stretched. A
+# note's icon has one size.
+_RESIZABLE = frozenset(("Square", "Circle", "FreeText", "Stamp", "Ink", "Line", "Polygon", "PolyLine"))
+_STRETCHED = frozenset(("Stamp",))
 # What PyMuPDF redraws in a new colour (measured): a stamp or an attachment
 # keeps an appearance of its own, which a redraw would throw away.
 _COLORABLE = frozenset(
@@ -381,9 +421,16 @@ def apply_file_changes(
         if edit.removed:
             page.delete_annot(annot)
             continue
-        if edit.offset != (0.0, 0.0) and annotation.movable:
-            _shift(page.parent, annot.xref, *edit.offset)
         redraw = False
+        if edit.box is not None and annotation.movable:
+            old, new = annotation.rect, edit.box
+            if abs(new.width - old.width) < 0.01 and abs(new.height - old.height) < 0.01:
+                _shift(page.parent, annot.xref, new.x0 - old.x0, new.y0 - old.y0)
+            elif annotation.resizable:
+                _place(page.parent, annot, new)
+                # The shapes redrawn at the new size keep their line width,
+                # and a FreeText wraps its words again instead of stretching.
+                redraw = annotation.subtype not in _STRETCHED
         if edit.text is not None and annotation.has_text:
             annot.set_info(content=edit.text)
             if annotation.subtype == "FreeText":
@@ -424,6 +471,61 @@ def _shift(doc: pymupdf.Document, xref: int, dx: float, dy: float) -> None:
             return f"{moved:.4f}"
 
         doc.xref_set_key(xref, key, _NUMBER.sub(step, value))
+
+
+def _place(doc: pymupdf.Document, annot: pymupdf.Annot, box: RedactionRect) -> None:
+    """Stretch *annot* so its box becomes *box* (page space).
+
+    Every coordinate pair is mapped from the old box to the new one. The
+    mapping between page space and PDF space comes from the annotation
+    itself, its /Rect against ``annot.rect``: no page geometry to get wrong.
+    Not for a note, whose ``annot.rect`` is where its icon is drawn.
+    """
+    kind, value = doc.xref_get_key(annot.xref, "Rect")
+    raw = [float(v) for v in _NUMBER.findall(value)] if kind == "array" else []
+    if len(raw) != 4:
+        return
+    old = annot.rect
+    if old.width <= 0 or old.height <= 0:
+        return
+    # x_pdf = x + bx, y_pdf = by - y (PDF space grows upwards).
+    bx = min(raw[0], raw[2]) - old.x0
+    by = max(raw[1], raw[3]) + old.y0
+    sx, sy = box.width / old.width, box.height / old.height
+
+    def mapped(x_pdf: float, y_pdf: float) -> tuple[float, float]:
+        x, y = x_pdf - bx, by - y_pdf
+        return box.x0 + (x - old.x0) * sx + bx, by - (box.y0 + (y - old.y0) * sy)
+
+    for key in _POSITIONS:
+        kind, value = doc.xref_get_key(annot.xref, key)
+        if kind != "array":
+            continue
+        value = _replace_numbers(value, _map_pairs(value, mapped))
+        if key == "Rect":
+            x0, y0, x1, y1 = (float(v) for v in _NUMBER.findall(value))
+            value = f"[{min(x0, x1):.4f} {min(y0, y1):.4f} {max(x0, x1):.4f} {max(y0, y1):.4f}]"
+        doc.xref_set_key(annot.xref, key, value)
+
+
+def _map_pairs(value: str, mapped: Callable[[float, float], tuple[float, float]]) -> list[float]:
+    """The numbers of *value*, each (x, y) pair passed through *mapped*.
+
+    An odd count -- a malformed array from an untrusted file -- maps nothing.
+    """
+    numbers = [float(v) for v in _NUMBER.findall(value)]
+    if len(numbers) % 2:
+        return numbers
+    out: list[float] = []
+    for i in range(0, len(numbers) - 1, 2):
+        out.extend(mapped(numbers[i], numbers[i + 1]))
+    return out
+
+
+def _replace_numbers(value: str, numbers: list[float]) -> str:
+    """*value* with its numbers replaced, in order, by *numbers*."""
+    supply = iter(numbers)
+    return _NUMBER.sub(lambda _match: f"{next(supply):.4f}", value)
 
 
 def _find(present: list[pymupdf.Annot], annotation: FileAnnotation) -> pymupdf.Annot | None:

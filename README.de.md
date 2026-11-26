@@ -35,7 +35,8 @@ Komprimieren nutzt.
   und freihand zeichnen. Alles lässt sich wie jede Änderung rückgängig machen
   und wird beim Speichern zu echten PDF-Anmerkungen, die andere Programme
   anzeigen und bearbeiten. Auch die Anmerkungen, die das PDF schon hat,
-  lassen sich entfernen, verschieben (durch Ziehen) und umfärben, und seine
+  lassen sich entfernen, verschieben (durch Ziehen), in der Größe
+  ändern (an einer Ecke) und umfärben, und seine
   Notizen und Textfelder neu schreiben (Rechtsklick auf die Anmerkung)
 - **Lesezeichen** (_Ansicht → Lesezeichen_, ein Reiter neben den Miniaturen):
   das Inhaltsverzeichnis des PDFs lesen, per Klick zur Seite springen und

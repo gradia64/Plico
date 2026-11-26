@@ -351,8 +351,19 @@ class MoveFileAnnotation(_FileAnnotationChange):
         self, model: DocumentModel, index: int, annotation: FileAnnotation, dx: float, dy: float
     ) -> None:
         name = QCoreApplication.translate("MoveAnnotation", "Sposta annotazione su pagina {0}")
-        ox, oy = model.pages[index].file_edit(annotation).offset
-        super().__init__(name, model, index, annotation, offset=(ox + dx, oy + dy))
+        box = model.pages[index].file_box(annotation)
+        moved = RedactionRect(box.x0 + dx, box.y0 + dy, box.x1 + dx, box.y1 + dy)
+        super().__init__(name, model, index, annotation, box=moved)
+
+
+class ResizeFileAnnotation(_FileAnnotationChange):
+    """Give one of the file's annotations the page-space box *box*."""
+
+    def __init__(
+        self, model: DocumentModel, index: int, annotation: FileAnnotation, box: RedactionRect
+    ) -> None:
+        name = QCoreApplication.translate("ResizeAnnotation", "Ridimensiona annotazione su pagina {0}")
+        super().__init__(name, model, index, annotation, box=box)
 
 
 class _ReplaceAnnotation(QUndoCommand):
@@ -391,6 +402,16 @@ class RecolorAnnotation(_ReplaceAnnotation):
     def __init__(self, model: DocumentModel, index: int, annotation: Annotation, color: Color) -> None:
         name = QCoreApplication.translate("RecolorAnnotation", "Colore dell'annotazione su pagina {0}")
         super().__init__(name, model, index, annotation, replace(annotation, tint=color))
+
+
+class ResizeAnnotation(_ReplaceAnnotation):
+    """Stretch a stroke made in Plico so that its bounds become *box*."""
+
+    def __init__(
+        self, model: DocumentModel, index: int, annotation: Annotation, box: RedactionRect
+    ) -> None:
+        name = QCoreApplication.translate("ResizeAnnotation", "Ridimensiona annotazione su pagina {0}")
+        super().__init__(name, model, index, annotation, annotation.resized(box))
 
 
 class MoveAnnotation(_ReplaceAnnotation):

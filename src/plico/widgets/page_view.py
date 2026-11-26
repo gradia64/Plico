@@ -84,6 +84,10 @@ SEARCH_CURRENT_BORDER = QColor(214, 96, 0)
 
 # Below this (in pixels) a press-and-release is a click, not a drag.
 CLICK_SLOP = 4.0
+# Side of a corner handle of an annotation, in widget pixels.
+HANDLE = 7.0
+# The smallest side an annotation can be stretched down to, in page points.
+MIN_ANNOTATION_SIZE = 8.0
 
 # Handles of an existing mark: a square this wide sits on each corner, and a
 # press within that distance of a corner resizes instead of moving. In pixels,
@@ -227,6 +231,13 @@ class _PageLabel(QLabel):
         self._adjust: tuple[int, str | None, RedactionRect, tuple[float, float]] | None = None
         # The annotation being dragged to a new place, with no tool on.
         self._moving: Annotation | FileAnnotation | None = None
+        # While a corner is dragged: the opposite corner, which stays put
+        # (page space). None while moving the whole annotation.
+        self._resize_fixed: tuple[float, float] | None = None
+        # The annotation under the mouse with no tool on: its corners are
+        # drawn as handles, and the cursor says what a drag will do.
+        self._hover: Annotation | FileAnnotation | None = None
+        self.setMouseTracking(True)
         # Background colour behind each edited span, sampled from the render
         # it was painted over. Keyed by the render too: a new pixmap (zoom,
         # rotation) may sample differently, and toImage() is too costly to
@@ -292,6 +303,7 @@ class _PageLabel(QLabel):
         self._paint_annotations(painter)
         self._paint_search(painter)
         self._paint_move(painter)
+        self._paint_handles(painter)
         if self._view.redaction_mode():
             self._paint_redactions(painter)
         elif self._view.selection_mode():
@@ -512,7 +524,7 @@ class _PageLabel(QLabel):
             return None
         x, y = self._to_page(point)
         for annotation in reversed(canvas.item.file_annotations_shown()):
-            if annotation.hit(x, y, canvas.item.file_edit(annotation).offset):
+            if annotation.hit(x, y, canvas.item.file_edit(annotation).box):
                 return annotation
         return None
 
@@ -739,11 +751,11 @@ class _PageLabel(QLabel):
                 )
             return
         if not (self._view.redaction_mode() or self._view.selection_mode()):
-            target = self.target_at(event.position())
-            if target is not None and target.movable:
-                # A drag moves it; a click still reaches the field below, on
-                # release (see mouseReleaseEvent).
-                self._moving = target
+            grab = self._grab_at(event.position())
+            if grab is not None:
+                # A drag moves it, or stretches it by a corner; a click still
+                # reaches the field below, on release (see mouseReleaseEvent).
+                self._moving, self._resize_fixed = grab
                 self._drag_from = event.position()
                 self._drag_to = self._drag_from
                 return
@@ -767,6 +779,7 @@ class _PageLabel(QLabel):
 
     def mouseMoveEvent(self, event) -> None:
         if self._drag_from is None:
+            self._track_hover(event.position())
             super().mouseMoveEvent(event)
             return
         self._drag_to = event.position()
@@ -843,11 +856,18 @@ class _PageLabel(QLabel):
             self._release_annotation(start, end)
             return
         if self._moving is not None:
-            target = self._moving
+            target, fixed = self._moving, self._resize_fixed
             self.forget_drag()
             self.update()
             if (end - start).manhattanLength() < CLICK_SLOP:
                 self._select_field_under(end)
+                return
+            if fixed is not None:
+                box = self._resize_box(target, fixed, end)
+                if box != self._bounds_of(target):
+                    canvas = self.canvas
+                    assert canvas is not None
+                    self._view.resize_target(canvas, target, box)
                 return
             self._release_move(target, start, end)
             return
@@ -930,9 +950,110 @@ class _PageLabel(QLabel):
             return target.bounds()
         canvas = self.canvas
         assert canvas is not None
-        dx, dy = canvas.item.file_edit(target).offset
-        r = target.rect
-        return RedactionRect(r.x0 + dx, r.y0 + dy, r.x1 + dx, r.y1 + dy)
+        return canvas.item.file_box(target)
+
+    def _corners(self, target: Annotation | FileAnnotation) -> list[tuple[float, float]]:
+        box = self._bounds_of(target)
+        return [(box.x0, box.y0), (box.x1, box.y0), (box.x1, box.y1), (box.x0, box.y1)]
+
+    def _corner_at(
+        self, target: Annotation | FileAnnotation, point: QPointF
+    ) -> tuple[float, float] | None:
+        """The corner opposite the handle of *target* under *point*, if any."""
+        if not target.resizable:
+            return None
+        transform = self._page_transform()
+        corners = self._corners(target)
+        for i, (x, y) in enumerate(corners):
+            spot = transform.map(QPointF(x, y))
+            if abs(spot.x() - point.x()) <= HANDLE + 1 and abs(spot.y() - point.y()) <= HANDLE + 1:
+                return corners[(i + 2) % 4]
+        return None
+
+    def _grab_at(
+        self, point: QPointF
+    ) -> tuple[Annotation | FileAnnotation, tuple[float, float] | None] | None:
+        """What a press at *point* takes hold of: a corner first, then a body.
+
+        A handle sits half outside its annotation, so the one under the mouse
+        (or the last one under it) is asked first.
+        """
+        for target in (self._hover, self.target_at(point)):
+            if target is not None:
+                fixed = self._corner_at(target, point)
+                if fixed is not None:
+                    return target, fixed
+        target = self.target_at(point)
+        if target is not None and target.movable:
+            return target, None
+        return None
+
+    def _resize_box(
+        self, target: Annotation | FileAnnotation, fixed: tuple[float, float], point: QPointF
+    ) -> RedactionRect:
+        """The box from the fixed corner to *point*, on the page, not too small."""
+        canvas = self.canvas
+        assert canvas is not None
+        width, height = canvas.item.unrotated_size
+        x, y = self._to_page(point)
+        x, y = min(max(x, 0.0), width), min(max(y, 0.0), height)
+        fx, fy = fixed
+        x = _away(x, fx, width)
+        y = _away(y, fy, height)
+        return RedactionRect.from_corners(round(fx, 2), round(fy, 2), round(x, 2), round(y, 2))
+
+    def _plain(self) -> bool:
+        """No tool on: the mouse moves and stretches annotations."""
+        view = self._view
+        return not (
+            view.annotation_tool() is not None
+            or view.text_mode()
+            or view.redaction_mode()
+            or view.selection_mode()
+        )
+
+    def _track_hover(self, point: QPointF) -> None:
+        """Keep the handles and the cursor in step with the mouse."""
+        if self.canvas is None or not self._plain():
+            if self._hover is not None:
+                self._hover = None
+                self.update()
+            return
+        grab = self._grab_at(point)
+        hover = grab[0] if grab is not None else self.target_at(point)
+        if hover != self._hover:
+            self._hover = hover
+            self.update()
+        if grab is None:
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+        elif grab[1] is None:
+            self.setCursor(Qt.CursorShape.SizeAllCursor)
+        else:
+            transform = self._page_transform()
+            fixed = transform.map(QPointF(*grab[1]))
+            same = (point.x() - fixed.x()) * (point.y() - fixed.y()) > 0
+            self.setCursor(Qt.CursorShape.SizeFDiagCursor if same else Qt.CursorShape.SizeBDiagCursor)
+
+    def leaveEvent(self, event) -> None:
+        if self._hover is not None and self._drag_from is None:
+            self._hover = None
+            self.update()
+        super().leaveEvent(event)
+
+    def _paint_handles(self, painter: QPainter) -> None:
+        """The corners of the annotation under the mouse that can be stretched."""
+        target = self._hover
+        if target is None or not target.resizable or self._moving is not None or not self._plain():
+            return
+        transform = self._page_transform()
+        painter.save()
+        color = self.palette().color(QPaletteColor.ColorRole.Highlight)
+        painter.setPen(QPen(color, 1.0))
+        painter.setBrush(QColor(255, 255, 255))
+        for x, y in self._corners(target):
+            spot = transform.map(QPointF(x, y))
+            painter.drawRect(QRectF(spot.x() - HANDLE / 2, spot.y() - HANDLE / 2, HANDLE, HANDLE))
+        painter.restore()
 
     def _move_step(
         self, target: Annotation | FileAnnotation, start: QPointF, end: QPointF
@@ -959,9 +1080,12 @@ class _PageLabel(QLabel):
         target = self._moving
         if target is None or self._drag_from is None or self._drag_to is None:
             return
-        dx, dy = self._move_step(target, self._drag_from, self._drag_to)
-        box = self._bounds_of(target)
-        area = self._to_pixels(RedactionRect(box.x0 + dx, box.y0 + dy, box.x1 + dx, box.y1 + dy))
+        if self._resize_fixed is not None:
+            area = self._to_pixels(self._resize_box(target, self._resize_fixed, self._drag_to))
+        else:
+            dx, dy = self._move_step(target, self._drag_from, self._drag_to)
+            box = self._bounds_of(target)
+            area = self._to_pixels(RedactionRect(box.x0 + dx, box.y0 + dy, box.x1 + dx, box.y1 + dy))
         painter.save()
         pen = QPen(self.palette().color(QPaletteColor.ColorRole.Highlight), 1.5, Qt.PenStyle.DashLine)
         painter.setPen(pen)
@@ -983,9 +1107,19 @@ class _PageLabel(QLabel):
                 canvas.item.redactions[position] = before
         self._adjust = None
         self._moving = None
+        self._resize_fixed = None
         self._drag_from = None
         self._drag_to = None
         self._stroke = None
+
+
+def _away(value: float, fixed: float, limit: float) -> float:
+    """*value*, at least MIN_ANNOTATION_SIZE from *fixed*, within 0..*limit*."""
+    if abs(value - fixed) >= MIN_ANNOTATION_SIZE:
+        return value
+    if value >= fixed and fixed + MIN_ANNOTATION_SIZE <= limit:
+        return fixed + MIN_ANNOTATION_SIZE
+    return fixed - MIN_ANNOTATION_SIZE
 
 
 @dataclass
@@ -1049,6 +1183,8 @@ class PageView(QScrollArea):
     # An annotation (either kind) dragged by (dx, dy) page points, and one
     # given another colour (an RGB tuple in 0..1).
     annotation_moved = Signal(int, object, float, float)
+    # An annotation given a new box (a RedactionRect in page space).
+    annotation_resized = Signal(int, object, object)
     annotation_recolored = Signal(int, object, object)
 
     def __init__(self, worker, model=None, parent: QWidget | None = None) -> None:
@@ -1845,6 +1981,12 @@ class PageView(QScrollArea):
         if not chosen.isValid():
             return None
         return (round(chosen.redF(), 3), round(chosen.greenF(), 3), round(chosen.blueF(), 3))
+
+    def resize_target(
+        self, canvas: _Canvas, target: Annotation | FileAnnotation, box: RedactionRect
+    ) -> None:
+        """Ask for *target* to take the page-space box *box*."""
+        self.annotation_resized.emit(canvas.index, target, box)
 
     def move_target(
         self, canvas: _Canvas, target: Annotation | FileAnnotation, dx: float, dy: float
