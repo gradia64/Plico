@@ -88,7 +88,7 @@
       <caption xml:lang="es">Un documento con sus páginas, ajustado al ancho de la ventana</caption>
       <caption xml:lang="fr">Un document et ses pages, ajusté à la largeur de la fenêtre</caption>
       <caption xml:lang="de">Ein Dokument mit seinen Seiten, an die Fensterbreite angepasst</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.1/flatpak/screenshots/main.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.2/flatpak/screenshots/main.png</image>
     </screenshot>
     <screenshot>
       <caption>Personal data marked for erasure: on saving it leaves the file</caption>
@@ -96,7 +96,7 @@
       <caption xml:lang="es">Datos personales marcados para borrar: al guardar salen del archivo</caption>
       <caption xml:lang="fr">Données personnelles marquées pour l'effacement : à l'enregistrement, elles quittent le fichier</caption>
       <caption xml:lang="de">Persönliche Daten zum Löschen markiert: Beim Speichern verlassen sie die Datei</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.1/flatpak/screenshots/redact.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.2/flatpak/screenshots/redact.png</image>
     </screenshot>
     <screenshot>
       <caption>Filling in a PDF form, on the page or in the side panel</caption>
@@ -104,7 +104,7 @@
       <caption xml:lang="es">Rellenar un formulario PDF, en la página o en el panel lateral</caption>
       <caption xml:lang="fr">Remplir un formulaire PDF, sur la page ou dans le panneau latéral</caption>
       <caption xml:lang="de">Ein PDF-Formular ausfüllen, auf der Seite oder in der Seitenleiste</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.1/flatpak/screenshots/form.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.2/flatpak/screenshots/form.png</image>
     </screenshot>
     <screenshot>
       <caption>Correcting a line of text where it stands</caption>
@@ -112,7 +112,7 @@
       <caption xml:lang="es">Corregir una línea de texto en su sitio</caption>
       <caption xml:lang="fr">Corriger une ligne de texte là où elle se trouve</caption>
       <caption xml:lang="de">Eine Textzeile direkt an ihrer Stelle korrigieren</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.1/flatpak/screenshots/edit.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.2/flatpak/screenshots/edit.png</image>
     </screenshot>
     <screenshot>
       <caption>Highlights, a note and a freehand mark, with the bookmarks in the side bar</caption>
@@ -120,7 +120,7 @@
       <caption xml:lang="es">Resaltados, una nota y un trazo a mano alzada, con los marcadores en la barra lateral</caption>
       <caption xml:lang="fr">Surlignages, une note et un trait à main levée, avec les signets dans la barre latérale</caption>
       <caption xml:lang="de">Hervorhebungen, eine Notiz und eine Freihandmarkierung, mit den Lesezeichen in der Seitenleiste</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.1/flatpak/screenshots/annotate.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.2/flatpak/screenshots/annotate.png</image>
     </screenshot>
     <screenshot>
       <caption>Searching the document: every match highlighted, the current one in orange</caption>
@@ -128,7 +128,7 @@
       <caption xml:lang="es">Buscar en el documento: cada coincidencia resaltada, la actual en naranja</caption>
       <caption xml:lang="fr">Rechercher dans le document : chaque occurrence surlignée, l'occurrence courante en orange</caption>
       <caption xml:lang="de">Im Dokument suchen: jeder Treffer hervorgehoben, der aktuelle in Orange</caption>
-      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.1/flatpak/screenshots/search.png</image>
+      <image type="source" width="1280" height="800">https://raw.githubusercontent.com/gradia64/Plico/v0.2.2/flatpak/screenshots/search.png</image>
     </screenshot>
   </screenshots>
 
@@ -222,6 +222,27 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="0.2.2" date="2026-11-28">
+      <description>
+        <p>Annotations can now be moved, resized and recoloured, those a PDF already has included.</p>
+        <p xml:lang="it">Ora le annotazioni si spostano, si ridimensionano e si ricolorano, anche quelle che un PDF ha già.</p>
+        <p xml:lang="es">Ahora las anotaciones se mueven, se redimensionan y cambian de color, también las que un PDF ya tiene.</p>
+        <p xml:lang="fr">Les annotations peuvent maintenant être déplacées, redimensionnées et recolorées, y compris celles qu'un PDF a déjà.</p>
+        <p xml:lang="de">Anmerkungen lassen sich jetzt verschieben, in der Größe ändern und umfärben, auch die, die ein PDF schon hat.</p>
+        <ul>
+          <li>Drag an annotation to move it, or a corner to resize it</li>
+          <li xml:lang="it">Si trascina un'annotazione per spostarla, o un angolo per ridimensionarla</li>
+          <li xml:lang="es">Se arrastra una anotación para moverla, o una esquina para redimensionarla</li>
+          <li xml:lang="fr">Faites glisser une annotation pour la déplacer, ou un coin pour la redimensionner</li>
+          <li xml:lang="de">Eine Anmerkung ziehen, um sie zu verschieben, oder eine Ecke, um ihre Größe zu ändern</li>
+          <li>Right-click for a new colour, or to rewrite the text of a text box</li>
+          <li xml:lang="it">Tasto destro per un colore nuovo, o per riscrivere il testo di un riquadro di testo</li>
+          <li xml:lang="es">Clic derecho para un color nuevo, o para reescribir el texto de un cuadro de texto</li>
+          <li xml:lang="fr">Clic droit pour une nouvelle couleur, ou pour réécrire le texte d'une zone de texte</li>
+          <li xml:lang="de">Rechtsklick für eine neue Farbe oder um den Text eines Textfelds neu zu schreiben</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.1" date="2026-11-26">
       <description>
         <p>The annotations a PDF already has can now be removed, and its notes rewritten.</p>
